@@ -23,3 +23,5 @@ struct SDL_Surface *rt_sdl_surface_sync(struct CPU *c, uint32_t guest);
 int rt_sdl_display_scale(void);
 int rt_sdl_window_scale(void);
 void rt_sdl_force_scales(int display, int window);
+// Encoche : hauteur d'écran annoncée au jeu (celle que reçoit une fenêtre plein écran).
+int rt_sdl_notch_height(int height, int frame_h, int visible_top, double safe_top);
