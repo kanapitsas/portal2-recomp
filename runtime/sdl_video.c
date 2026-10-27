@@ -371,6 +371,62 @@ static void scale_mode(SDL_DisplayMode *mode, int pixels) {
     mode->h = pixels ? screen_pixels(mode->h) : screen_points(mode->h);
 }
 
+// --- Encoche -------------------------------------------------------------------
+// Sur un écran à encoche (MacBook Pro et Air récents), une fenêtre plein écran
+// SDL ne reçoit que la zone sous la barre des menus (1800×1130 points sur un
+// 14 pouces réglé en 1800×1169), jamais la bande de l'encoche. Annoncer l'écran
+// entier faisait choisir au jeu 3600×2338 pour une surface de 3600×2260 : image
+// et souris divergeaient de 78 pixels en plein écran (boutons du menu cliquables
+// plus bas que dessinés). L'écran est donc annoncé à la hauteur que reçoit
+// vraiment la fenêtre : du bas de l'écran au bas de la barre des menus.
+// Hauteur en points d'un écran de frame_h points dont la zone visible s'arrête
+// visible_top points au-dessus de son bas, avec safe_top points d'encoche ;
+// height est la hauteur demandée (inchangée si ce n'est pas l'écran entier).
+int rt_sdl_notch_height(int height, int frame_h, int visible_top, double safe_top) {
+    if (safe_top <= 0 || height != frame_h || visible_top <= 0 || visible_top >= frame_h) return height;
+    return visible_top;
+}
+
+#if !TARGET_OS_IPHONE
+// Mesurée à la première demande pour chaque écran, barre des menus visible, puis
+// gardée : en plein écran la barre se masque et la zone visible gagne un point
+// que la fenêtre ne reçoit pas. Sans encoche (écrans externes, Mac plus anciens),
+// ou hors Cocoa (tests sur le pilote dummy) : rien ne change.
+static int fullscreen_height(int display, int height) {
+    static int cached[8][2];   // {hauteur de l'écran entier, hauteur annoncée}
+    if (display_scale_forced || display < 0 || display >= 8 || !pthread_main_np()) return height;
+    const char *driver = SDL_GetCurrentVideoDriver();
+    if (!driver || strcmp(driver, "cocoa")) return height;
+    if (cached[display][0]) return height == cached[display][0] ? cached[display][1] : height;
+    SDL_Rect bounds;
+    if (SDL_GetDisplayBounds(display, &bounds)) return height;
+    typedef struct { double x, y, w, h; } Rect;
+    typedef struct { double top, left, bottom, right; } Insets;
+    id screens = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("NSScreen"), sel_registerName("screens"));
+    unsigned long count = screens ? ((unsigned long (*)(id, SEL))objc_msgSend)(screens, sel_registerName("count")) : 0;
+    for (unsigned long i = 0; i < count; ++i) {
+        id screen = ((id (*)(id, SEL, unsigned long))objc_msgSend)(screens, sel_registerName("objectAtIndex:"), i);
+        Rect frame = ((Rect (*)(id, SEL))objc_msgSend)(screen, sel_registerName("frame"));
+        if ((int)frame.x != bounds.x || (int)frame.w != bounds.w || (int)frame.h != bounds.h) continue;
+        Rect visible = ((Rect (*)(id, SEL))objc_msgSend)(screen, sel_registerName("visibleFrame"));
+        Insets safe = {0};
+        if (((BOOL (*)(id, SEL, SEL))objc_msgSend)(screen, sel_registerName("respondsToSelector:"),
+                                                   sel_registerName("safeAreaInsets")))
+            safe = ((Insets (*)(id, SEL))objc_msgSend)(screen, sel_registerName("safeAreaInsets"));
+        int top = (int)(visible.y + visible.h - frame.y);
+        cached[display][0] = bounds.h;
+        cached[display][1] = rt_sdl_notch_height(bounds.h, bounds.h, top, safe.top);
+        if (cached[display][1] != bounds.h)
+            fprintf(stderr, "[sdl] encoche : écran %d annoncé en %dx%d points (plein écran sous la barre des menus) au lieu de %dx%d\n",
+                    display, bounds.w, cached[display][1], bounds.w, bounds.h);
+        return height == cached[display][0] ? cached[display][1] : height;
+    }
+    return height;
+}
+#else
+static int fullscreen_height(int display, int height) { (void)display; return height; }
+#endif
+
 // Échelle d'une fenêtre de w×h pixels : 1 si elle tient dans la zone utile de
 // l'écran (barre de titre comprise), l'échelle de l'écran sinon.
 enum { TITLE_BAR_POINTS = 28 };
@@ -529,6 +585,7 @@ static int sdl_video(CPU *c, const char *name) {
         SDL_DisplayMode mode = {0};
         if (address) rt_write_span(c, address, RT_SDL_DISPLAYMODE_SIZE);
         int result = SDL_GetWindowDisplayMode(w, address ? &mode : NULL);
+        if (!result) mode.h = fullscreen_height(SDL_GetWindowDisplayIndex(w), mode.h);
         scale_mode(&mode, 1);
         r = (uint32_t)mode_result(c, result, address, &mode);
     }
@@ -551,6 +608,7 @@ static int sdl_video(CPU *c, const char *name) {
         else {
             rt_write_span(c, address, RT_SDL_RECT_SIZE);
             if (!(r = (uint32_t)SDL_GetDisplayBounds((int)arg(c, 0), &rect))) {
+                rect.h = fullscreen_height((int)arg(c, 0), rect.h);
                 W32(address, (uint32_t)screen_pixels(rect.x)); W32(address + 4, (uint32_t)screen_pixels(rect.y));
                 W32(address + 8, (uint32_t)screen_pixels(rect.w)); W32(address + 12, (uint32_t)screen_pixels(rect.h));
             }
@@ -562,6 +620,7 @@ static int sdl_video(CPU *c, const char *name) {
         int index = (int)arg(c, 0);
         int result = n[3] == 'C' ? SDL_GetCurrentDisplayMode(index, address ? &mode : NULL)
                                  : SDL_GetDesktopDisplayMode(index, address ? &mode : NULL);
+        if (!result) mode.h = fullscreen_height(index, mode.h);
         scale_mode(&mode, 1);
         r = (uint32_t)mode_result(c, result, address, &mode);
     }

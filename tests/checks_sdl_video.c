@@ -303,3 +303,16 @@ RT_CHECK(sdl_video_retina_window_follows_resolution) {
     rt_sdl_force_scales(0, 0);
     stop_video();
 }
+
+RT_CHECK(sdl_video_notch_height) {
+    // MacBook Pro 14 pouces réglé en 1800×1169 points : encoche de 38 points,
+    // barre des menus jusqu'à 1130 points du bas ; plein écran = 1130.
+    assert(rt_sdl_notch_height(1169, 1169, 1130, 38.0) == 1130);
+    // Sans encoche (écran externe, Mac plus ancien) : l'écran entier.
+    assert(rt_sdl_notch_height(1169, 1169, 1130, 0.0) == 1169);
+    // Autre hauteur que l'écran entier (mode non natif) : inchangée.
+    assert(rt_sdl_notch_height(900, 1169, 1130, 38.0) == 900);
+    // Zone visible absente ou incohérente : l'écran entier.
+    assert(rt_sdl_notch_height(1169, 1169, 0, 38.0) == 1169);
+    assert(rt_sdl_notch_height(1169, 1169, 1169, 38.0) == 1169);
+}
