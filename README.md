@@ -164,11 +164,11 @@ tuned in the iOS Settings app, under Portal 2.
 ## Tests
 
 ```sh
-make test INPUT_DIR=/path/to/depot_661/bin       # runtime and ABI checks against the real binaries
-make sanitize INPUT_DIR=/path/to/depot_661/bin   # the same with UBSan
+make test INPUT_DIR=/path/to/depot_661/bin/linux32   # runtime and ABI checks against the real binaries
+make sanitize INPUT_DIR=/path/to/depot_661/bin/linux32   # the same with UBSan
 ```
 
-`INPUT_DIR` defaults to `../work/portal2-linux/bin`.
+`INPUT_DIR` is the folder holding `libtier0.so` and `libvstdlib.so` (in a Steam depot, `bin/linux32`); it defaults to `../work/portal2-linux/bin`.
 
 ## Limits
 
