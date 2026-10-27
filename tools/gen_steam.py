@@ -174,7 +174,7 @@ def plan_method(flat, method, ret, params, wrapper, types, gprs):
     count = 1 + sum(1 for kind, _ in params if not (scalar(kind) and scalar(kind)[0] in ('float', 'double')))
     if count != gprs:
         raise Unsupported(f'signature C# ({count} entiers) != dylib ({gprs})')
-    lines, call, offset = [], ['self'], 0
+    lines, call, offset, post = [], ['self'], 0, []
     proto = ['void *']
     names = [n for _, n in params]
     for index, (kind, name) in enumerate(params):
@@ -190,6 +190,14 @@ def plan_method(flat, method, ret, params, wrapper, types, gprs):
             lines.append(f'uint64_t {var} = R64({at});'); proto.append('uint64_t'); offset += 8
         elif kind == 'InteropHelp.UTF8StringHandle':
             lines.append(f'const char *{var} = steam_in_string(c, R32({at}));'); proto.append('const char *'); offset += 4
+        elif kind == 'out IntPtr' and name.startswith('ppch'):
+            # char ** rempli par Steam (GetUGCDetails) : la chaîne hôte est recopiée, internée,
+            # en mémoire invitée et l'invité reçoit son adresse.
+            lines.append(f'void *{var}_slot = steam_out(c, R32({at}), 4u); const char *{var}_text = NULL;')
+            lines.append(f'const char **{var} = {var}_slot ? &{var}_text : NULL;')
+            post.append(f'if ({var}_slot) {{ uint32_t {var}_guest = steam_guest_string(c, {var}_text); '
+                        f'memcpy({var}_slot, &{var}_guest, 4); }}')
+            proto.append('const char **'); offset += 4
         elif kind.startswith(('out ', 'ref ')):
             inner = kind.split()[1]
             if scalar(inner):
@@ -241,6 +249,7 @@ def plan_method(flat, method, ret, params, wrapper, types, gprs):
             'void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);',
             f'if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "{flat}"), __ATOMIC_RELAXED);', *lines]
     body.append(f'{"" if rproto == "void" else rproto + " r = "}((F)fn)({", ".join(call)});')
+    body.extend(post)
     if store:
         body.append(store)
     return body, sret

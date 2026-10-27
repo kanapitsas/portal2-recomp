@@ -2270,6 +2270,23 @@ static void m215(CPU *c, void *self, uint32_t args, uint32_t sret) {
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
 }
+/* STEAMREMOTESTORAGE_INTERFACE_VERSION016::GetUGCDetails */
+static void m216(CPU *c, void *self, uint32_t args, uint32_t sret) {
+    (void)args; (void)sret;
+    typedef bool (*F)(void *, uint64_t, void *, const char **, void *, void *);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_GetUGCDetails"), __ATOMIC_RELAXED);
+    uint64_t a0 = (uint64_t)R64(args + 0u);
+    void *a1 = steam_out(c, R32(args + 8u), 4u);
+    void *a2_slot = steam_out(c, R32(args + 12u), 4u); const char *a2_text = NULL;
+    const char **a2 = a2_slot ? &a2_text : NULL;
+    void *a3 = steam_out(c, R32(args + 16u), 4u);
+    void *a4 = steam_out(c, R32(args + 20u), 8u);
+    bool r = ((F)fn)(self, a0, a1, a2, a3, a4);
+    if (a2_slot) { uint32_t a2_guest = steam_guest_string(c, a2_text); memcpy(a2_slot, &a2_guest, 4); }
+    c->eax = r ? 1u : 0u;
+}
 /* STEAMREMOTESTORAGE_INTERFACE_VERSION016::GetUGCDownloadProgress */
 static void m217(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
@@ -8582,7 +8599,7 @@ const SteamMethodInfo steam_methods[] = {
     {"STEAMREMOTESTORAGE_INTERFACE_VERSION016::GetPublishedItemVoteDetails", 10u, 46u, 0, m213, NULL},
     {"STEAMREMOTESTORAGE_INTERFACE_VERSION016::GetQuota", 10u, 20u, 0, m214, NULL},
     {"STEAMREMOTESTORAGE_INTERFACE_VERSION016::GetSyncPlatforms", 10u, 17u, 0, m215, NULL},
-    {"STEAMREMOTESTORAGE_INTERFACE_VERSION016::GetUGCDetails", 10u, 26u, 0, NULL, "param\u00e8tre out IntPtr ppchName"},
+    {"STEAMREMOTESTORAGE_INTERFACE_VERSION016::GetUGCDetails", 10u, 26u, 0, m216, NULL},
     {"STEAMREMOTESTORAGE_INTERFACE_VERSION016::GetUGCDownloadProgress", 10u, 25u, 0, m217, NULL},
     {"STEAMREMOTESTORAGE_INTERFACE_VERSION016::GetUserPublishedItemVoteDetails", 10u, 48u, 0, m218, NULL},
     {"STEAMREMOTESTORAGE_INTERFACE_VERSION016::IsCloudEnabledForAccount", 10u, 21u, 0, m219, NULL},

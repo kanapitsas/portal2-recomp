@@ -156,6 +156,14 @@ static void fake_terminate(Fake *self, uint32_t ip, uint16_t port) { (void)self;
 static int32_t fake_controllers(Fake *self, uint64_t *handles) {
     (void)self; for (int i = 0; i < 16; ++i) handles[i] = i < 2 ? UINT64_C(0x1000000000) + (uint64_t)i : 0; return 2;
 }
+static const char *ugc_name_seen = "unset";
+static bool fake_ugc_details(Fake *self, uint64_t handle, uint32_t *app, const char **name, int32_t *size, uint64_t *owner) {
+    (void)self; assert(handle == UINT64_C(0x1122334455667788) && app && size && owner);
+    *app = 620; *size = 4096; *owner = UINT64_C(0x0110000100000007);
+    ugc_name_seen = name ? "set" : NULL;
+    if (name) *name = "maps/workshop/chamber.bsp";
+    return true;
+}
 static uint64_t fake_steamid(Fake *self) { assert(self == &fake_user); return UINT64_C(0x0110000100abcdef); }
 static bool fake_logged_on(Fake *self) { (void)self; return true; }
 static bool fake_data_folder(Fake *self, char *buffer, int size) {
@@ -241,6 +249,19 @@ RT_CHECK(steam_marshalling_through_official_flat_api) {
     uint32_t handles[] = {SCRATCH + 0x400};
     assert(call_method(input, "SteamInput006::GetConnectedControllers", 0, 1, handles).eax == 2);
     assert(R64(SCRATCH + 0x400) == UINT64_C(0x1000000000) && R64(SCRATCH + 0x408) == UINT64_C(0x1000000001) && !R64(SCRATCH + 0x478));
+
+    // char ** rempli par Steam (GetUGCDetails) : l'invité reçoit une copie internée ; NULL accepté.
+    storage_vtable[method("STEAMREMOTESTORAGE_INTERFACE_VERSION016::GetUGCDetails")->slot] = (void *)fake_ugc_details;
+    W32(SCRATCH + 0x504, 0xdeadbeefu);
+    uint32_t ugc[] = {0x55667788u, 0x11223344u, SCRATCH + 0x500, SCRATCH + 0x504, SCRATCH + 0x508, SCRATCH + 0x510};
+    assert(call_method(storage, "STEAMREMOTESTORAGE_INTERFACE_VERSION016::GetUGCDetails", 0, 6, ugc).eax == 1);
+    uint32_t ugc_name = R32(SCRATCH + 0x504);
+    assert(ugc_name && ugc_name != 0xdeadbeefu && !strcmp(GPTR(ugc_name), "maps/workshop/chamber.bsp"));
+    assert(R32(SCRATCH + 0x500) == 620 && (int32_t)R32(SCRATCH + 0x508) == 4096);
+    assert(R64(SCRATCH + 0x510) == UINT64_C(0x0110000100000007));
+    ugc[3] = 0;
+    assert(call_method(storage, "STEAMREMOTESTORAGE_INTERFACE_VERSION016::GetUGCDetails", 0, 6, ugc).eax == 1);
+    assert(ugc_name_seen == NULL);
 }
 
 RT_CHECK(steam_context_init_caches_like_the_dylib) {
