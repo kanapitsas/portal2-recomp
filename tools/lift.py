@@ -476,22 +476,19 @@ class _Without:
 #   inc/dec/décalages n'écrivent pas tout : ils ne tuent rien mais leur calcul
 #   peut sauter si rien ne lit après ;
 # - lecteurs : cond(&f, …) ; toute autre mention de f est opaque (lue, gardée) ;
-# - appels : transparents (l'appelé peut rendre les drapeaux reçus, comme
-#   get_pc_thunk) ; c->flags n'est sauvé avant et relu après que si un lecteur
-#   suit l'appel. Seule hypothèse : un appelé ne lit pas à son entrée des
-#   drapeaux qu'il n'a pas posés (conventions d'appel x86). ret et sauts
-#   sortants sauvent toujours les drapeaux (résultat rendu dans CF, etc.).
+# - appels : les drapeaux sont toujours sauvés avant (l'appelé peut les lire
+#   ou les rendre, comme get_pc_thunk) ; la relecture après l'appel saute
+#   quand aucun lecteur ne suit. ret et sauts sortants sauvent toujours. Rien
+#   n'est supposé sur les autres fonctions.
 _FLAG_WRITER = re.compile(r'\bf_(add|sub|logic|neg|imul|inc|dec|shl|shr|sar)\(&f, ')
 _FLAG_KILLS = {'add', 'sub', 'logic', 'neg', 'imul'}
 _FLAG_ANY = re.compile(r'&f\b|\bf\.|\bf = |= f;')
 _CALL_SAVE = 'c->flags = f; '
 _CALL_RESTORE = ' f = c->flags;'
 _CALL = re.compile(r'rt_call(_fn|_any|_import)?\(c, ')
-_EXIT_SAVE = re.compile(r'^(a = [^;]*; )?c->flags = f; rt_(return|jump_any|jump_fn|dispatch)\(')
-FLAGS_IN = '/* drapeaux lus à l\'entrée */ '
 
 
-def dead_flags(translated, flow, resume=frozenset(), entry=None):
+def dead_flags(translated, flow, resume=frozenset()):
     if any('get_eflags' in code or 'set_eflags' in code for code in translated.values()):
         return translated
     if resume:
@@ -505,10 +502,10 @@ def dead_flags(translated, flow, resume=frozenset(), entry=None):
         others = _FLAG_ANY.findall(_FLAG_WRITER.sub('', rest))
         conds = rest.count('cond(&f')
         if call:
-            # Appel transparent : l'appelé peut rendre les drapeaux reçus
-            # (get_pc_thunk). Sauvegarde et relecture ne sautent que si rien
-            # ne lit les drapeaux après l'appel.
-            kind = ('call', False, False) if not writers and not others else ('opaque', True, False)
+            # L'appelé reçoit toujours les drapeaux (sauvegarde gardée : il
+            # pourrait les lire, et get_pc_thunk les rend tels quels) ; la
+            # relecture après l'appel ne saute que si rien ne les lit ensuite.
+            kind = ('call', True, False) if not writers and not others else ('opaque', True, False)
         elif rest.count('f_comi(&f, ') == 1 and len(_FLAG_ANY.findall(rest)) == 1:
             # comiss/ucomisd : écrit les six drapeaux (rt.h), gardé tel quel.
             kind = ('comi', False, True)
@@ -535,23 +532,12 @@ def dead_flags(translated, flow, resume=frozenset(), entry=None):
                     changed = True
         return live
     live_in = solve(lambda pc: info[pc][1])
-    # Vraie lecture à l'entrée : sans compter ret et sauts sortants, qui ne
-    # font que rendre les drapeaux à l'appelant (lequel garde alors sa
-    # sauvegarde avant l'appel s'il les relit).
-    exits = {pc for pc, code in translated.items() if not flow.get(pc) and _EXIT_SAVE.search(code)}
-    entry_live = entry is not None and solve(lambda pc: info[pc][1] and pc not in exits).get(entry)
     result = {}
-    if entry_live:
-        # Lit des drapeaux reçus de l'appelant (aucune fonction compilée ne
-        # devrait) : repéré pour vérification (tools/lift.py, FLAGS_IN).
-        result[entry] = FLAGS_IN + translated[entry]
     for pc, code in translated.items():
-        if pc in result:
-            continue
         kind = info[pc][0]
         out = any(live_in.get(s, True) for s in flow.get(pc, ()))
         if kind == 'call' and not out:
-            code = code.replace(_CALL_SAVE, '', 1).replace(_CALL_RESTORE, '', 1)
+            code = code.replace(_CALL_RESTORE, '', 1)
         elif kind == 'writer' and not out:
             code = _FLAG_WRITER.sub(lambda m: f'n_{m[1]}(', code)
         result[pc] = code
@@ -591,7 +577,7 @@ def lift(entry, insns, entries=frozenset(), callees=None, tables=None, setjmp=No
             if target is not None and setjmp(target):
                 resume.add(nxt)
     if not os.environ.get('P2_LIFT_KEEP_FLAGS'):
-        translated = dead_flags(translated, flow, frozenset(resume), entry)
+        translated = dead_flags(translated, flow, frozenset(resume))
     # `restrict` : le CPU vit hors de la mémoire invitée, et `mem_` est une
     # copie locale de M ; clang garde ainsi les registres invités dans des
     # registres hôtes entre les accès mémoire (voir RT_MEM dans rt.h).
@@ -1330,17 +1316,7 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
                     non_code_roots=[f'{a:#x}' for a in sorted(not_code)],
                     not_compiled={f'{a:#x}': why for a, why in sorted(failures.items()) if a not in counts})
     compiled = frozenset(counts)
-    # dead_flags a retiré la sauvegarde des drapeaux avant les appels sans
-    # lecteur ensuite ; une fonction qui lit des drapeaux reçus à son entrée
-    # (repérée par FLAGS_IN, quelques dizaines de fragments) la retrouve chez
-    # tous ses appelants directs.
-    flag_readers = sorted({entry for bodies in shards.values() for entry, body in bodies.items()
-                           if f'L{entry:x}: {FLAGS_IN}' in body})
-    reader_call = re.compile(r'(?<!c->flags = f; )rt_call_fn\(c, fn_(' + '|'.join(f'{e:x}' for e in flag_readers) + r'),')
     for name, bodies in sorted(shards.items()):
-        if flag_readers:
-            for entry in bodies:
-                bodies[entry] = reader_call.sub(lambda m: 'c->flags = f; ' + m[0], bodies[entry])
         linked, referenced = [], set()
         for entry in sorted(bodies):
             body, used = link_direct(bodies[entry].replace('static void fn_', 'void fn_', 1), compiled, imports)
@@ -1367,7 +1343,6 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
     shutil.rmtree(parts, ignore_errors=True)
     manifest['timing'] = dict(load=round(load_time, 1), lift=round(lift_time, 1),
                               write=round(time.time() - started - load_time - lift_time, 1))
-    log(f'{len(flag_readers)} fonctions lisent des drapeaux à l\'entrée (sauvegarde rétablie chez leurs appelants)')
     log(f'{len(selected)} named roots, {len(roots)} roots ({taken} from code pointers), {len(counts)} native functions, '
         f'{manifest["instructions"]} instructions, {len(used_imports)} direct imports, '
         f'{len(shards)} files, {manifest["c_bytes"] / 1e6:.0f} MB of C, {len(not_code)} non-code roots ignored '

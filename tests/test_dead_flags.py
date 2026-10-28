@@ -38,19 +38,22 @@ class DeadFlags(unittest.TestCase):
         out = self.run_pass(code, flow)
         self.assertIn('f_sub(&f', out[0x1000])   # CF traverse inc
 
-    def test_call_drops_save_only_when_nothing_reads_after(self):
-        dead = {0x1000: CALL.replace('L1010', 'L1010'), 0x1010: 'a = c->eax; b = 0u; r = f_logic(&f, a & b, 32);  goto L1012;',
+    def test_call_keeps_save_and_drops_unused_restore(self):
+        dead = {0x1000: 'a = c->eax; b = 1u; r = f_add(&f, a, b, 32); c->eax = r; goto L1003;',
+                0x1003: CALL,
+                0x1010: 'a = c->eax; b = 0u; r = f_logic(&f, a & b, 32);  goto L1012;',
                 0x1012: 'if (cond(&f, CC_E)) { goto L1000; } goto L1014;',
                 0x1014: 'c->flags = f; rt_return(c); c->esp += 0u; return;'}
-        flow = {0x1000: [0x1010], 0x1010: [0x1012], 0x1012: [0x1000, 0x1014], 0x1014: []}
+        flow = {0x1000: [0x1003], 0x1003: [0x1010], 0x1010: [0x1012], 0x1012: [0x1000, 0x1014], 0x1014: []}
         out = self.run_pass(dead, flow)
-        self.assertNotIn('c->flags = f', out[0x1000])
-        self.assertNotIn('f = c->flags', out[0x1000])
+        self.assertIn('c->flags = f;', out[0x1003])      # l'appelé peut lire les drapeaux
+        self.assertNotIn('f = c->flags', out[0x1003])    # rien ne les lit après
+        self.assertIn('f_add(&f', out[0x1000])           # donc l'écriture d'avant reste
         live = dict(dead)
         live[0x1010] = 'if (cond(&f, CC_B)) { goto L1000; } goto L1014;'   # lit CF rendu par l'appelé
-        out = self.run_pass(live, {0x1000: [0x1010], 0x1010: [0x1000, 0x1014], 0x1014: []})
-        self.assertIn('c->flags = f;', out[0x1000])
-        self.assertIn('f = c->flags;', out[0x1000])
+        out = self.run_pass(live, {0x1000: [0x1003], 0x1003: [0x1010], 0x1010: [0x1000, 0x1014], 0x1014: []})
+        self.assertIn('c->flags = f;', out[0x1003])
+        self.assertIn('f = c->flags;', out[0x1003])
 
     def test_eflags_users_are_left_alone(self):
         code = {0x1000: 'a = c->eax; b = 1u; r = f_add(&f, a, b, 32); c->eax = r; goto L1003;',
@@ -69,16 +72,8 @@ class DeadFlags(unittest.TestCase):
                 0x1020: 'if (cond(&f, CC_B)) { goto L1012; } goto L1012;'}
         flow = {0x1000: [0x1003], 0x1003: [0x1010], 0x1010: [0x1012], 0x1012: [], 0x1020: [0x1012]}
         out = lift.dead_flags(code, flow, frozenset({0x1020}))
-        self.assertIn('c->flags = f;', out[0x1003])
-        self.assertIn('f_sub(&f', out[0x1000])
-        self.assertIn('n_sub(', lift.dead_flags(code, flow)[0x1000])
-
-    def test_entry_flag_reader_is_marked(self):
-        code = {0x1000: 'if (cond(&f, CC_B)) { goto L1002; } goto L1002;',
-                0x1002: 'c->flags = f; rt_return(c); c->esp += 0u; return;'}
-        out = lift.dead_flags(code, {0x1000: [0x1002], 0x1002: []}, entry=0x1000)
-        self.assertTrue(out[0x1000].startswith(lift.FLAGS_IN))
-
+        self.assertIn('f = c->flags;', out[0x1003])   # relecture gardée pour la reprise
+        self.assertNotIn('f = c->flags;', lift.dead_flags(code, flow)[0x1003])
 
 if __name__ == '__main__':
     unittest.main()
