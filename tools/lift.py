@@ -1057,12 +1057,20 @@ def owner(layout, address):
 # fonction traduite est gardée sous le nom fn_<adresse>_guest ; fn_<adresse>
 # appelle la version native sauf si P2_NATIVE_<NOM>=0 (comparaison A/B, repli).
 # Si les octets ne correspondent pas (autre build du jeu), rien n'est remplacé.
+# Octets attendus (expression régulière sur l'hexadécimal) : '.' pour les
+# adresses absolues, que le remplacement lit dans le code invité.
+CHANGE_ACCESSOR = '83ec18ff742420e8(.{8})8b15(.{8})83c41c8d0482c3'
 NATIVE_OVERRIDES = {
     # pathmatch (filesystem_stdio, correcteur de casse Linux de Valve) : sur un
     # chemin absent, parcourt chaque dossier avec opendir/readdir/strcasecmp.
     # ~20 % du thread principal en partie. Inutile ici : APFS est insensible à
     # la casse sur Mac, et paths.c/case_path.c résolvent déjà la casse sur iOS.
     ('filesystem_stdio.so', 0x2df40): ('rt_native_pathmatch', 'PATHMATCH', '5557565383ec0c8b6c24288b5c242c0fb605'),
+    # CVEngineServer::GetChangeAccessor (engine.so, entrée 0x180 de sa table) :
+    # &sv.edictchangeinfo[NUM_FOR_EDICT(edict)]. Quand on quitte en pleine
+    # partie, sv.edicts est déjà à zéro alors que des entités appellent encore
+    # NetworkStateChanged : l'adresse calculée part dans le vide (voir native.c).
+    ('engine.so', 0x586930): ('rt_native_change_accessor', 'CHANGE_ACCESSOR', CHANGE_ACCESSOR),
 }
 
 
@@ -1083,16 +1091,17 @@ def native_override(layout, entry, body, log=print):
     if not spec:
         return None
     function, name, prefix = spec
-    if guest_bytes(module, entry, len(prefix) // 2).hex() != prefix:
+    length = len(re.sub(r'\(\.\{(\d+)\}\)', lambda m: 'x' * int(m.group(1)), prefix)) // 2
+    if not re.fullmatch(prefix, guest_bytes(module, entry, length).hex()):
         log(f'remplacement natif {function} ignoré : octets inattendus à {entry:#x}')
         return None
     head = f'void fn_{entry:x}(CPU *restrict c) {{'
     if head not in body:
         return None
     guest = body.replace(head, f'static void fn_{entry:x}_guest(CPU *restrict c) {{', 1)
-    return (f'void {function}(CPU *c);\nint rt_native_enabled(const char *name, int *state);\n{guest}\n'
+    return (f'int {function}(CPU *c, uint32_t entry);\nint rt_native_enabled(const char *name, int *state);\n{guest}\n'
             f'void fn_{entry:x}(CPU *restrict c) {{\n    static int state = -1;\n'
-            f'    if (rt_native_enabled("{name}", &state)) {function}(c); else fn_{entry:x}_guest(c);\n}}')
+            f'    if (!rt_native_enabled("{name}", &state) || !{function}(c, {entry:#x}u)) fn_{entry:x}_guest(c);\n}}')
 
 
 class LazyInsns(dict):
