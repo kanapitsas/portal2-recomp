@@ -103,7 +103,10 @@ def main():
     app_icon(app)
     # Lancement depuis l'écran d'accueil : arguments du jeu par défaut (les
     # dossiers de données sont ajoutés par ios/main_ios.c).
-    (app / 'launch.args').write_text('--\n-game\nportal2\n-novid\n-fullscreen\n')
+    # La langue vient de tools/language.py au moment du build : pour la changer,
+    # régler "language" dans config/local.json et refaire le build.
+    language = subprocess.run([sys.executable, str(ROOT / 'tools/language.py')], capture_output=True, text=True).stdout.split()
+    (app / 'launch.args').write_text('--\n-game\nportal2\n-novid\n-fullscreen\n' + ''.join(f'{word}\n' for word in language))
     if args.target == 'sim':
         subprocess.run(['codesign', '-s', '-', '-f', str(app)], check=True, capture_output=True)
     else:
