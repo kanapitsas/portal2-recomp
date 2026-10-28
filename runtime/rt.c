@@ -105,8 +105,10 @@ int rt_init(void) {
     return 0;
 }
 
+void rt_native_destroy(void);   // native.c
 void rt_destroy(void) {
     rt_shims_destroy();
+    rt_native_destroy();
     if (M) munmap(M, (size_t)(address_space + guard_size));
     M = NULL;
 }

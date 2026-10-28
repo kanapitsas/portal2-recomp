@@ -56,7 +56,8 @@ uint32_t rt_module_symbol(const GuestModule *module, const char *name) {
 }
 uint32_t rt_invoke(CPU *c, uint32_t address, const uint32_t *args, size_t count) {
     extern _Thread_local CPU *rt_fault_cpu;
-    if (!rt_fault_cpu) rt_fault_cpu = c;
+    CPU *outer = rt_fault_cpu;   // diagnostic de faute : CPU de l'appel en cours
+    rt_fault_cpu = c;
     uint32_t original = c->esp;
     c->esp -= (c->esp - (uint32_t)count * 4) & 15;
     for (size_t i = count; i; --i) PUSH(c, args[i - 1]);
@@ -64,6 +65,7 @@ uint32_t rt_invoke(CPU *c, uint32_t address, const uint32_t *args, size_t count)
     rt_call(c, address, RT_RETURN_SENTINEL);
     if (c->esp != expected) rt_trap(c, address, "cdecl stack imbalance");
     c->esp = original;
+    rt_fault_cpu = outer;
     return c->eax;
 }
 void rt_loader_set_arguments(uint32_t argc, uint32_t argv, uint32_t envp) {

@@ -54,22 +54,35 @@ int rt_native_pathmatch(CPU *c, uint32_t entry) {
 // Les adresses des deux tableaux sont lues dans le code invité : tools/lift.py
 // a vérifié les octets de GetChangeAccessor, ceux de NUM_FOR_EDICT le sont ici
 // (sinon 0 : la fonction traduite s'exécute).
+static struct { uint32_t entry, edicts_at, infos_at, scratch; int valid; } accessor;
+
+// Remise à zéro avec la mémoire invitée (rt_destroy) : adresses et bloc
+// factice ne survivent pas à une réinitialisation.
+void rt_native_destroy(void) { memset(&accessor, 0, sizeof(accessor)); }
+
 int rt_native_change_accessor(CPU *c, uint32_t entry) {
-    static const uint8_t head[] = {0x8b, 0x44, 0x24, 0x04, 0x2b, 0x05}, tail[] = {0xc1, 0xf8, 0x04, 0xc3};
-    static uint32_t scratch;
-    uint32_t number_for_edict = entry + 12 + R32(entry + 8);   // call rel32 en entry+7
-    if (!rt_guest_readable(number_for_edict) || !rt_guest_readable(number_for_edict + 13) ||
-        memcmp(GPTR(number_for_edict), head, sizeof(head)) || memcmp(GPTR(number_for_edict + 10), tail, sizeof(tail)))
-        return 0;
+    if (accessor.entry != entry) {
+        // Vérifié une fois par entrée : rt_guest_readable coûte un appel noyau,
+        // et cette fonction sert à chaque NetworkStateChanged.
+        static const uint8_t head[] = {0x8b, 0x44, 0x24, 0x04, 0x2b, 0x05}, tail[] = {0xc1, 0xf8, 0x04, 0xc3};
+        uint32_t number_for_edict = entry + 12 + R32(entry + 8);   // call rel32 en entry+7
+        accessor.entry = entry;
+        accessor.valid = rt_guest_readable(number_for_edict) && rt_guest_readable(number_for_edict + 13) &&
+                         !memcmp(GPTR(number_for_edict), head, sizeof(head)) &&
+                         !memcmp(GPTR(number_for_edict + 10), tail, sizeof(tail));
+        accessor.edicts_at = R32(number_for_edict + 6);
+        accessor.infos_at = R32(entry + 14);
+    }
+    if (!accessor.valid) return 0;
     // [esp+4] : this (CVEngineServer), [esp+8] : l'edict.
-    uint32_t edict = R32(c->esp + 8), edicts = R32(R32(number_for_edict + 6)), infos = R32(R32(entry + 14));
+    uint32_t edict = R32(c->esp + 8), edicts = R32(accessor.edicts_at), infos = R32(accessor.infos_at);
     if (edicts) {
         c->eax = infos + 4u * (uint32_t)((int32_t)(edict - edicts) >> 4);
     } else {
-        if (!scratch) scratch = rt_alloc(16);
-        if (!scratch) return 0;
-        memset(GPTR(scratch), 0, 16);
-        c->eax = scratch;
+        if (!accessor.scratch) accessor.scratch = rt_alloc(16);
+        if (!accessor.scratch) return 0;
+        memset(GPTR(accessor.scratch), 0, 16);
+        c->eax = accessor.scratch;
     }
     rt_return(c);
     return 1;

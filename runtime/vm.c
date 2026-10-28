@@ -145,16 +145,11 @@ uint32_t rt_vm_mapped_bytes(void) {
     return total > UINT32_MAX ? UINT32_MAX : (uint32_t)total;
 }
 
-// Diagnostic de faute : droits de la page invitée et projection qui la contient.
+// Diagnostic de faute (gestionnaire de signal) : droits de la page invitée.
+// Ne lit que le tableau des droits ; la liste des projections peut être en
+// cours de modification par le thread fautif.
 int rt_vm_describe(uint32_t address, char *out, size_t size) {
-    unsigned perm = address >= RT_VM_BEGIN && address < RT_VM_END ? rt_vm_permissions[(address - RT_VM_BEGIN) >> 12] : 0xffu;
-    for (Mapping *m = mappings; m; m = m->next)
-        if (address >= m->address && address - m->address < m->size)
-            return snprintf(out, size, "  page flags %#x, mapping %#x+%#x %s\n", perm, m->address, m->size, m->anonymous ? "anon" : "file");
-    uint32_t below = 0, above = UINT32_MAX;
-    for (Mapping *m = mappings; m; m = m->next) {
-        if (m->address + m->size <= address && m->address + m->size > below) below = m->address + m->size;
-        if (m->address > address && m->address < above) above = m->address;
-    }
-    return snprintf(out, size, "  page flags %#x, no mapping (previous ends %#x, next starts %#x)\n", perm, below, above);
+    if (address < RT_VM_BEGIN || address >= RT_VM_END) return snprintf(out, size, "  outside the mmap area\n");
+    unsigned flags = rt_vm_permissions[(address - RT_VM_BEGIN) >> 12];
+    return snprintf(out, size, "  page flags %#x (%s)\n", flags, flags & 8 ? "mapped" : "not mapped");
 }

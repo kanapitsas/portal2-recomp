@@ -1,6 +1,7 @@
 #include "checks.h"
 
 int rt_native_change_accessor(CPU *c, uint32_t entry);
+void rt_native_destroy(void);
 
 // GetChangeAccessor et NUM_FOR_EDICT d'engine.so, recopiés dans un bloc :
 // code en +0 et +32, sv.edicts en +48, sv.edictchangeinfo en +52.
@@ -13,6 +14,7 @@ static uint32_t change_accessor_code(uint32_t block) {
     W32(block + 8, 32 - 12);        // call NUM_FOR_EDICT
     W32(block + 14, block + 52);    // &sv.edictchangeinfo
     W32(block + 32 + 6, block + 48);   // &sv.edicts
+    rt_native_destroy();           // le remplacement garde les octets vérifiés par entrée
     return block;
 }
 
@@ -58,6 +60,7 @@ RT_CHECK(change_accessor_declines_unknown_code) {
     uint32_t block = rt_alloc(64), entry = change_accessor_code(block);
     int handled;
     W8(block + 32 + 10, 0x90);
+    rt_native_destroy();
     call_accessor(entry, 0x85a83690u, &handled);
     assert(!handled);
     rt_free(block);
