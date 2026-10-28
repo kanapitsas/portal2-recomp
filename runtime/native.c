@@ -6,6 +6,8 @@
 #include <string.h>
 #include <stdio.h>
 
+int rt_paths_case_insensitive(void);   // paths.c
+
 int rt_native_enabled(const char *name, int *state) {
     int value = __atomic_load_n(state, __ATOMIC_RELAXED);
     if (value < 0) {
@@ -13,6 +15,8 @@ int rt_native_enabled(const char *name, int *state) {
         snprintf(variable, sizeof(variable), "P2_NATIVE_%s", name);
         const char *e = getenv(variable);
         value = !(e && !strcmp(e, "0"));
+        // Volume Mac sensible à la casse : le correcteur invité reste utile.
+        if (value && !strcmp(name, "PATHMATCH") && !rt_paths_case_insensitive()) value = 0;
         __atomic_store_n(state, value, __ATOMIC_RELAXED);
     }
     return value;
@@ -23,8 +27,8 @@ int rt_native_enabled(const char *name, int *state) {
 // L'original met *out à NULL, et si access(in) réussit rend false sans rien
 // changer ; sinon il cherche une variante de casse dossier par dossier.
 // L'appelant utilise alors *out à la place de in. Ici, aucune variante n'est
-// cherchée : APFS (Mac) est insensible à la casse, et sur iOS paths.c et
-// case_path.c résolvent la casse de chaque chemin du jeu. Résultat : *out
+// cherchée : utilisé seulement quand toutes les racines résolvent la casse
+// (APFS insensible sur Mac, paths.c et case_path.c sur iOS). Résultat : *out
 // reste NULL, retour false, comme l'original quand le chemin existe tel quel.
 void rt_native_pathmatch(CPU *c) {
     uint32_t out = R32(c->esp + 8);

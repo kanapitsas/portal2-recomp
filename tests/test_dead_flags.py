@@ -59,6 +59,26 @@ class DeadFlags(unittest.TestCase):
         out = self.run_pass(code, {0x1000: [0x1003], 0x1003: [0x1004], 0x1004: []})
         self.assertEqual(out, code)
 
+    def test_longjmp_resume_point_keeps_flags_live_across_calls(self):
+        # 0x1000 écrit des drapeaux, 0x1003 appelle ; un longjmp peut revenir
+        # en 0x1020, qui lit les drapeaux.
+        code = {0x1000: 'a = c->eax; b = 1u; r = f_sub(&f, a, b, 32);  goto L1003;',
+                0x1003: CALL.replace('L1010', 'L1010'),
+                0x1010: 'a = c->eax; b = 0u; r = f_logic(&f, a & b, 32);  goto L1012;',
+                0x1012: 'c->flags = f; rt_return(c); c->esp += 0u; return;',
+                0x1020: 'if (cond(&f, CC_B)) { goto L1012; } goto L1012;'}
+        flow = {0x1000: [0x1003], 0x1003: [0x1010], 0x1010: [0x1012], 0x1012: [], 0x1020: [0x1012]}
+        out = lift.dead_flags(code, flow, frozenset({0x1020}))
+        self.assertIn('c->flags = f;', out[0x1003])
+        self.assertIn('f_sub(&f', out[0x1000])
+        self.assertIn('n_sub(', lift.dead_flags(code, flow)[0x1000])
+
+    def test_entry_flag_reader_is_marked(self):
+        code = {0x1000: 'if (cond(&f, CC_B)) { goto L1002; } goto L1002;',
+                0x1002: 'c->flags = f; rt_return(c); c->esp += 0u; return;'}
+        out = lift.dead_flags(code, {0x1000: [0x1002], 0x1002: []}, entry=0x1000)
+        self.assertTrue(out[0x1000].startswith(lift.FLAGS_IN))
+
 
 if __name__ == '__main__':
     unittest.main()

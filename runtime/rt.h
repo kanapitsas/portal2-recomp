@@ -158,7 +158,9 @@ RT_ALWAYS_INLINE uint32_t f_sbb(FL *f, uint32_t a, uint32_t b, int n) {
     a &= MSK(n); b &= MSK(n); uint32_t ci = f->cf; uint32_t rr = (a - b - ci) & MSK(n);
     f->cf = (uint64_t)a < (uint64_t)b + ci; f->of = (((a ^ b) & (a ^ rr)) >> (n - 1)) & 1; f->af = ((a ^ b ^ rr) >> 4) & 1; szp(f, rr, n); return rr;
 }
-RT_ALWAYS_INLINE uint32_t f_logic(FL *f, uint32_t r, int n) { f->cf = 0; f->of = 0; szp(f, r, n); return r & MSK(n); }
+// AF est indéfini après and/or/xor/test et imul (manuel Intel) : mis à 0, ce
+// qui en fait des écritures complètes pour dead_flags (lift.py).
+RT_ALWAYS_INLINE uint32_t f_logic(FL *f, uint32_t r, int n) { f->cf = 0; f->of = 0; f->af = 0; szp(f, r, n); return r & MSK(n); }
 RT_ALWAYS_INLINE uint32_t f_inc(FL *f, uint32_t a, int n) { uint32_t r = (a + 1) & MSK(n); f->of = r == SGN(n); f->af = ((a ^ 1u ^ r) >> 4) & 1; szp(f, r, n); return r; }
 RT_ALWAYS_INLINE uint32_t f_dec(FL *f, uint32_t a, int n) { a &= MSK(n); uint32_t r = (a - 1) & MSK(n); f->of = a == SGN(n); f->af = ((a ^ 1u ^ r) >> 4) & 1; szp(f, r, n); return r; }
 RT_ALWAYS_INLINE uint32_t f_neg(FL *f, uint32_t a, int n) { a &= MSK(n); uint32_t r = (0 - a) & MSK(n); f->cf = a != 0; f->of = a == SGN(n); f->af = ((a ^ r) >> 4) & 1; szp(f, r, n); return r; }
@@ -195,7 +197,7 @@ RT_ALWAYS_INLINE uint32_t f_rotate(FL *f, uint32_t value, uint32_t count, int n,
 }
 RT_ALWAYS_INLINE uint32_t f_imul(FL *f, uint32_t a, uint32_t b, int n) {
     int64_t r = (int64_t)(int32_t)sx(a, n) * (int64_t)(int32_t)sx(b, n); uint32_t rr = (uint32_t)r & MSK(n);
-    f->cf = f->of = r != (int64_t)(int32_t)sx(rr, n); szp(f, rr, n); return rr;
+    f->cf = f->of = r != (int64_t)(int32_t)sx(rr, n); f->af = 0; szp(f, rr, n); return rr;
 }
 // Mêmes résultats que f_*, sans indicateurs (tools/lift.py, dead_flags).
 RT_ALWAYS_INLINE uint32_t n_add(uint32_t a, uint32_t b, int n) { return (a + b) & MSK(n); }
