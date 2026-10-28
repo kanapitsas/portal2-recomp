@@ -110,6 +110,34 @@ Re-run `./setup.sh --ios` every 7 days with a free account.
 Saves and settings go to `~/Library/Application Support/Portal2Recomp`; the
 game folder is never written to.
 
+### Game language
+
+The game starts in the language chosen by `tools/language.py`, which adds
+`-language <name>` to the launch. First match wins:
+
+1. a `-language <name>` you pass yourself (for example
+   `python3 tools/make_app.py -- -game portal2 -novid -language french`);
+2. the environment variable `P2_LANGUAGE`
+   (`P2_LANGUAGE=german "~/Applications/Portal 2 Natif.app/Contents/MacOS/launcher"`);
+3. `"language": "french"` in `config/local.json` (no rebuild needed, the app
+   reads it at each launch);
+4. the language set in the Steam properties of Portal 2, read from
+   `steamapps/appmanifest_620.acf` next to the game folder;
+5. your macOS system language;
+6. English.
+
+Names are Steam's: `french`, `german`, `spanish`, `italian`, `russian`,
+`schinese`, `brazilian`, `koreana`, and so on (one `gameui_<name>.txt` per
+language in `portal2/resource/`). A language missing from your game folder
+falls back to English. Steam only downloads the voices of the language set in
+its properties: if you installed the game in English, menus and subtitles are
+translated but the voices stay English. To get them, switch the language in
+Steam (Properties > Language) and let it update the game first.
+
+`python3 tools/language.py --explain` prints the choice and where it comes
+from. On the iPhone, the language is written into the app at build time
+(same rules, rebuild after changing `config/local.json`).
+
 ## Manual build
 
 `config/local.json` (ignored by git; `setup.sh` writes it):

@@ -56,6 +56,10 @@ Replace `YOURTEAMID` with your team ID (Xcode > Settings > Accounts, or the
 `Documents/launch.args` in the app's container adds arguments
 (one per line), for example `+map` followed by `sp_a2_laser_intro`.
 
+The game language is written into the app's `launch.args` when it is built
+(`-language <name>`, chosen as on the Mac: see "Game language" in the README).
+To change it, set `"language"` in `config/local.json` and rebuild.
+
 ## Settings (iOS Settings app)
 
 "Portal 2" page in the Settings app (`ios/Settings.bundle`, copied into the app

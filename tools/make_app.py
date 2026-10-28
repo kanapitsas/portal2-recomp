@@ -39,8 +39,11 @@ if ! /usr/bin/pgrep -qx steam_osx; then
 fi
 export SteamAppId=620 SteamGameId=620
 mkdir -p "$(dirname "$LOG")" {user_dir}
+# Langue : P2_LANGUAGE, "language" de config/local.json, Steam, système (tools/language.py).
+# Un -language passé au lanceur l'emporte ; en cas d'échec, le jeu reste en anglais.
+LANGUAGE_ARGS=$(/usr/bin/python3 {language_script} -- {game_args} "$@" 2>/dev/null)
 exec "$HERE/portal2-native" --images {images} --game-dir {game_dir} --linux-root {linux_root} \\
-    --user-dir {user_dir} -- {game_args} "$@" >"$LOG" 2>&1
+    --user-dir {user_dir} -- {game_args} $LANGUAGE_ARGS "$@" >"$LOG" 2>&1
 '''
 
 
@@ -66,7 +69,7 @@ def main():
 
     launcher = macos / 'launcher'
     launcher.write_text(LAUNCHER.format(
-        name=NAME, game_args=shlex.join(game_args or DEFAULT_ARGS),
+        name=NAME, language_script=shlex.quote(str(ROOT / 'tools/language.py')), game_args=shlex.join(game_args or DEFAULT_ARGS),
         binary_text=str(binary), game_dir_text=str(paths['game_dir']).replace('"', ''),
         **{key: shlex.quote(str(value)) for key, value in paths.items()}))
     launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
