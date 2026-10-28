@@ -466,6 +466,76 @@ class _Without:
         return address != self.own and address in self.entries
 
 
+# Indicateurs morts. Chaque instruction écrit les indicateurs x86 dans la
+# structure locale f (rt.h, calcul immédiat). Une écriture que rien ne lit
+# avant la suivante est inutile, et clang ne l'élimine pas toujours (f
+# sauvegardé dans c->flags à chaque appel). Passe arrière de vivacité, sur
+# l'indicateur « au moins un drapeau » :
+# - écrivains connus (f_add/sub/logic/neg/imul : tous les drapeaux lus ici ;
+#   AF n'est lu que par pushf/lahf, et ces fonctions-là ne sont pas traitées) ;
+#   inc/dec/décalages n'écrivent pas tout : ils ne tuent rien mais leur calcul
+#   peut sauter si rien ne lit après ;
+# - lecteurs : cond(&f, …) ; toute autre mention de f est opaque (lue, gardée) ;
+# - appels : transparents (l'appelé peut rendre les drapeaux reçus, comme
+#   get_pc_thunk) ; c->flags n'est sauvé avant et relu après que si un lecteur
+#   suit l'appel. Seule hypothèse : un appelé ne lit pas à son entrée des
+#   drapeaux qu'il n'a pas posés (conventions d'appel x86). ret et sauts
+#   sortants sauvent toujours les drapeaux (résultat rendu dans CF, etc.).
+_FLAG_WRITER = re.compile(r'\bf_(add|sub|logic|neg|imul|inc|dec|shl|shr|sar)\(&f, ')
+_FLAG_KILLS = {'add', 'sub', 'logic', 'neg', 'imul'}
+_FLAG_ANY = re.compile(r'&f\b|\bf\.|\bf = |= f;')
+_CALL_SAVE = 'c->flags = f; '
+_CALL_RESTORE = ' f = c->flags;'
+_CALL = re.compile(r'rt_call(_fn|_any|_import)?\(c, ')
+
+
+def dead_flags(translated, flow):
+    if any('get_eflags' in code or 'set_eflags' in code for code in translated.values()):
+        return translated
+    info = {}
+    for pc, code in translated.items():
+        call = _CALL.search(code) is not None and _CALL_SAVE in code and _CALL_RESTORE in code
+        rest = code.replace(_CALL_SAVE, '', 1).replace(_CALL_RESTORE, '', 1) if call else code
+        writers = _FLAG_WRITER.findall(rest)
+        others = _FLAG_ANY.findall(_FLAG_WRITER.sub('', rest))
+        conds = rest.count('cond(&f')
+        if call:
+            # Appel transparent : l'appelé peut rendre les drapeaux reçus
+            # (get_pc_thunk). Sauvegarde et relecture ne sautent que si rien
+            # ne lit les drapeaux après l'appel.
+            kind = ('call', False, False) if not writers and not others else ('opaque', True, False)
+        elif len(writers) == 1 and not others:
+            kind = ('writer', False, writers[0] in _FLAG_KILLS)
+        elif not writers and conds and len(others) == conds:
+            kind = ('reader', True, False)
+        elif not writers and not others:
+            kind = ('none', False, False)
+        else:
+            kind = ('opaque', True, False)
+        info[pc] = kind
+    live_in = dict.fromkeys(translated, False)
+    changed = True
+    while changed:
+        changed = False
+        for pc in sorted(translated, reverse=True):
+            _, reads, kills = info[pc]
+            out = any(live_in.get(s, True) for s in flow.get(pc, ()))
+            value = reads or (out and not kills)
+            if value != live_in[pc]:
+                live_in[pc] = value
+                changed = True
+    result = {}
+    for pc, code in translated.items():
+        kind = info[pc][0]
+        out = any(live_in.get(s, True) for s in flow.get(pc, ()))
+        if kind == 'call' and not out:
+            code = code.replace(_CALL_SAVE, '', 1).replace(_CALL_RESTORE, '', 1)
+        elif kind == 'writer' and not out:
+            code = _FLAG_WRITER.sub(lambda m: f'n_{m[1]}(', code)
+        result[pc] = code
+    return result
+
+
 def lift(entry, insns, entries=frozenset(), callees=None, tables=None, setjmp=None, delta=None):
     """Translate one function. `setjmp(target)` tells whether a direct call
     target is setjmp; its return sites become resume points for longjmp.
@@ -473,6 +543,7 @@ def lift(entry, insns, entries=frozenset(), callees=None, tables=None, setjmp=No
     de code et chaque valeur relocalisée vaut alors adresse + delta."""
     pending = [entry]
     translated = {}
+    flow = {}
     resume = set()
     others = _Without(entries, entry)
     while pending:
@@ -487,6 +558,7 @@ def lift(entry, insns, entries=frozenset(), callees=None, tables=None, setjmp=No
         except (Unsupported, IndexError) as exc:
             raise Unsupported(f'{pc:#x}: {exc}') from exc
         translated[pc] = code
+        flow[pc] = successors
         pending.extend(successors)
         nxt, op, args = insns[pc]
         if op == 'call' and setjmp is not None:
@@ -496,6 +568,8 @@ def lift(entry, insns, entries=frozenset(), callees=None, tables=None, setjmp=No
                 target = None
             if target is not None and setjmp(target):
                 resume.add(nxt)
+    if not os.environ.get('P2_LIFT_KEEP_FLAGS'):
+        translated = dead_flags(translated, flow)
     # `restrict` : le CPU vit hors de la mémoire invitée, et `mem_` est une
     # copie locale de M ; clang garde ainsi les registres invités dans des
     # registres hôtes entre les accès mémoire (voir RT_MEM dans rt.h).

@@ -197,6 +197,23 @@ RT_ALWAYS_INLINE uint32_t f_imul(FL *f, uint32_t a, uint32_t b, int n) {
     int64_t r = (int64_t)(int32_t)sx(a, n) * (int64_t)(int32_t)sx(b, n); uint32_t rr = (uint32_t)r & MSK(n);
     f->cf = f->of = r != (int64_t)(int32_t)sx(rr, n); szp(f, rr, n); return rr;
 }
+// Mêmes résultats que f_*, sans indicateurs (tools/lift.py, dead_flags).
+RT_ALWAYS_INLINE uint32_t n_add(uint32_t a, uint32_t b, int n) { return (a + b) & MSK(n); }
+RT_ALWAYS_INLINE uint32_t n_sub(uint32_t a, uint32_t b, int n) { return (a - b) & MSK(n); }
+RT_ALWAYS_INLINE uint32_t n_logic(uint32_t r, int n) { return r & MSK(n); }
+RT_ALWAYS_INLINE uint32_t n_neg(uint32_t a, int n) { return (0 - a) & MSK(n); }
+RT_ALWAYS_INLINE uint32_t n_inc(uint32_t a, int n) { return (a + 1) & MSK(n); }
+RT_ALWAYS_INLINE uint32_t n_dec(uint32_t a, int n) { return (a - 1) & MSK(n); }
+RT_ALWAYS_INLINE uint32_t n_imul(uint32_t a, uint32_t b, int n) {
+    return (uint32_t)((int64_t)(int32_t)sx(a, n) * (int64_t)(int32_t)sx(b, n)) & MSK(n);
+}
+RT_ALWAYS_INLINE uint32_t n_shl(uint32_t a, uint32_t cnt, int n) {
+    cnt &= 31; a &= MSK(n); return cnt ? (uint32_t)((uint64_t)a << cnt) & MSK(n) : a;
+}
+RT_ALWAYS_INLINE uint32_t n_shr(uint32_t a, uint32_t cnt, int n) { cnt &= 31; a &= MSK(n); return cnt ? a >> cnt : a; }
+RT_ALWAYS_INLINE uint32_t n_sar(uint32_t a, uint32_t cnt, int n) {
+    cnt &= 31; int32_t s = (int32_t)sx(a & MSK(n), n); return cnt ? (uint32_t)(s >> cnt) & MSK(n) : a & MSK(n);
+}
 RT_ALWAYS_INLINE int parity(uint32_t v) { return !__builtin_parity(v & 0xff); }
 
 enum { CC_O, CC_NO, CC_B, CC_AE, CC_E, CC_NE, CC_BE, CC_A, CC_S, CC_NS, CC_P, CC_NP, CC_L, CC_GE, CC_LE, CC_G };
