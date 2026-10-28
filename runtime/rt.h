@@ -73,10 +73,6 @@ __attribute__((noreturn)) void rt_memory_trap(uint32_t address, uint64_t length,
 // détecté (par ex. une page de garde de pile de 4 Kio). Un accès qui déborde
 // 4 Go tombe dans la page de garde réservée après l'espace invité (rt.c).
 // Toute autre faute reste une faute matérielle, traduite par host_fault.
-// Petites fonctions des corps générés : toujours intégrées. Sinon clang les
-// laisse hors ligne dans les grosses fonctions (seuil des sites « froids »),
-// et un seul appel à f_sub(&f, …) force tous les indicateurs en mémoire.
-#define RT_ALWAYS_INLINE static inline __attribute__((always_inline))
 static inline void rt_check_memory(uint32_t address, unsigned size, int mode) {
 #ifdef RT_FAST_MEMORY
     (void)address; (void)size; (void)mode;
@@ -139,45 +135,43 @@ static inline void rt_wx (uint8_t *m, uint32_t a, XMM v)      { rt_check_memory(
 
 #define MSK(n) ((n) == 32 ? 0xffffffffu : ((1u << (n)) - 1))
 #define SGN(n) (1u << ((n) - 1))
-RT_ALWAYS_INLINE uint32_t sx(uint32_t v, int n) { return n == 32 ? v : (uint32_t)((int32_t)(v << (32 - n)) >> (32 - n)); }
+static inline uint32_t sx(uint32_t v, int n) { return n == 32 ? v : (uint32_t)((int32_t)(v << (32 - n)) >> (32 - n)); }
 
-RT_ALWAYS_INLINE void szp(FL *f, uint32_t r, int n) { r &= MSK(n); f->zf = r == 0; f->sf = (r >> (n - 1)) & 1; f->pf = r & 0xff; }
-RT_ALWAYS_INLINE uint32_t f_add(FL *f, uint32_t a, uint32_t b, int n) {
+static inline void szp(FL *f, uint32_t r, int n) { r &= MSK(n); f->zf = r == 0; f->sf = (r >> (n - 1)) & 1; f->pf = r & 0xff; }
+static inline uint32_t f_add(FL *f, uint32_t a, uint32_t b, int n) {
     a &= MSK(n); b &= MSK(n); uint64_t r = (uint64_t)a + b; uint32_t rr = (uint32_t)r & MSK(n);
     f->cf = (uint32_t)(r >> n) & 1; f->of = (((a ^ rr) & (b ^ rr)) >> (n - 1)) & 1; f->af = ((a ^ b ^ rr) >> 4) & 1; szp(f, rr, n); return rr;
 }
-RT_ALWAYS_INLINE uint32_t f_adc(FL *f, uint32_t a, uint32_t b, int n) {
+static inline uint32_t f_adc(FL *f, uint32_t a, uint32_t b, int n) {
     a &= MSK(n); b &= MSK(n); uint64_t r = (uint64_t)a + b + f->cf; uint32_t rr = (uint32_t)r & MSK(n);
     f->cf = (uint32_t)(r >> n) & 1; f->of = (((a ^ rr) & (b ^ rr)) >> (n - 1)) & 1; f->af = ((a ^ b ^ rr) >> 4) & 1; szp(f, rr, n); return rr;
 }
-RT_ALWAYS_INLINE uint32_t f_sub(FL *f, uint32_t a, uint32_t b, int n) {
+static inline uint32_t f_sub(FL *f, uint32_t a, uint32_t b, int n) {
     a &= MSK(n); b &= MSK(n); uint32_t rr = (a - b) & MSK(n);
     f->cf = a < b; f->of = (((a ^ b) & (a ^ rr)) >> (n - 1)) & 1; f->af = ((a ^ b ^ rr) >> 4) & 1; szp(f, rr, n); return rr;
 }
-RT_ALWAYS_INLINE uint32_t f_sbb(FL *f, uint32_t a, uint32_t b, int n) {
+static inline uint32_t f_sbb(FL *f, uint32_t a, uint32_t b, int n) {
     a &= MSK(n); b &= MSK(n); uint32_t ci = f->cf; uint32_t rr = (a - b - ci) & MSK(n);
     f->cf = (uint64_t)a < (uint64_t)b + ci; f->of = (((a ^ b) & (a ^ rr)) >> (n - 1)) & 1; f->af = ((a ^ b ^ rr) >> 4) & 1; szp(f, rr, n); return rr;
 }
-// AF est indéfini après and/or/xor/test et imul (manuel Intel) : mis à 0, ce
-// qui en fait des écritures complètes pour dead_flags (lift.py).
-RT_ALWAYS_INLINE uint32_t f_logic(FL *f, uint32_t r, int n) { f->cf = 0; f->of = 0; f->af = 0; szp(f, r, n); return r & MSK(n); }
-RT_ALWAYS_INLINE uint32_t f_inc(FL *f, uint32_t a, int n) { uint32_t r = (a + 1) & MSK(n); f->of = r == SGN(n); f->af = ((a ^ 1u ^ r) >> 4) & 1; szp(f, r, n); return r; }
-RT_ALWAYS_INLINE uint32_t f_dec(FL *f, uint32_t a, int n) { a &= MSK(n); uint32_t r = (a - 1) & MSK(n); f->of = a == SGN(n); f->af = ((a ^ 1u ^ r) >> 4) & 1; szp(f, r, n); return r; }
-RT_ALWAYS_INLINE uint32_t f_neg(FL *f, uint32_t a, int n) { a &= MSK(n); uint32_t r = (0 - a) & MSK(n); f->cf = a != 0; f->of = a == SGN(n); f->af = ((a ^ r) >> 4) & 1; szp(f, r, n); return r; }
-RT_ALWAYS_INLINE uint32_t f_shl(FL *f, uint32_t a, uint32_t cnt, int n) {
+static inline uint32_t f_logic(FL *f, uint32_t r, int n) { f->cf = 0; f->of = 0; szp(f, r, n); return r & MSK(n); }
+static inline uint32_t f_inc(FL *f, uint32_t a, int n) { uint32_t r = (a + 1) & MSK(n); f->of = r == SGN(n); f->af = ((a ^ 1u ^ r) >> 4) & 1; szp(f, r, n); return r; }
+static inline uint32_t f_dec(FL *f, uint32_t a, int n) { a &= MSK(n); uint32_t r = (a - 1) & MSK(n); f->of = a == SGN(n); f->af = ((a ^ 1u ^ r) >> 4) & 1; szp(f, r, n); return r; }
+static inline uint32_t f_neg(FL *f, uint32_t a, int n) { a &= MSK(n); uint32_t r = (0 - a) & MSK(n); f->cf = a != 0; f->of = a == SGN(n); f->af = ((a ^ r) >> 4) & 1; szp(f, r, n); return r; }
+static inline uint32_t f_shl(FL *f, uint32_t a, uint32_t cnt, int n) {
     cnt &= 31; a &= MSK(n); if (!cnt) return a;
     uint64_t r = (uint64_t)a << cnt; uint32_t rr = (uint32_t)r & MSK(n);
     f->cf = cnt <= (uint32_t)n ? (uint32_t)(r >> n) & 1 : 0; f->of = ((rr >> (n - 1)) & 1) ^ f->cf; szp(f, rr, n); return rr;
 }
-RT_ALWAYS_INLINE uint32_t f_shr(FL *f, uint32_t a, uint32_t cnt, int n) {
+static inline uint32_t f_shr(FL *f, uint32_t a, uint32_t cnt, int n) {
     cnt &= 31; a &= MSK(n); if (!cnt) return a;
     uint32_t rr = cnt >= 32 ? 0 : a >> cnt; f->cf = (uint32_t)(((uint64_t)a >> (cnt - 1)) & 1); f->of = (a >> (n - 1)) & 1; szp(f, rr, n); return rr;
 }
-RT_ALWAYS_INLINE uint32_t f_sar(FL *f, uint32_t a, uint32_t cnt, int n) {
+static inline uint32_t f_sar(FL *f, uint32_t a, uint32_t cnt, int n) {
     cnt &= 31; int32_t s = (int32_t)sx(a & MSK(n), n); if (!cnt) return a & MSK(n);
     uint32_t rr = (uint32_t)(s >> cnt) & MSK(n); f->cf = (uint32_t)(s >> (cnt - 1)) & 1; f->of = 0; szp(f, rr, n); return rr;
 }
-RT_ALWAYS_INLINE uint32_t f_rotate(FL *f, uint32_t value, uint32_t count, int n, int kind) {
+static inline uint32_t f_rotate(FL *f, uint32_t value, uint32_t count, int n, int kind) {
     value &= MSK(n);
     uint32_t masked = count & 31;
     if (!masked) return value;
@@ -195,31 +189,14 @@ RT_ALWAYS_INLINE uint32_t f_rotate(FL *f, uint32_t value, uint32_t count, int n,
     if (masked == 1) f->of = kind == 0 || kind == 2 ? (result >> (n - 1)) ^ f->cf : ((result >> (n - 1)) ^ (result >> (n - 2))) & 1;
     return result;
 }
-RT_ALWAYS_INLINE uint32_t f_imul(FL *f, uint32_t a, uint32_t b, int n) {
+static inline uint32_t f_imul(FL *f, uint32_t a, uint32_t b, int n) {
     int64_t r = (int64_t)(int32_t)sx(a, n) * (int64_t)(int32_t)sx(b, n); uint32_t rr = (uint32_t)r & MSK(n);
-    f->cf = f->of = r != (int64_t)(int32_t)sx(rr, n); f->af = 0; szp(f, rr, n); return rr;
+    f->cf = f->of = r != (int64_t)(int32_t)sx(rr, n); szp(f, rr, n); return rr;
 }
-// Mêmes résultats que f_*, sans indicateurs (tools/lift.py, dead_flags).
-RT_ALWAYS_INLINE uint32_t n_add(uint32_t a, uint32_t b, int n) { return (a + b) & MSK(n); }
-RT_ALWAYS_INLINE uint32_t n_sub(uint32_t a, uint32_t b, int n) { return (a - b) & MSK(n); }
-RT_ALWAYS_INLINE uint32_t n_logic(uint32_t r, int n) { return r & MSK(n); }
-RT_ALWAYS_INLINE uint32_t n_neg(uint32_t a, int n) { return (0 - a) & MSK(n); }
-RT_ALWAYS_INLINE uint32_t n_inc(uint32_t a, int n) { return (a + 1) & MSK(n); }
-RT_ALWAYS_INLINE uint32_t n_dec(uint32_t a, int n) { return (a - 1) & MSK(n); }
-RT_ALWAYS_INLINE uint32_t n_imul(uint32_t a, uint32_t b, int n) {
-    return (uint32_t)((int64_t)(int32_t)sx(a, n) * (int64_t)(int32_t)sx(b, n)) & MSK(n);
-}
-RT_ALWAYS_INLINE uint32_t n_shl(uint32_t a, uint32_t cnt, int n) {
-    cnt &= 31; a &= MSK(n); return cnt ? (uint32_t)((uint64_t)a << cnt) & MSK(n) : a;
-}
-RT_ALWAYS_INLINE uint32_t n_shr(uint32_t a, uint32_t cnt, int n) { cnt &= 31; a &= MSK(n); return cnt ? a >> cnt : a; }
-RT_ALWAYS_INLINE uint32_t n_sar(uint32_t a, uint32_t cnt, int n) {
-    cnt &= 31; int32_t s = (int32_t)sx(a & MSK(n), n); return cnt ? (uint32_t)(s >> cnt) & MSK(n) : a & MSK(n);
-}
-RT_ALWAYS_INLINE int parity(uint32_t v) { return !__builtin_parity(v & 0xff); }
+static inline int parity(uint32_t v) { return !__builtin_parity(v & 0xff); }
 
 enum { CC_O, CC_NO, CC_B, CC_AE, CC_E, CC_NE, CC_BE, CC_A, CC_S, CC_NS, CC_P, CC_NP, CC_L, CC_GE, CC_LE, CC_G };
-RT_ALWAYS_INLINE int cond(const FL *f, int cc) {
+static inline int cond(const FL *f, int cc) {
     switch (cc) {
     case CC_O: return f->of; case CC_NO: return !f->of;
     case CC_B: return f->cf; case CC_AE: return !f->cf;
@@ -282,7 +259,7 @@ void rt_guest_poll(void);
 // Threads bloqués sur le verrou invité (scheduler.c). Le code généré ne cède
 // que s'il y en a : test en ligne, sans appel ni accès _Thread_local.
 extern _Atomic unsigned rt_guest_waiting;
-RT_ALWAYS_INLINE void rt_poll(void) {
+static inline void rt_poll(void) {
     if (__builtin_expect(atomic_load_explicit(&rt_guest_waiting, memory_order_relaxed) != 0, 0)) rt_guest_poll();
 }
 // Appel et saut directs du code généré vers une fonction traduite connue
@@ -294,7 +271,7 @@ RT_ALWAYS_INLINE void rt_poll(void) {
 // adresse de retour. Chaque chemin rapide cède le verrou comme rt_dispatch
 // (rt_poll) : un cycle d'appels ou de sauts terminaux entre fonctions, sans
 // branche arrière, ne doit pas affamer les autres threads invités.
-RT_ALWAYS_INLINE void rt_call_fn(CPU *c, gfn fn, uint32_t target, uint32_t expected_return) {
+static inline void rt_call_fn(CPU *c, gfn fn, uint32_t target, uint32_t expected_return) {
 #ifdef RT_TRACED_CALLS
     (void)fn; rt_call(c, target, expected_return);
 #else
@@ -308,7 +285,7 @@ RT_ALWAYS_INLINE void rt_call_fn(CPU *c, gfn fn, uint32_t target, uint32_t expec
 // sont presque toujours monomorphes), ce qui évite la recherche de rt_lookup.
 // Sans atomique : le code généré s'exécute sous le verrou invité.
 typedef struct { uint32_t target; gfn fn; } RtSiteCache;
-RT_ALWAYS_INLINE gfn rt_site_lookup(RtSiteCache *site, uint32_t target) {
+static inline gfn rt_site_lookup(RtSiteCache *site, uint32_t target) {
     if (__builtin_expect(site->target == target && site->fn != NULL, 1)) return site->fn;
     gfn fn = target < RT_IMPORT_BASE ? rt_lookup(target) : NULL;
     if (fn) { site->target = target; site->fn = fn; }
@@ -339,7 +316,7 @@ static inline void rt_jump_any_site(CPU *c, uint32_t target, RtSiteCache *site) 
 // Appel direct d'un import (shim) depuis le code généré, qui tient déjà le
 // verrou invité : route mémorisée appelée directement, sinon rt_call.
 void rt_call_import(RT_NOESCAPE CPU *c, uint32_t target, uint32_t expected_return);
-RT_ALWAYS_INLINE void rt_jump_fn(CPU *c, gfn fn, uint32_t target) {
+static inline void rt_jump_fn(CPU *c, gfn fn, uint32_t target) {
 #ifdef RT_TRACED_CALLS
     (void)fn; rt_dispatch(c, target);
 #else

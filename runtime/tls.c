@@ -59,28 +59,13 @@ uint32_t rt_thread_pointer(CPU *c) {
     return c->gs_base;
 }
 
-// Cache direct (thread, module) -> bloc : __tls_get_addr est appelé à chaque
-// accès TLS invité, et les deux parcours de liste coûtaient ~1 % du thread
-// principal. Le code invité s'exécute sous la porte invitée (un seul thread
-// invité à la fois) : pas d'atomiques. Entrées d'un thread effacées à sa fin.
-#define TLS_CACHE 256u
-static struct { uint32_t thread, module, address, size; } tls_cache[TLS_CACHE];
-static unsigned tls_slot(uint32_t thread, uint32_t module) { return (thread * 31u + module) & (TLS_CACHE - 1); }
-
 uint32_t rt_tls_address(CPU *c, uint32_t module, uint32_t offset) {
     if (!c->tid) c->tid = 1;
-    unsigned slot = tls_slot(c->tid, module);
-    if (tls_cache[slot].thread == c->tid && tls_cache[slot].module == module && offset < tls_cache[slot].size)
-        return tls_cache[slot].address + offset;
     TLSModule *m = modules;
     while (m && m->id != module) m = m->next;
     if (!m || offset >= m->size) rt_trap(c, c->eip, "unknown module or offset in guest TLS descriptor");
     for (TLSBlock *b = blocks; b; b = b->next)
-        if (b->thread == c->tid && b->module == module) {
-            tls_cache[slot].thread = c->tid; tls_cache[slot].module = module;
-            tls_cache[slot].address = b->address; tls_cache[slot].size = m->size;
-            return b->address + offset;
-        }
+        if (b->thread == c->tid && b->module == module) return b->address + offset;
     uint64_t size = (uint64_t)m->size + m->alignment - 1;
     if (size > UINT32_MAX) rt_trap(c, c->eip, "guest TLS allocation overflow");
     uint32_t allocation = rt_alloc((uint32_t)size);
@@ -94,7 +79,6 @@ uint32_t rt_tls_address(CPU *c, uint32_t module, uint32_t offset) {
 
 // Frees the TCB and TLS blocks of a guest thread whose guest code is over.
 void rt_tls_release(uint32_t thread) {
-    for (unsigned i = 0; i < TLS_CACHE; ++i) if (tls_cache[i].thread == thread) tls_cache[i].thread = 0;
     for (ThreadContext **link = &contexts; *link;) {
         ThreadContext *ctx = *link;
         if (ctx->thread != thread) { link = &ctx->next; continue; }
@@ -108,7 +92,6 @@ void rt_tls_release(uint32_t thread) {
 }
 
 void rt_tls_destroy(void) {
-    memset(tls_cache, 0, sizeof(tls_cache));
     while (contexts) { ThreadContext *next = contexts->next; free(contexts); contexts = next; }
     while (blocks) { TLSBlock *next = blocks->next; free(blocks); blocks = next; }
     while (modules) { TLSModule *next = modules->next; free(modules->initial); free(modules); modules = next; }

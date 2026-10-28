@@ -158,8 +158,7 @@ static int core_resolve(const char *name, RtShimRoute *route) {
     return 0;
 }
 int rt_libc_resolve(const char *name, RtShimRoute *route);   // libc.c
-int rt_pthread_resolve(const char *name, RtShimRoute *route);   // pthreads.c
-static const rt_shim_resolver builtin_resolvers[BUILTIN] = {core_resolve, NULL, rt_pthread_resolve, rt_libc_resolve};
+static const rt_shim_resolver builtin_resolvers[BUILTIN] = {core_resolve, NULL, NULL, rt_libc_resolve};
 static rt_shim_provider providers[64];
 static rt_shim_resolver resolvers[64];
 static size_t provider_count;

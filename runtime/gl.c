@@ -564,15 +564,7 @@ typedef struct Mirror {
     int flush_on_unmap;  // état APPLE_flush_buffer_range du tampon (vrai par défaut)
     struct Mirror *next;
 } Mirror;
-// Table de hachage par (groupe de partage, nom) : find_mirror est appelé à
-// chaque glBufferSubData suivi, et l'ancienne liste chaînée coûtait ~3 % du
-// thread principal (parcours complet à chaque absence).
-#define MIRROR_BUCKETS 4096u
-static Mirror *mirrors[MIRROR_BUCKETS];
-static Mirror **mirror_bucket(CGLShareGroupObj share, uint32_t name) {
-    uint32_t h = (uint32_t)((uintptr_t)share >> 4) * 0x9e3779b1u ^ name * 2654435761u;
-    return &mirrors[h >> 20];
-}
+static Mirror *mirrors;
 
 static GLenum binding_of(uint32_t target) {
     switch (target) {
@@ -588,12 +580,11 @@ static GLenum binding_of(uint32_t target) {
 }
 static CGLShareGroupObj current_share(void) { return CGLGetShareGroup(CGLGetCurrentContext()); }
 static Mirror *find_mirror(CGLShareGroupObj share, uint32_t name, int create) {
-    Mirror **head = mirror_bucket(share, name);
-    for (Mirror *m = *head; m; m = m->next) if (m->share == share && m->name == name) return m;
+    for (Mirror *m = mirrors; m; m = m->next) if (m->share == share && m->name == name) return m;
     if (!create) return NULL;
     Mirror *m = calloc(1, sizeof(*m));
     if (!m) return NULL;
-    m->share = share; m->name = name; m->flush_on_unmap = 1; m->next = *head; *head = m;
+    m->share = share; m->name = name; m->flush_on_unmap = 1; m->next = mirrors; mirrors = m;
     return m;
 }
 static uint32_t bound_buffer(uint32_t target) {
@@ -700,7 +691,7 @@ int rt_gl_manual_glDeleteBuffersARB(CPU *c, void *fn) {
     for (int32_t i = 0; i < n; ++i) {
         uint32_t name = R32(list + 4 * (uint32_t)i);
         rt_gl_stream_forget(name);
-        for (Mirror **p = mirror_bucket(share, name); *p; p = &(*p)->next) {
+        for (Mirror **p = &mirrors; *p; p = &(*p)->next) {
             if ((*p)->share != share || (*p)->name != name || !name) continue;
             Mirror *dead = *p; *p = dead->next;
             rt_free(dead->guest); free(dead);  // GL démappe implicitement un tampon supprimé

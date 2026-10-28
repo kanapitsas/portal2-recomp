@@ -85,67 +85,6 @@ changes: a fullscreen launch will provide the numbers.
 The SIGBUS in fn_17eabcc0 (3 times on 26 Oct.) happens when the game shuts
 down (CPortal_Player, probably an orphaned GC inventory listener), not in game.
 
-## CPU work of the translated code (night of 27 to 28 October, branch perf/code-traduit)
-
-Measuring method (the only reliable one found): hardware counters of the
-process (`proc_pid_rusage`: instructions and cycles) over a 15 s window,
-taken 30 s after the frame counter starts, alternating binaries over 3
-rounds. Results vary by less than 1 % between rounds. Pitfalls:
-- The first ~10 s after a map load do much more work (asset loading,
-  Valve's `pathmatch`). A profile taken there blames the file system.
-- Time Profiler counts the main thread as 100 % busy. Cycles per frame equal
-  the frame time at a fixed 3.66 GHz, so in steady state the game is really
-  CPU-bound (sp_a2_laser_over_goo, 720p). `P2_GPU_TIMING` slows the game
-  (timer queries) and is not a valid way to settle this question.
-- `sample` takes 3 samples in 5 s on this 300 MB binary, so it cannot be
-  used. `P2_PROFILE` (SIGPROF) puts ~85 % on system calls.
-
-Results (sp_a2_laser_over_goo 720p, idle machine): main ~44.7 M instructions,
-~21.9 M cycles, ~165 fps; final numbers for the branch: see the end of
-this section. Steps:
-1. Native `pathmatch` (Linux case fixer in filesystem_stdio, replaced through
-   `NATIVE_OVERRIDES` in lift.py; `P2_NATIVE_PATHMATCH=0` restores it). It is
-   only active when every root is case-insensitive, and only costs during
-   loads. GL mirror hash (`find_mirror` was 4.7 % of the main thread in steady
-   state). Mutex cache, fast path and direct routes: 20.9 → 19.3 M cycles.
-2. `always_inline` helpers in rt.h and a TLS cache: -2 % of instructions,
-   cycles unchanged.
-3. Dead x86 flags (`dead_flags` in lift.py; `P2_LIFT_KEEP_FLAGS=1` at
-   generation disables it). This is the **safe** version: `c->flags` is
-   always saved before a call, and only the restore after the call is
-   dropped. About -1.5 % of cycles. A first version that no longer passed
-   flags to callees reached -6 %. Codex showed it was unsound: a callee (or a
-   tail-jump thunk, or an indirect call) that reads flags at entry would see
-   stale flags, and restoring the save afterwards does not bring back
-   writers that were already removed. To recover that gain soundly:
-   - per-flag liveness, so that cmpxchg8b, which writes only ZF, is no longer
-     a "read";
-   - a summary per function (flags read at entry, plus callees and tail-jump
-     targets reached without a kill);
-   - a global fixed point;
-   - a second lifting pass that keeps the save only before calls to the
-     readers. Indirect calls are safe only if no address-taken function
-     reads flags.
-
-Final measurement (28 Oct., idle machine, 3 rounds): main 45.3 M
-instructions, 22.8 M cycles, 160 fps; branch (safe version)
-40.9 M instructions, 18.6 M cycles, 195 fps (+22 %). The app binary
-(`build/portal2-native`) is still the main one. The branch's binary is built
-by `python3 tools/build_game.py --release --pgo-use build/game/pgo.profdata`.
-
-Remaining profile (steady state): ~60 % translated code, flat (no function
-above 1 %); Apple driver plus kernel ~30 %, of which `iokit_user_client_trap`
-is 11 %. That is command-buffer submissions, each `glBlitFramebuffer` forcing
-one. Leads not yet tried:
-- regenerate the PGO profile on the new code;
-- direct routes for the libc imports that are still hot (`P2_IMPORT_COUNTS`);
-- fewer blits.
-
-The guest gate (scheduler.c) serialises all guest threads. Source's
-multithreaded rendering (`mat_queue_mode`) would therefore gain nothing
-without reworking it. Not measured on iPhone, where the CPU limits more than
-on Mac.
-
 The main thread mostly waits on Apple's OpenGL driver (Metal submissions on
 glBufferSubData of in-flight buffers, on-the-fly GLSL compilation, cached by
 togl in `update/glshaders.cfg`). The GPU has headroom: the frame rate varies

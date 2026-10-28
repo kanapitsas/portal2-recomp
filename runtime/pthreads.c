@@ -51,16 +51,8 @@ static Attr *find_attr(uint32_t address) {
     for (Attr *a = attributes; a; a = a->next) if (a->address == address) return a;
     return NULL;
 }
-// Cache direct devant la liste (verrouillages fréquents : ~2 % du thread
-// principal en parcours de liste). Toujours consulté sous la porte invitée ;
-// une entrée est effacée à la destruction de son mutex.
-#define MUTEX_CACHE 1024u
-static Mutex *mutex_cache[MUTEX_CACHE];
-static unsigned mutex_slot(uint32_t address) { return (address >> 2 ^ address >> 12) & (MUTEX_CACHE - 1); }
 static Mutex *find_mutex(uint32_t address) {
-    Mutex *m = mutex_cache[mutex_slot(address)];
-    if (m && m->address == address) return m;
-    for (m = mutexes; m; m = m->next) if (m->address == address) { mutex_cache[mutex_slot(address)] = m; return m; }
+    for (Mutex *m = mutexes; m; m = m->next) if (m->address == address) return m;
     return NULL;
 }
 static int create_mutex(uint32_t address, const pthread_mutexattr_t *attr, uint32_t kind) {
@@ -115,26 +107,6 @@ static int timed_lock(CPU *c, Mutex *m, uint32_t pointer) {
         if (backoff < 1000000) backoff *= 2;
     }
     rt_guest_resume(saved);
-    return error;
-}
-
-enum { MUTEX_LOCK, MUTEX_TRYLOCK, MUTEX_TIMEDLOCK, MUTEX_UNLOCK };
-// Appelé sous la porte invitée. Verrou libre : trylock, sans relâcher la porte
-// (il ne bloque jamais) ; sinon attente bloquante porte relâchée, comme avant.
-static int mutex_operation(CPU *c, uint32_t address, int op) {
-    Mutex *m = find_mutex(address);
-    if (!m && address) m = static_mutex(c, address);
-    if (!m) return EINVAL;
-    int error;
-    if (op == MUTEX_LOCK) {
-        if (m->kind == 2 && m->owned && pthread_equal(m->owner, pthread_self())) return EDEADLK;
-        if ((error = pthread_mutex_trylock(&m->native)) == EBUSY) {
-            unsigned saved = rt_guest_suspend(); error = pthread_mutex_lock(&m->native); rt_guest_resume(saved);
-        }
-        if (!error) lock_acquired(m);
-    } else if (op == MUTEX_TRYLOCK) { error = pthread_mutex_trylock(&m->native); if (!error) lock_acquired(m); }
-    else if (op == MUTEX_TIMEDLOCK) { error = timed_lock(c, m, argument(c, 1)); if (!error) lock_acquired(m); }
-    else { error = pthread_mutex_unlock(&m->native); if (!error && m->kind == 2) m->owned = 0; }
     return error;
 }
 
@@ -251,33 +223,26 @@ static int pthread_objects(CPU *c, const char *name) {
         else {
             Mutex *m = *link;
             error = pthread_mutex_destroy(&m->native);
-            if (!error) { *link = m->next; if (mutex_cache[mutex_slot(address)] == m) mutex_cache[mutex_slot(address)] = NULL; W32(address + 12, UINT32_MAX); free(m); }
+            if (!error) { *link = m->next; W32(address + 12, UINT32_MAX); free(m); }
         }
     } else if (!strcmp(name, "pthread_mutex_lock") || !strcmp(name, "pthread_mutex_trylock") ||
                !strcmp(name, "pthread_mutex_timedlock") || !strcmp(name, "pthread_mutex_unlock")) {
-        int op = !strcmp(name, "pthread_mutex_lock") ? MUTEX_LOCK : !strcmp(name, "pthread_mutex_trylock") ? MUTEX_TRYLOCK
-                 : !strcmp(name, "pthread_mutex_timedlock") ? MUTEX_TIMEDLOCK : MUTEX_UNLOCK;
-        error = mutex_operation(c, address, op);
+        Mutex *m = find_mutex(address);
+        if (!m && address) m = static_mutex(c, address);
+        if (!m) error = EINVAL;
+        else if (!strcmp(name, "pthread_mutex_lock")) {
+            if (m->kind == 2 && m->owned && pthread_equal(m->owner, pthread_self())) error = EDEADLK;
+            else { unsigned saved=rt_guest_suspend(); error=pthread_mutex_lock(&m->native); rt_guest_resume(saved); }
+            if (!error) lock_acquired(m);
+        }
+        else if (!strcmp(name, "pthread_mutex_trylock")) { error = pthread_mutex_trylock(&m->native); if (!error) lock_acquired(m); }
+        else if (!strcmp(name, "pthread_mutex_timedlock")) { error = timed_lock(c, m, argument(c, 1)); if (!error) lock_acquired(m); }
+        else { error = pthread_mutex_unlock(&m->native); if (!error && m->kind == 2) m->owned = 0; }
     } else return 0;
     c->eax = (uint32_t)linux_error(error);
     return 1;
 }
 
-// Routes directes (rt_shim_route) des verrouillages, sans recherche par nom.
-static int mutex_handler(CPU *c, const char *name, void *data) {
-    (void)name;
-    rt_guest_enter();
-    c->eax = (uint32_t)linux_error(mutex_operation(c, argument(c, 0), (int)(intptr_t)data));
-    rt_guest_leave();
-    return 1;
-}
-int rt_pthread_resolve(const char *name, RtShimRoute *route) {
-    int op = !strcmp(name, "pthread_mutex_lock") ? MUTEX_LOCK : !strcmp(name, "pthread_mutex_trylock") ? MUTEX_TRYLOCK
-             : !strcmp(name, "pthread_mutex_unlock") ? MUTEX_UNLOCK : -1;
-    if (op < 0) return 0;
-    route->handler = mutex_handler; route->data = (void *)(intptr_t)op;
-    return 1;
-}
 int rt_pthread_shim(CPU *c,const char *name) {
     if(strcmp(name,"__pthread_key_create") && strncmp(name,"pthread_",8))return 0;
     rt_guest_enter();
@@ -307,7 +272,6 @@ void rt_pthreads_destroy(void) {
     while (conditions) { Cond *next=conditions->next; pthread_cond_destroy(&conditions->native); free(conditions); conditions=next; }
     while (onces) { Once *next=onces->next; free(onces); onces=next; }
     next_key=1;
-    memset(mutex_cache, 0, sizeof(mutex_cache));
     while (mutexes) {
         Mutex *next = mutexes->next;
         pthread_mutex_destroy(&mutexes->native);
