@@ -71,6 +71,16 @@ echo "ok: $(python3 --version), $(objdump --version | head -1)"
 
 # --- Game folders ---------------------------------------------------------
 step "Finding the game"
+# A path dragged into Terminal comes with "\ " escapes and a trailing space; inside
+# quotes they reach us verbatim. Undo that when the path does not exist as typed.
+unescape_path() {
+    local p="$1"
+    while [ "${p% }" != "$p" ]; do p="${p% }"; done
+    [ -e "$p" ] || p="$(printf '%s' "$p" | sed 's/\\\(.\)/\1/g')"
+    printf '%s' "$p"
+}
+[ -n "$GAME" ] && GAME="$(unescape_path "$GAME")"
+[ -n "$LINUX" ] && LINUX="$(unescape_path "$LINUX")"
 if [ -z "$GAME" ]; then
     for c in "$(config_get game_root)" "$STEAM_SUPPORT/steamapps/common/Portal 2" "$(find_depot 621)"; do
         [ -n "$c" ] && [ -d "$c/portal2" ] && { GAME="$c"; break; }
