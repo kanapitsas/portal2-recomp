@@ -1,4 +1,5 @@
 #include "rt.h"
+#include "posix.h"
 #include <dlfcn.h>
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
@@ -20,6 +21,7 @@ static const uint64_t guard_size = UINT64_C(1) << 16;
 typedef struct { uint32_t target, caller; } GuestFrame;
 static _Thread_local GuestFrame frames[256];
 static _Thread_local unsigned frame_depth;
+_Thread_local CPU *rt_fault_cpu;   // diagnostic : CPU invité du thread (rt_invoke)
 static void guest_backtrace(void) {
     unsigned count=frame_depth<256?frame_depth:256;
     unsigned first=count>16?count-16:0;
@@ -41,6 +43,10 @@ static void host_fault(int signal, siginfo_t *info, void *context) {
         n = snprintf(line, sizeof(line), "host %s on host address %#lx\n",
                      signal == SIGBUS ? "SIGBUS" : "SIGSEGV", (unsigned long)address);
     if (n > 0) write(2, line, (size_t)n);
+    if (M && address >= base && address - base < address_space) {
+        n = rt_vm_describe((uint32_t)(address - base), line, sizeof(line));
+        if (n > 0) write(2, line, (size_t)n);
+    }
 #if defined(__aarch64__)
     ucontext_t *uc = context;
     void *pc = (void *)uc->uc_mcontext->__ss.__pc;
@@ -57,6 +63,12 @@ static void host_fault(int signal, siginfo_t *info, void *context) {
     void *host_frames[24];
     int depth = backtrace(host_frames, 24);
     backtrace_symbols_fd(host_frames, depth, 2);
+    if (rt_fault_cpu) {
+        CPU *g = rt_fault_cpu;
+        n = snprintf(line, sizeof(line), "  guest eax=%#x ecx=%#x edx=%#x ebx=%#x esp=%#x ebp=%#x esi=%#x edi=%#x\n",
+                     g->eax, g->ecx, g->edx, g->ebx, g->esp, g->ebp, g->esi, g->edi);
+        if (n > 0) write(2, line, (size_t)n);
+    }
     guest_backtrace();
     struct sigaction fallback = {0};
     fallback.sa_handler = SIG_DFL;
@@ -363,6 +375,8 @@ uint64_t rt_compare_exchange64(CPU *c, uint32_t address, uint64_t expected, uint
 __attribute__((noreturn)) void rt_memory_trap(uint32_t address, uint64_t length, int mode) {
     fprintf(stderr, "guest memory fault at %#x length=%llu access=%s\n", address,
             (unsigned long long)length, mode == 2 ? "write" : "read");
+    char line[160];
+    if (rt_vm_describe(address, line, sizeof(line)) > 0) fputs(line, stderr);
     guest_backtrace();
     abort();
 }

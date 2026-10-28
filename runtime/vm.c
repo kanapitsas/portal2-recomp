@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <stdio.h>
 #include <unistd.h>
 
 uint8_t rt_vm_permissions[(RT_VM_END - RT_VM_BEGIN) / 4096] __attribute__((aligned(64)));
@@ -142,4 +143,18 @@ uint32_t rt_vm_mapped_bytes(void) {
     uint64_t total = 0;
     for (Mapping *m = mappings; m; m = m->next) total += m->size;
     return total > UINT32_MAX ? UINT32_MAX : (uint32_t)total;
+}
+
+// Diagnostic de faute : droits de la page invitée et projection qui la contient.
+int rt_vm_describe(uint32_t address, char *out, size_t size) {
+    unsigned perm = address >= RT_VM_BEGIN && address < RT_VM_END ? rt_vm_permissions[(address - RT_VM_BEGIN) >> 12] : 0xffu;
+    for (Mapping *m = mappings; m; m = m->next)
+        if (address >= m->address && address - m->address < m->size)
+            return snprintf(out, size, "  page flags %#x, mapping %#x+%#x %s\n", perm, m->address, m->size, m->anonymous ? "anon" : "file");
+    uint32_t below = 0, above = UINT32_MAX;
+    for (Mapping *m = mappings; m; m = m->next) {
+        if (m->address + m->size <= address && m->address + m->size > below) below = m->address + m->size;
+        if (m->address > address && m->address < above) above = m->address;
+    }
+    return snprintf(out, size, "  page flags %#x, no mapping (previous ends %#x, next starts %#x)\n", perm, below, above);
 }

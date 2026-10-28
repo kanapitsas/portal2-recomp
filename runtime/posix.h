@@ -58,4 +58,5 @@ int rt_path_is_game_source(const char *host);
 unsigned long rt_paths_generation(void);   // change à chaque écriture invitée (paths.c)
 int rt_path_absolute(const char *path, char out[PATH_MAX]);   // chemin hôte absolu normalisé
 uint32_t rt_vm_mapped_bytes(void);   // diagnostic (vm.c)
+int rt_vm_describe(uint32_t address, char *out, size_t size);   // diagnostic de faute (vm.c)
 int rt_access_cached(const char *path, int mode);   // 0, -1 (errno), -2 non mémorisable
