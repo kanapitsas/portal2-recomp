@@ -26,6 +26,8 @@ library and the GPU supports BC textures; otherwise the app uses gl4es. On an
 iPhone 15 Pro Max it ran at 71–77 fps against 60 for OpenGL (same room, MSAA 4,
 scale 2, no vsync), and fixes the too-dark image of the gl4es path.
 
+`./setup.sh --ios` builds and links the library when Rust is installed. By hand:
+
 ```sh
 # in the mtld3d checkout (branch feat/native-host), once per mtld3d change:
 make native-ios PROFILE=production        # native/target/aarch64-apple-ios/production/libd3d9metal.a

@@ -3,6 +3,8 @@
 # libsteam_api.dylib (inside Steamworks.NET 20.1.0), writes config/local.json,
 # recompiles the game and creates "Portal 2 Natif.app" in ~/Applications.
 # With --ios, also builds, signs and installs the iPhone app.
+# If Rust is installed (https://rustup.rs), it also builds libd3d9metal for the
+# Metal renderer; without it the game uses OpenGL. P2_NO_METAL=1 skips it.
 #
 # usage: ./setup.sh [--ios] ["/path/to/Portal 2" ["/path/to/depot_661"]]
 #
@@ -24,7 +26,7 @@ ARGS=()
 for a in "$@"; do
     case "$a" in
         --ios) IOS=1 ;;
-        -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*) echo "unknown option $a" >&2; exit 2 ;;
         *) ARGS+=("$a") ;;
     esac
@@ -35,6 +37,9 @@ LINUX="${ARGS[1]:-}"
 STEAMWORKS_URL="https://github.com/rlabrecque/Steamworks.NET/releases/download/20.1.0/Steamworks.NET_20.1.0.unitypackage"
 STEAMWORKS_SHA256="3be79e6bdf53c86210267bf39f46362bb839130896006aec26364c5efc37e314"
 STEAM_SUPPORT="$HOME/Library/Application Support/Steam"
+# Metal renderer: libd3d9metal, built from mtld3d's native host branch (zlib).
+MTLD3D_URL="https://github.com/kanapitsas/mtld3d.git"
+MTLD3D_REV="101f37d3d45c760e95e20176f758b9d309c23885"   # feat/native-host, pinned
 
 step() { printf '\n==> %s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
@@ -139,6 +144,56 @@ if [ -z "$DYLIB" ] || [ ! -f "$DYLIB" ]; then
     fi
 fi
 
+# --- Metal renderer: libd3d9metal (optional) -----------------------------
+# Built from a pinned commit of mtld3d's native host branch. Any problem here
+# only costs the Metal renderer: the game then uses OpenGL.
+D3D9METAL=""
+D3D9METAL_IOS=""
+METAL_SRC="$DEPS/mtld3d-native"        # owned by setup.sh (marker file); never a checkout of yours
+fetch_mtld3d() {
+    if [ -e "$METAL_SRC" ] && [ ! -f "$METAL_SRC/.p2-setup" ]; then
+        warn "$METAL_SRC exists and was not made by setup.sh: leaving it alone"; return 1
+    fi
+    [ "$(git -C "$METAL_SRC" rev-parse HEAD 2>/dev/null)" = "$MTLD3D_REV" ] && return 0
+    mkdir -p "$METAL_SRC" && touch "$METAL_SRC/.p2-setup" && git -C "$METAL_SRC" init -q \
+        && git -C "$METAL_SRC" fetch -q --depth 1 "$MTLD3D_URL" "$MTLD3D_REV" \
+        && git -C "$METAL_SRC" checkout -q --force FETCH_HEAD
+}
+build_d3d9metal() {
+    if ! command -v cargo >/dev/null 2>&1; then
+        warn "Rust not found: the game will use OpenGL. For the faster Metal renderer,
+  install Rust (https://rustup.rs) and re-run ./setup.sh."
+        return 0
+    fi
+    step "Building libd3d9metal for the Metal renderer (a few minutes the first time)"
+    fetch_mtld3d || { warn "could not get mtld3d from $MTLD3D_URL: the game will use OpenGL"; return 0; }
+    local target="$METAL_SRC/native/target" out
+    out="$target/production/libd3d9metal.dylib"
+    if (cd "$METAL_SRC/native" && CARGO_TARGET_DIR="$target" cargo build -q --profile production) && [ -f "$out" ]; then
+        D3D9METAL="$out"
+    else
+        warn "libd3d9metal did not build (mtld3d needs Rust 1.99 or newer: rustup update): the game will use OpenGL"
+        return 0
+    fi
+    if [ $IOS = 1 ]; then
+        out="$target/aarch64-apple-ios/production/libd3d9metal.a"
+        if { ! command -v rustup >/dev/null 2>&1 || rustup target add aarch64-apple-ios >/dev/null 2>&1; } \
+            && (cd "$METAL_SRC/native" && CARGO_TARGET_DIR="$target" cargo build -q --profile production --target aarch64-apple-ios) \
+            && [ -f "$out" ]; then
+            D3D9METAL_IOS="$out"
+        else
+            warn "libd3d9metal for iOS did not build: the iPhone app will use OpenGL"
+        fi
+    fi
+}
+METAL_OFF=0
+if [ -n "${P2_NO_METAL:-}" ] && [ "$P2_NO_METAL" != 0 ]; then
+    echo "P2_NO_METAL set: OpenGL renderer only"
+    METAL_OFF=1
+else
+    build_d3d9metal
+fi
+
 # --- iOS identity (before writing the config) -----------------------------
 TEAM=""
 if [ $IOS = 1 ]; then
@@ -156,14 +211,26 @@ fi
 # --- config/local.json ----------------------------------------------------
 step "Writing config/local.json"
 mkdir -p "$REPO/config"
-python3 - "$CONFIG" "$GAME" "$LINUX" "$DYLIB" "$TEAM" <<'EOF'
+python3 - "$CONFIG" "$GAME" "$LINUX" "$DYLIB" "$TEAM" "$D3D9METAL" "$D3D9METAL_IOS" "$METAL_OFF" <<'EOF'
 import json, os, sys
 from pathlib import Path
-path, game, linux, dylib, team = sys.argv[1:]
+path, game, linux, dylib, team, metal, metal_ios, metal_off = sys.argv[1:]
 p = Path(path)
 config = json.loads(p.read_text()) if p.exists() else {}
 fresh = not config
 config.update(game_root=os.path.normpath(game), linux_root=os.path.normpath(linux), steam_api_dylib=os.path.normpath(dylib))
+# Metal renderer: recorded when built here; P2_NO_METAL=1 removes it; a path
+# that still exists (set by hand, or by an earlier run) is otherwise kept.
+if metal_off == '1':
+    config.pop('d3d9metal_dylib', None); config.pop('d3d9metal_ios', None)
+else:
+    if metal: config['d3d9metal_dylib'] = metal
+    elif config.get('d3d9metal_dylib') and not Path(config['d3d9metal_dylib']).expanduser().is_file():
+        config.pop('d3d9metal_dylib')
+    if metal_ios:
+        ios = config.get('d3d9metal_ios') if isinstance(config.get('d3d9metal_ios'), dict) else {}
+        ios['device'] = metal_ios
+        config['d3d9metal_ios'] = ios
 config.setdefault('steam_appid', 620)
 config.setdefault('depot_id', 661)
 if fresh:
@@ -219,9 +286,13 @@ fi
 
 SAVES_DIR="$(config_get user_dir)"
 SAVES_DIR="${SAVES_DIR:-$HOME/Library/Application Support/Portal 2 Natif/userdata}"
+D3D9METAL="${D3D9METAL:-$(config_get d3d9metal_dylib)}"
+if [ -n "$D3D9METAL" ]; then RENDERER="Metal (libd3d9metal); P2_RENDERER=opengl forces OpenGL"
+else RENDERER="OpenGL (install Rust from https://rustup.rs and re-run for Metal)"; fi
 cat <<EOF
 
 Done: ~/Applications/Portal 2 Natif.app
+- Renderer: ${RENDERER}
 - Start Steam and sign in with the account that owns Portal 2, then open the app
   (it starts Steam itself if needed). Log: ~/Library/Logs/Portal2Natif.log
 - The app carries its own copy of the game binary and libraries: Homebrew is only
