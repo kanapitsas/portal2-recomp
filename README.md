@@ -46,14 +46,35 @@ share the built app or the generated code**, they contain Valve's game.
    stops the game with its address.
 3. **Runtime** (`runtime/`): guest memory, threads (serialized on a guest
    lock with yield points), TLS, futexes, and bridges for the Linux imports
-   the game uses: libc, pthreads, SDL2, OpenGL (through Valve's own
-   `togl` D3D9-to-GL layer), OpenAL, Fontconfig/FreeType, and Steam (the
+   the game uses: libc, pthreads, SDL2, Direct3D 9 (see "Renderer" below),
+   OpenAL, Fontconfig/FreeType, and Steam (the
    official Steamworks `libsteam_api.dylib` on macOS, a minimal offline stub
    on iOS).
-4. **iOS** (`runtime/ios/`, `ios/`): OpenGL 2.1 is turned into OpenGL ES 3 by
-   a patched [gl4es](https://github.com/ptitSeb/gl4es), with shader rewrites
-   for sRGB, texture borders and vertex color swizzling; a UIKit overlay
-   provides the touch controls; an iOS Settings page exposes the options.
+4. **iOS** (`runtime/ios/`, `ios/`): a UIKit overlay provides the touch
+   controls; an iOS Settings page exposes the options. On the OpenGL path,
+   OpenGL 2.1 is turned into OpenGL ES 3 by a patched
+   [gl4es](https://github.com/ptitSeb/gl4es).
+
+### Renderer
+
+The game is rendered through **Metal** when a usable `libd3d9metal` is
+available, and through **OpenGL** otherwise:
+
+- **Metal**: Valve's `shaderapivk.so` talks plain Direct3D 9; the runtime
+  forwards those calls to `libd3d9metal`, a native Direct3D 9 on Metal built
+  from [mtld3d](https://github.com/athei/mtld3d) by Alexander Theissen (zlib
+  licence). Its Wine-free native build is not upstream yet; it lives on the
+  [`feat/native-host` branch of a fork](https://github.com/kanapitsas/mtld3d/tree/feat/native-host).
+  Measured +50 % fps on a Mac and +20–25 % on an iPhone.
+- **OpenGL**: `shaderapidx9.so` and Valve's `togl` (Direct3D 9 to OpenGL),
+  plus gl4es on iOS.
+
+`setup.sh` does not download or build `libd3d9metal`: see
+[docs/d3d9-bridge.md](docs/d3d9-bridge.md) to build it and add it to the app.
+`P2_RENDERER=opengl` forces OpenGL. On iPhone, Metal also needs the library
+linked into the app and a GPU with BC textures; Settings > Portal 2 > Rendu
+switches back to OpenGL. F3 on the Mac (the corner counter on iPhone) shows
+the renderer and the frame rate.
 
 More details: [docs/ios.md](docs/ios.md) (iOS port, controls, settings),
 [docs/steam.md](docs/steam.md) (Steam bridge),
@@ -103,18 +124,22 @@ Natif.app`. Without paths, it looks for the folders `download_depot` writes
 under `~/Library/Application Support/Steam` (not tested yet: pass the paths
 if it does not find them). Re-running it is safe and quick.
 
-With `--ios` it also reads your team from your Apple Development
-certificate, picks an app identifier unique to that team, gets a provisioning
+With `--ios` it also reads your team from your Apple Development certificate
+(create one first: Xcode > Settings > Accounts > Manage Certificates > + >
+Apple Development), picks an app identifier unique to that team, gets a provisioning
 profile through Xcode, builds the iPhone app, installs it and copies the game
-data to the phone (about 11.5 GB, only the first time). On the phone, trust
+data to the phone (about 11.5 GB, only the first time; after reinstalling the
+app or changing the data, copy it again with `tools/ios_device.sh data`). On the phone, trust
 your developer account in Settings > General > VPN & Device Management.
 Re-run `./setup.sh --ios` every 7 days with a free account.
 
 The app carries its own copy of the prepared Linux modules (about 75 MB, in
 `Contents/Resources/prep`); saves and settings go to `~/Library/Application
 Support/Portal 2 Natif/userdata`. The game files (about 12 GB) and the Linux
-depot stay where Steam put them, and the game folder is never written to. The
-app still runs the executable from this folder's `build/`, so keep the folder.
+depot stay where Steam put them, and the game folder is never written to.
+The app contains its own executable and libraries. Re-run
+`python3 tools/make_app.py` after rebuilding or after changing
+`config/local.json`.
 
 ### Game language
 
@@ -124,9 +149,9 @@ The game starts in the language chosen by `tools/language.py`, which adds
 1. a `-language <name>` you pass yourself (for example
    `python3 tools/make_app.py -- -game portal2 -novid -language french`);
 2. the environment variable `P2_LANGUAGE`
-   (`P2_LANGUAGE=german "~/Applications/Portal 2 Natif.app/Contents/MacOS/launcher"`);
-3. `"language": "french"` in `config/local.json` (no rebuild needed, the app
-   reads it at each launch);
+   (`P2_LANGUAGE=german "$HOME/Applications/Portal 2 Natif.app/Contents/MacOS/launcher"`);
+3. `"language": "french"` in `config/local.json` (the app keeps a copy of
+   this file: re-run `python3 tools/make_app.py` after changing it);
 4. the language set in the Steam properties of Portal 2, read from
    `steamapps/appmanifest_620.acf` next to the game folder;
 5. your macOS system language;
@@ -204,10 +229,11 @@ tuned in the iOS Settings app, under Portal 2.
 ./uninstall.sh
 ```
 
-It lists what is installed, then asks twice (default: no): first to move the
-app and its log (`~/Library/Logs/Portal2Natif.log`) to the Trash, then
+It lists what is installed, then asks (default: no), only about what exists:
+first to move the app and its log (`~/Library/Logs/Portal2Natif.log`) to the Trash, then
 separately for the saves and settings (`~/Library/Application Support/Portal 2
-Natif`, and `user_dir` if it points elsewhere). It never touches the Steam game
+Natif`, and `user_dir` if it points elsewhere, unless that folder overlaps your
+home, the game, the depot or this folder). It never touches the Steam game
 files or the Linux depot, which may be your real Steam install: it prints their
 paths from `config/local.json` and what to do with them. Delete this folder
 afterwards if you no longer need it.
@@ -220,6 +246,10 @@ make sanitize INPUT_DIR=/path/to/depot_661/bin/linux32   # the same with UBSan
 ```
 
 `INPUT_DIR` is the folder holding `libtier0.so` and `libvstdlib.so` (in a Steam depot, `bin/linux32`); it defaults to `../work/portal2-linux/bin`.
+
+CI (GitHub Actions, on Apple Silicon) runs the Python tests and the
+fixture-based runtime checks, plain and under UBSan. It cannot build or run the
+full game, whose files are not in the repository.
 
 ## Limits
 
