@@ -27,7 +27,8 @@ extern _Atomic unsigned long rt_ios_frames;   // gl_ios.m
 float rt_ios_render_scale(void);       // sdl_ios.m
 void rt_ios_request_frame_rate(void);  // gl_ios.m
 
-static void presented(void) { ++rt_ios_frames; }
+uint64_t rt_frame_log_tick(void);   // runtime/sdl_video.c : cadence P2_FRAME_LOG
+static void presented(void) { ++rt_ios_frames; rt_frame_log_tick(); }
 
 int rt_ios_metal_usable(char *why, size_t size) {
     id<MTLDevice> device = MTLCreateSystemDefaultDevice();

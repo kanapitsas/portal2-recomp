@@ -236,10 +236,12 @@ static const char *gl_attribute_name(uint32_t attribute) {
 // nombre d'images et leur cadence ; P2_FRAME_DUMP=/chemin.ppm y écrit le
 // tampon arrière toutes les 120 images, avant l'échange (fenêtre cachée).
 static void drawable_size(SDL_Window *window, int *w, int *h);
-static void diagnose_frame(SDL_Window *w) {
+// Compteur et cadence (P2_FRAME_LOG), communs à OpenGL (échange de tampons) et
+// à Direct3D 9 (Present, voir runtime/ios/metal_ios.m) ; renvoie le numéro d'image.
+uint64_t rt_frame_log_tick(void) {
     static uint64_t frames, last_ticks;
-    static int log = -1; static const char *dump;
-    if (log < 0) { log = getenv("P2_FRAME_LOG") != NULL; dump = getenv("P2_FRAME_DUMP"); }
+    static int log = -1;
+    if (log < 0) log = getenv("P2_FRAME_LOG") != NULL;
     ++frames;
     if (log && frames % 60 == 0) {
         uint64_t now = SDL_GetTicks64();
@@ -247,6 +249,13 @@ static void diagnose_frame(SDL_Window *w) {
                 last_ticks ? 60000.0 / (double)(now - last_ticks + 1) : 0.0);
         last_ticks = now;
     }
+    return frames;
+}
+
+static void diagnose_frame(SDL_Window *w) {
+    static const char *dump; static int dump_read;
+    if (!dump_read) { dump = getenv("P2_FRAME_DUMP"); dump_read = 1; }
+    uint64_t frames = rt_frame_log_tick();
     if (!dump || frames % 120 != 1 || !w) return;
     int width = 0, height = 0;
     drawable_size(w, &width, &height);

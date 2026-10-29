@@ -316,3 +316,10 @@ RT_CHECK(sdl_video_notch_height) {
     assert(rt_sdl_notch_height(1169, 1169, 0, 38.0) == 1169);
     assert(rt_sdl_notch_height(1169, 1169, 1169, 38.0) == 1169);
 }
+
+uint64_t rt_frame_log_tick(void);
+// Le compteur d'images est partagé : Present (Direct3D 9) l'avance comme l'échange GL.
+RT_CHECK(sdl_video_frame_log_tick_is_shared_and_monotonic) {
+    uint64_t a = rt_frame_log_tick(), b = rt_frame_log_tick();
+    assert(b == a + 1);
+}
