@@ -36,14 +36,32 @@ static void fill(void **table, unsigned count) { for (unsigned i = 0; i < count;
 static uint32_t f_addref(Fake *self) { return (uint32_t)++self->refs; }
 static uint32_t f_release(Fake *self) { assert(self->refs > 0); return (uint32_t)--self->refs; }
 static uint32_t f_get_type(Fake *self) { return self->type; }
+static uint32_t s_addref(Fake *self) { return f_addref(self->child); }   // surface : compte du conteneur
+static uint32_t s_release(Fake *self) { return f_release(self->child); }
 
 static void *texture_vtbl[22], *cube_vtbl[22], *surface_vtbl[17], *buffer_vtbl[14], *shader_vtbl[5], *device_vtbl[119], *d3d_vtbl[17];
+static void *chain_vtbl[10];
 static Fake d3d = {d3d_vtbl, 1, 0, NULL, NULL}, device = {device_vtbl, 0, 0, NULL, NULL};
-static Fake surface = {surface_vtbl, 1, 1, NULL, NULL}, texture = {texture_vtbl, 0, 3, &surface, NULL};
+// Le niveau 0 partage le compte de sa texture, comme dans d3d9 (child = conteneur pour la surface).
+static Fake texture;
+static Fake surface = {surface_vtbl, 0, 1, &texture, NULL};
+static Fake texture = {texture_vtbl, 0, 3, &surface, NULL};
+static Fake chain = {chain_vtbl, 1, 0, NULL, NULL};
 static Fake hidden_cube = {cube_vtbl, 1, 5, NULL, NULL}, buffer = {buffer_vtbl, 0, 6, NULL, NULL};
 static Fake shader = {shader_vtbl, 0, 0, NULL, NULL}, declaration = {shader_vtbl, 0, 0, NULL, NULL};
 
+
 static const uint8_t iid_unknown[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0xc0, 0, 0, 0, 0, 0, 0, 0x46};
+static int32_t chain_query(Fake *self, const uint8_t *iid, void **out) {
+    if (memcmp(iid, iid_unknown, 16) && memcmp(iid, rt_d3d9_interfaces[D3D9_IDirect3DSwapChain9].iid, 16)) {
+        *out = NULL; return (int32_t)D3D9_E_NOINTERFACE;
+    }
+    ++self->refs; *out = self; return 0;
+}
+static int32_t surface_container(Fake *self, const uint8_t *iid, void **out) {
+    (void)self; assert(!memcmp(iid, iid_unknown, 16));
+    ++chain.refs; *out = &chain; return 0;   // conteneur jamais vu par le pont
+}
 static int32_t f_query(Fake *self, const uint8_t *iid, void **out) {
     // Texture : IUnknown, Resource, BaseTexture, Texture.
     const int known = !memcmp(iid, iid_unknown, 16) ||
@@ -97,7 +115,7 @@ static int32_t dev_present(Fake *self, const void *src, const void *dst, void *w
 static int32_t dev_back_buffer(Fake *self, uint32_t chain, uint32_t index, uint32_t type, void **out) {
     (void)self;
     assert(chain == 0 && index == 0 && type == 0);
-    ++surface.refs; *out = &surface; return 0;
+    s_addref(&surface); *out = &surface; return 0;
 }
 static int32_t dev_create_texture(Fake *self, uint32_t w, uint32_t h, uint32_t levels, uint32_t usage, uint32_t format,
                                   uint32_t pool, void **out, void *shared) {
@@ -153,7 +171,7 @@ static int32_t dev_create_vs(Fake *self, const uint32_t *tokens, void **out) {
 // IDirect3DTexture9 / IDirect3DSurface9 / IDirect3DVertexBuffer9
 static int32_t tex_surface_level(Fake *self, uint32_t level, void **out) {
     assert(level == 0);
-    ++self->child->refs; *out = self->child; return 0;
+    s_addref(self->child); *out = self->child; return 0;
 }
 static int32_t tex_lock(Fake *self, uint32_t level, D3d9HostLocked *locked, const void *rect, uint32_t flags) {
     assert(level == 0 && !rect && flags == 0x2000);
@@ -169,9 +187,11 @@ static int32_t vb_unlock(Fake *self) { (void)self; return 0; }
 
 static void setup_vtables(void) {
     fill(d3d_vtbl, 17); fill(device_vtbl, 119); fill(texture_vtbl, 22); fill(cube_vtbl, 22);
-    fill(surface_vtbl, 17); fill(buffer_vtbl, 14); fill(shader_vtbl, 5);
-    void **all[] = {d3d_vtbl, device_vtbl, texture_vtbl, cube_vtbl, surface_vtbl, buffer_vtbl, shader_vtbl};
+    fill(surface_vtbl, 17); fill(buffer_vtbl, 14); fill(shader_vtbl, 5); fill(chain_vtbl, 10);
+    void **all[] = {d3d_vtbl, device_vtbl, texture_vtbl, cube_vtbl, buffer_vtbl, shader_vtbl, chain_vtbl};
     for (size_t i = 0; i < sizeof(all) / sizeof(*all); ++i) { all[i][1] = (void *)f_addref; all[i][2] = (void *)f_release; }
+    surface_vtbl[1] = (void *)s_addref; surface_vtbl[2] = (void *)s_release; surface_vtbl[11] = (void *)surface_container;
+    chain_vtbl[0] = (void *)chain_query;
     texture_vtbl[0] = (void *)f_query;
     texture_vtbl[10] = cube_vtbl[10] = surface_vtbl[10] = buffer_vtbl[10] = (void *)f_get_type;
     d3d_vtbl[5] = (void *)d3d_identifier; d3d_vtbl[16] = (void *)d3d_create_device;
@@ -337,10 +357,17 @@ RT_CHECK(d3d9_bridge_against_fake_native_library) {
     // Interfaces en sortie : un mandataire par objet hôte (identité stable).
     assert(CALL(tex, IDirect3DTexture9, GetSurfaceLevel, 0, out).eax == 0);
     uint32_t level = R32(out);
-    assert(level && R32(level + 4) == tag(D3D9_IDirect3DSurface9) && surface.refs == 2);
-    assert(CALL(dev, IDirect3DDevice9, GetBackBuffer, 0, 0, 0, out).eax == 0 && R32(out) == level && surface.refs == 3);
+    assert(level && R32(level + 4) == tag(D3D9_IDirect3DSurface9) && texture.refs == 2);
+    assert(CALL(dev, IDirect3DDevice9, GetBackBuffer, 0, 0, 0, out).eax == 0 && R32(out) == level && texture.refs == 3);
     assert(CALL0(level, IUnknown, Release).eax == 2 && CALL0(level, IUnknown, Release).eax == 1);
     assert(rt_d3d9_find_proxy(&surface) == level);   // encore vivant (compte du conteneur)
+    // GetContainer(IID_IUnknown) vers un objet jamais vu : type trouvé par QueryInterface.
+    uint32_t unknown = SCRATCH + 0x700;
+    memcpy(GPTR(unknown), iid_unknown, 16);
+    assert(CALL(level, IDirect3DSurface9, GetContainer, unknown, out).eax == 0);
+    uint32_t chain_proxy = R32(out);
+    assert(R32(chain_proxy + 4) == tag(D3D9_IDirect3DSwapChain9) && chain.refs == 2);
+    assert(CALL0(chain_proxy, IUnknown, Release).eax == 1);
     // QueryInterface vers une interface parente : même mandataire.
     uint32_t iid = SCRATCH + 0x600;
     memcpy(GPTR(iid), rt_d3d9_interfaces[D3D9_IDirect3DBaseTexture9].iid, 16);
@@ -367,14 +394,15 @@ RT_CHECK(d3d9_bridge_against_fake_native_library) {
     // Release à 0 : mandataire libéré, objet suivant à la même adresse = nouveau mandataire.
     unsigned live = rt_d3d9_live_proxies();
     assert(CALL0(tex, IUnknown, Release).eax == 0 && rt_d3d9_find_proxy(&texture) == 0);
-    assert(rt_d3d9_live_proxies() == live - 1);
+    assert(rt_d3d9_find_proxy(&surface) == 0);   // niveau retiré avec son conteneur
+    assert(rt_d3d9_live_proxies() == live - 2);
     fake_host->free_app(fake_host->user, texture.bits, 256 * 128 * 4);
     fake_host->free_app(fake_host->user, buffer.bits, 4096);
     assert(CALL0(vb, IUnknown, Release).eax == 0);
     assert(CALL0(vs_proxy, IUnknown, Release).eax == 0 && CALL0(decl_proxy, IUnknown, Release).eax == 0);
     assert(CALL0(dev, IUnknown, Release).eax == 0 && rt_d3d9_find_proxy(&device) == 0);
     assert(CALL0(d3d_proxy, IUnknown, Release).eax == 0);
-    // Restent : la surface (tenue par sa texture factice) et le cube caché.
+    // Restent : la chaîne d'échange et le cube cachés (jamais libérés par le faux hôte).
     assert(rt_d3d9_live_proxies() == proxies_before + 2);
 
     rt_handle_free(hwnd, RT_SDL_WINDOW);

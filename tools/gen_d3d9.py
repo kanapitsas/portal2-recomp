@@ -18,6 +18,8 @@ Types d'argument (un mot de pile chacun, d3d9 n'a aucun argument 64 bits) :
   out:EXPR           idem, écrit par l'hôte
   if:IFACE           interface en entrée (mandataire → objet hôte)
   pp:IFACE           interface en sortie (objet hôte → mandataire unique)
+  child:IFACE        idem, objet appartenant à this (niveau de texture) : son
+                     mandataire est retiré avec celui du conteneur
   hwnd               HWND : handle SDL_Window invité → SDL_Window* hôte
   shared             HANDLE *pSharedHandle (doit être NULL en d3d9 non Ex)
   params, params_out D3DPRESENT_PARAMETERS (56 octets i386, 64 arm64) entrée/sortie, sortie
@@ -216,21 +218,21 @@ interface IDirect3DBaseTexture9 : IDirect3DResource9 abstract {580CA87E-1D3C-4D5
 
 interface IDirect3DTexture9 : IDirect3DBaseTexture9 {85C31227-3DE5-4F00-9B3A-F11AC38C18B5}
     HRESULT GetLevelDesc(u Level, out:32 pDesc)
-    HRESULT GetSurfaceLevel(u Level, pp:IDirect3DSurface9 ppSurfaceLevel)
+    HRESULT GetSurfaceLevel(u Level, child:IDirect3DSurface9 ppSurfaceLevel)
     HRESULT LockRect(u Level, lockrect pLockedRect, in:16 pRect, u Flags)
     HRESULT UnlockRect(u Level)
     HRESULT AddDirtyRect(in:16 pDirtyRect)
 
 interface IDirect3DVolumeTexture9 : IDirect3DBaseTexture9 {2518526C-E789-4111-A7B9-47EF328D13E6}
     HRESULT GetLevelDesc(u Level, out:28 pDesc)
-    HRESULT GetVolumeLevel(u Level, pp:IDirect3DVolume9 ppVolumeLevel)
+    HRESULT GetVolumeLevel(u Level, child:IDirect3DVolume9 ppVolumeLevel)
     HRESULT LockBox(u Level, lockbox pLockedVolume, in:24 pBox, u Flags)
     HRESULT UnlockBox(u Level)
     HRESULT AddDirtyBox(in:24 pDirtyBox)
 
 interface IDirect3DCubeTexture9 : IDirect3DBaseTexture9 {FFF32F81-D953-473A-9223-93D652ABA93F}
     HRESULT GetLevelDesc(u Level, out:32 pDesc)
-    HRESULT GetCubeMapSurface(u FaceType, u Level, pp:IDirect3DSurface9 ppCubeMapSurface)
+    HRESULT GetCubeMapSurface(u FaceType, u Level, child:IDirect3DSurface9 ppCubeMapSurface)
     HRESULT LockRect(u FaceType, u Level, lockrect pLockedRect, in:16 pRect, u Flags)
     HRESULT UnlockRect(u FaceType, u Level)
     HRESULT AddDirtyRect(u FaceType, in:16 pDirtyRect)
@@ -298,7 +300,7 @@ class Param:
     def __init__(self, kind, name):
         self.name = name
         self.kind, _, self.extra = kind.partition(':')
-        if self.kind not in ('u', 'i', 'f', 'in', 'out', 'if', 'pp') and self.kind not in SIMPLE:
+        if self.kind not in ('u', 'i', 'f', 'in', 'out', 'if', 'pp', 'child') and self.kind not in SIMPLE:
             raise SystemExit(f'type inconnu {kind} pour {name}')
         if self.kind in ('in', 'out') and not self.extra:
             raise SystemExit(f'{name} : taille manquante')
@@ -448,12 +450,15 @@ def thunk(interfaces, method):
             if not target:
                 raise SystemExit(f'{method.full} : interface {p.extra} inconnue')
             lines.append(f'    void *a_{n} = d3d9_iface_in(c, g_{n}, 0x{derived(interfaces, target):x}u);')
-        elif p.kind == 'pp':
+        elif p.kind in ('pp', 'child'):
             target = by_name.get(p.extra)
             if not target:
                 raise SystemExit(f'{method.full} : interface {p.extra} inconnue')
             lines.append(f'    void *h_{n} = NULL, **a_{n} = d3d9_out_slot(c, g_{n}) ? &h_{n} : NULL;')
-            after.append(f'    d3d9_iface_out(c, g_{n}, h_{n}, D3D9_{target.name});')
+            if p.kind == 'pp':
+                after.append(f'    d3d9_iface_out(c, g_{n}, h_{n}, D3D9_{target.name});')
+            else:
+                after.append(f'    d3d9_child_out(c, g_{n}, h_{n}, D3D9_{target.name}, self);')
         elif p.kind == 'hwnd':
             lines.append(f'    void *a_{n} = d3d9_hwnd(c, g_{n});')
         elif p.kind == 'shared':
@@ -477,7 +482,7 @@ def thunk(interfaces, method):
         elif p.kind in ('shader', 'decl', 'rgndata'):
             lines.append(f'    const void *a_{n} = d3d9_{p.kind}(c, g_{n});')
         call_args.append(f'a_{n}')
-        types.append('void **' if p.kind in ('pp', 'lockptr') else
+        types.append('void **' if p.kind in ('pp', 'child', 'lockptr') else
                      'const void *' if p.kind in ('shader', 'decl', 'rgndata') else ctype(p))
     rtype = RETURNS[method.ret]
     signature = f'{rtype} (*)({", ".join(["void *"] + types)})'

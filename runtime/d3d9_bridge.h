@@ -71,6 +71,9 @@ uint32_t d3d9_deref(CPU *c, uint32_t guest);
 void *d3d9_iface_in(CPU *c, uint32_t guest, uint32_t accept);
 int d3d9_out_slot(CPU *c, uint32_t guest);
 void d3d9_iface_out(CPU *c, uint32_t guest, void *host, unsigned iface);
+// Interface en sortie appartenant à l'objet hôte parent (niveau de texture, face de cube) :
+// partage le compte de son conteneur, retirée quand le conteneur est détruit.
+void d3d9_child_out(CPU *c, uint32_t guest, void *host, unsigned iface, const void *parent);
 void *d3d9_hwnd(CPU *c, uint32_t guest);
 void *d3d9_shared(CPU *c, uint32_t guest);
 void *d3d9_params_in(CPU *c, uint32_t guest, D3d9HostParams *host, int input);
