@@ -28,7 +28,11 @@ class MakeAppTests(unittest.TestCase):
         (self.root / 'config').mkdir()
         (self.root / 'tools').mkdir(exist_ok=True)
         (self.root / 'tools/language.py').write_text('')
-        self.config = {'game_root': str(self.tmp / 'Portal 2'), 'linux_root': str(self.tmp / 'depot')}
+        steam = self.tmp / 'steamworks/libsteam_api.dylib'
+        steam.parent.mkdir()
+        steam.write_bytes(b'steam')
+        self.config = {'game_root': str(self.tmp / 'Portal 2'), 'linux_root': str(self.tmp / 'depot'),
+                       'steam_api_dylib': str(steam)}
         self.support = self.tmp / 'support'
         self.old = self.tmp / 'work/portal2-userdata'
         # The fake binary is not Mach-O: skip dylib bundling and signing here.
@@ -50,6 +54,13 @@ class MakeAppTests(unittest.TestCase):
         self.assertTrue((app / 'Contents/Resources/language.py').exists())
         self.assertTrue((app / 'Contents/Resources/local.json').exists())
         self.assertNotIn(str(self.root), (app / 'Contents/MacOS/launcher').read_text())
+
+    def test_steam_api_bundled_and_exported(self):
+        # The copied executable cannot find the repo, so the launcher must name the bundled Steam library.
+        app = self.run_main()
+        self.assertEqual((app / 'Contents/Frameworks/libsteam_api.dylib').read_bytes(), b'steam')
+        self.assertIn('P2_STEAM_API_DYLIB="$HERE/../Frameworks/libsteam_api.dylib"',
+                      (app / 'Contents/MacOS/launcher').read_text())
 
     def test_prep_copied_into_bundle(self):
         app = self.run_main()

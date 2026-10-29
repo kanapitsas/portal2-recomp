@@ -50,6 +50,9 @@ if ! /usr/bin/pgrep -qx steam_osx; then
     sleep 5
 fi
 export SteamAppId=620 SteamGameId=620
+# libsteam_api.dylib de Valve, copiée dans l'app : le runtime la cherche sinon
+# à côté du dépôt, absent ici.
+export P2_STEAM_API_DYLIB="$HERE/../Frameworks/libsteam_api.dylib"
 # Configuration Fontconfig embarquée (sinon cherchée dans /opt/homebrew/etc/fonts).
 [ -d "$HERE/../Resources/fonts" ] && export FONTCONFIG_PATH="$HERE/../Resources/fonts"
 mkdir -p "$(dirname "$LOG")" {user_dir}
@@ -155,6 +158,17 @@ def bundle_libraries(app, binary):
                         ignore=shutil.ignore_patterns('*.default'))
 
 
+def bundle_steam_api(app, config):
+    """Copie la libsteam_api.dylib configurée (chargée par dlopen, donc absente
+    d'otool -L) dans Frameworks, où le lanceur la désigne."""
+    source = Path(config.get('steam_api_dylib') or '').expanduser()
+    if not source.is_file():
+        sys.exit(f'libsteam_api.dylib not found ({source}): re-run ./setup.sh')
+    frameworks = app / 'Contents/Frameworks'
+    frameworks.mkdir(parents=True, exist_ok=True)
+    shutil.copy(source, frameworks / 'libsteam_api.dylib')
+
+
 def sign_app(app):
     """Signature ad hoc : install_name_tool invalide celle de l'éditeur de liens."""
     for lib in sorted((app / 'Contents/Frameworks').glob('*.dylib')):
@@ -222,6 +236,7 @@ def main():
         **{key: shlex.quote(str(value)) for key, value in paths.items()}))
     launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     bundle_libraries(app, binary)
+    bundle_steam_api(app, config)
 
     icon = paths['game_dir'] / 'portal2/resource/game.icns'
     if icon.exists(): shutil.copy(icon, resources / 'portal2.icns')
