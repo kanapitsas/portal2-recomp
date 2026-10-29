@@ -17,6 +17,7 @@
 //
 // SHIMS: Direct3DCreate9
 #include "d3d9_bridge.h"
+#include "frame_times.h"
 #include "sdl_common.h"
 #include <dlfcn.h>
 #include <limits.h>
@@ -802,6 +803,22 @@ static int d3d9_call(CPU *c, const char *name, void *data) {
     return 1;
 }
 
+// P2_FRAME_TIMES : les deux Present passent par un aiguillage qui les date ;
+// choisi à la résolution de la route, il ne coûte rien quand le journal est
+// éteint (les autres méthodes ne le voient jamais).
+static int d3d9_timed_present(CPU *c, const char *name, void *data) {
+    uint64_t start = rt_frame_times_now();
+    d3d9_call(c, name, data);
+    rt_frame_times_record('d', start);
+    return 1;
+}
+static rt_shim_handler handler_of(const D3d9Method *m) {
+    if (rt_frame_times_enabled() && (!strcmp(m->name, "IDirect3DDevice9::Present") ||
+                                     !strcmp(m->name, "IDirect3DSwapChain9::Present")))
+        return d3d9_timed_present;
+    return d3d9_call;
+}
+
 static int compare_method(const void *key, const void *item) {
     return strcmp((const char *)key, ((const D3d9Method *)item)->name);
 }
@@ -825,12 +842,12 @@ static int d3d9_shim(CPU *c, const char *name) {
         return 1;
     }
     const D3d9Method *m = find_method(name);
-    return m ? d3d9_call(c, name, (void *)m) : 0;
+    return m ? handler_of(m)(c, name, (void *)m) : 0;
 }
 static int d3d9_resolve(const char *name, RtShimRoute *route) {
     const D3d9Method *m = find_method(name);
     if (!m) return 0;
-    route->handler = d3d9_call;
+    route->handler = handler_of(m);
     route->data = (void *)m;
     return 1;
 }

@@ -25,6 +25,7 @@
 // SHIMS: SDL_GetClipboardText SDL_SetClipboardText SDL_HasClipboardText
 #include "rt.h"
 #include "host_gl.h"   // OpenGL.framework (macOS) ou gl4es (iOS)
+#include "frame_times.h"
 #include <mach/mach_time.h>
 void rt_gl_timing_add(const char *label, uint64_t ticks);
 void rt_gl_pass_frame(void);
@@ -749,6 +750,7 @@ static int sdl_video(CPU *c, const char *name) {
         r = (uint32_t)SDL_GL_SetSwapInterval(interval);
     }
     else if (!strcmp(n, "GL_SwapWindow")) {
+        uint64_t frame_start = rt_frame_times_enabled() ? rt_frame_times_now() : 0;   // P2_FRAME_TIMES
         SDL_Window *w = WINDOW(0);
         if (w) { int dw = 0, dh = 0; drawable_size(w, &dw, &dh); fps_overlay_frame(dw, dh); }
         static unsigned swaps;
@@ -761,6 +763,7 @@ static int sdl_video(CPU *c, const char *name) {
         rt_gl_timing_add("SwapWindow", mach_absolute_time() - start);
         rt_gl_pass_frame();
         rt_guest_resume(saved);
+        if (frame_start) rt_frame_times_record('g', frame_start);
     } else if (!strcmp(n, "GL_GetProcAddress")) {
         const char *proc = guest_string(c, arg(c, 0));
         r = proc ? rt_gl_proc_address(proc) : 0;

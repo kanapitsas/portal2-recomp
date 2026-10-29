@@ -6,6 +6,8 @@
 // de disposition différente et le chemin chaud SetRenderState/Draw*.
 #include "checks.h"
 #include "d3d9_bridge.h"
+#include "frame_times.h"
+#include <limits.h>
 #include "sdl_common.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -251,6 +253,37 @@ static CPU call(uint32_t proxy, uint32_t slot, unsigned count, const uint32_t *a
 static uint32_t tag(unsigned iface) { return D3D9_TAG << 8 | iface; }
 static uint32_t bits_of(float f) { uint32_t u; memcpy(&u, &f, 4); return u; }
 
+// P2_FRAME_TIMES : Present (par nom et par route) écrit une ligne « d » quand
+// le journal est ouvert ; fermé, la route résolue est celle de toute méthode.
+static void present_is_timed_only_with_frame_times(uint32_t dev) {
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s/p2-d3d9-frame-times-%d.log", getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp", (int)getpid());
+    CPU c; rt_cpu_reset(&c); c.esp = STACK;
+    for (int i = 0; i < 4; ++i) PUSH(&c, 0);
+    PUSH(&c, dev); PUSH(&c, RT_RETURN_SENTINEL);
+    assert(rt_frame_times_open(path) && rt_frame_times_enabled());
+    uint64_t before = rt_frame_times_count();
+    RtShimRoute timed = {0};
+    assert(rt_shim_route(&c, "IDirect3DDevice9::Present", &timed) == 1 && c.eax == 0 && timed.handler);
+    assert(rt_route_call(&timed, &c, "IDirect3DDevice9::Present") == 1 && c.eax == 0);
+    assert(rt_frame_times_count() == before + 2);
+    assert(!rt_frame_times_open(NULL) && !rt_frame_times_enabled());
+    RtShimRoute plain = {0};
+    assert(rt_shim_route(&c, "IDirect3DDevice9::Present", &plain) == 1 && c.eax == 0);
+    assert(plain.handler && plain.handler != timed.handler && rt_frame_times_count() == before + 2);
+    FILE *file = fopen(path, "r");
+    assert(file);
+    char line[256]; unsigned lines = 0;
+    assert(fgets(line, sizeof(line), file) && !strncmp(line, "# p2-frame-times v1 ", 20));
+    unsigned long long start, present, cpu, last = 0;
+    while (fgets(line, sizeof(line), file)) {
+        assert(sscanf(line, "d %llu %llu %llu", &start, &present, &cpu) == 3 && start > last && cpu > 0);
+        last = start; ++lines;
+    }
+    fclose(file); unlink(path);
+    assert(lines == 2);
+}
+
 RT_CHECK(d3d9_generated_tables_match_d3d9_h) {
     for (unsigned i = 1; i < rt_d3d9_method_count; ++i) assert(strcmp(rt_d3d9_methods[i - 1].name, rt_d3d9_methods[i].name) < 0);
     static const struct { unsigned iface, slots; } sizes[] = {
@@ -409,6 +442,7 @@ RT_CHECK(d3d9_bridge_against_fake_native_library) {
 
     // Present : attentes hôtes imbriquées autour du verrou invité.
     assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0 && seen.blocking == 1);
+    present_is_timed_only_with_frame_times(dev);
     // Méthode non pontée : E_NOTIMPL sans appel hôte.
     assert(CALL(dev, IDirect3DDevice9, DrawRectPatch, 0, 0, 0).eax == D3D9_E_NOTIMPL);
 
