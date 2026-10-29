@@ -573,3 +573,28 @@ RT_CHECK(d3d9_get_container_iunknown_keeps_one_reference) {
     assert(CALL0(container, IUnknown, Release).eax == 1 && CALL0(container, IUnknown, Release).eax == 0);
     assert(CALL0(level, IUnknown, Release).eax == 0 && rt_d3d9_live_proxies() == live);
 }
+
+// Plafonds mémoire de mtld3d adaptés à l'espace invité, posés avant
+// l'initialisation ; une clé donnée par l'utilisateur reste la dernière (gagne).
+RT_CHECK(d3d9_memory_caps_precede_user_config) {
+    const char *given = getenv("MTLD3D_CONFIG");
+    char *saved = given ? strdup(given) : NULL;
+    unsetenv("MTLD3D_CONFIG");
+    use_test_library(fake_init);
+    assert(rt_d3d9_available());
+    assert(getenv("MTLD3D_CONFIG") && !strcmp(getenv("MTLD3D_CONFIG"), rt_d3d9_memory_defaults));
+    assert(strstr(rt_d3d9_memory_defaults, "memory.pageboxPoolCapMB=") && strstr(rt_d3d9_memory_defaults, "memory.vbibRetentionCapMB="));
+    drop_test_library();
+    setenv("MTLD3D_CONFIG", "memory.pageboxPoolCapMB=16", 1);
+    use_test_library(fake_init);
+    assert(rt_d3d9_available());
+    const char *joined = getenv("MTLD3D_CONFIG");
+    size_t n = strlen(rt_d3d9_memory_defaults);
+    assert(!strncmp(joined, rt_d3d9_memory_defaults, n) && !strcmp(joined + n, ";memory.pageboxPoolCapMB=16"));
+    drop_test_library();
+    use_test_library(fake_init);   // pas de doublon au rechargement
+    assert(rt_d3d9_available() && !strcmp(getenv("MTLD3D_CONFIG"), joined));
+    drop_test_library();
+    if (saved) setenv("MTLD3D_CONFIG", saved, 1); else unsetenv("MTLD3D_CONFIG");
+    free(saved);
+}

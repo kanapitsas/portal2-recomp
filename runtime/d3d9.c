@@ -191,7 +191,29 @@ enum { MODE_CAPACITY = 64 };
 static D3D9MetalDisplayMode modes[MODE_CAPACITY];   // prêtés à la bibliothèque pour toute la vie du processus
 const D3D9MetalHost *rt_d3d9_host(void) { return &host; }
 
+// Plafonds mémoire de mtld3d, réglés par MTLD3D_CONFIG (lu à chaque
+// Direct3DCreate9). Ses valeurs par défaut visent un processus 32 bits de
+// 2 à 4 Gio ; ici, la mémoire alloc_app (tampons de sommets et d'index,
+// copies de textures, réserve de recyclage) partage ~1,2 Gio d'espace invité
+// avec le jeu, et une bibliothèque 64 bits annoncerait une mémoire vidéo sans
+// plafond. Placés devant la valeur de l'utilisateur : une clé qu'il donne
+// l'emporte (la dernière gagne).
+const char rt_d3d9_memory_defaults[] =
+    "memory.pageboxPoolCapMB=64;memory.vbibRetentionCapMB=192;memory.vramBudgetMB=1024";
+static void set_memory_defaults(void) {
+    const char *given = getenv("MTLD3D_CONFIG");
+    if (given && !strncmp(given, rt_d3d9_memory_defaults, sizeof(rt_d3d9_memory_defaults) - 1)) return;   // déjà posés
+    if (!given || !*given) { setenv("MTLD3D_CONFIG", rt_d3d9_memory_defaults, 1); return; }
+    size_t size = sizeof(rt_d3d9_memory_defaults) + 1 + strlen(given);
+    char *joined = malloc(size);
+    if (!joined) return;
+    snprintf(joined, size, "%s;%s", rt_d3d9_memory_defaults, given);
+    setenv("MTLD3D_CONFIG", joined, 1);
+    free(joined);
+}
+
 static void fill_host(void) {
+    set_memory_defaults();
     host = (D3D9MetalHost){
         .size = sizeof(D3D9MetalHost), .user = NULL,
         .metal_layer = host_metal_layer, .alloc_app = host_alloc_app, .free_app = host_free_app,
