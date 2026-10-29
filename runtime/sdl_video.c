@@ -39,6 +39,7 @@ void fps_overlay_frame(int drawable_width, int drawable_height);
 // Mise en page i386 de SDL2 (2.0.x à 2.32 : inchangée).
 _Static_assert(SDL_WINDOW_OPENGL == 0x2 && SDL_WINDOW_FULLSCREEN_DESKTOP == 0x1001, "SDL2 window flags");
 _Static_assert(SDL_INIT_VIDEO == 0x20 && SDL_GL_CONTEXT_PROFILE_MASK == 21, "SDL2 enums");
+_Static_assert(SDL_WINDOW_VULKAN == 0x10000000 && SDL_WINDOW_METAL == 0x20000000, "SDL2 window flags (Vulkan, Metal)");
 
 static uint32_t arg(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
 static const char *guest_string(CPU *c, uint32_t address) {
@@ -518,6 +519,67 @@ static SDL_Window *create_window(const char *title, int x, int y, int w, int h, 
     return window;
 }
 
+// --- Metal (rendu Direct3D 9 natif, runtime/d3d9.c) ---------------------------
+// Avec -vulkan, launcher.so crée sa fenêtre avec SDL_WINDOW_VULKAN et ne crée
+// pas de contexte GL ; shaderapivk.so donne cette fenêtre (HWND) à Direct3D 9.
+// Ici, pas de chargeur Vulkan : la fenêtre devient SDL_WINDOW_METAL et reçoit
+// une SDL_MetalView (thread principal) dont la CAMetalLayer est remise à la
+// bibliothèque Direct3D 9 native par rt_sdl_metal_layer.
+typedef struct MetalView { SDL_Window *window; SDL_MetalView view; struct MetalView *next; } MetalView;
+static MetalView *metal_views;
+
+uint32_t rt_sdl_window_flags(uint32_t guest_flags) {
+    if (!(guest_flags & SDL_WINDOW_VULKAN)) return guest_flags;
+    return (guest_flags & ~(uint32_t)(SDL_WINDOW_VULKAN | SDL_WINDOW_OPENGL)) | SDL_WINDOW_METAL;
+}
+
+static MetalView *find_metal_view(SDL_Window *window) {
+    pthread_mutex_lock(&lock);
+    MetalView *v = metal_views;
+    while (v && v->window != window) v = v->next;
+    pthread_mutex_unlock(&lock);
+    return v;
+}
+static MetalView *create_metal_view(SDL_Window *window) {
+    if (!pthread_main_np() || !(SDL_GetWindowFlags(window) & SDL_WINDOW_METAL)) return NULL;
+    SDL_MetalView view = SDL_Metal_CreateView(window);
+    MetalView *v = view ? malloc(sizeof(*v)) : NULL;
+    if (!v) {
+        if (view) SDL_Metal_DestroyView(view);
+        fprintf(stderr, "[sdl] SDL_Metal_CreateView failed: %s\n", SDL_GetError());
+        return NULL;
+    }
+    v->window = window; v->view = view;
+    pthread_mutex_lock(&lock);
+    v->next = metal_views; metal_views = v;
+    pthread_mutex_unlock(&lock);
+    return v;
+}
+static void destroy_metal_view(SDL_Window *window) {
+    pthread_mutex_lock(&lock);
+    MetalView **link = &metal_views;
+    while (*link && (*link)->window != window) link = &(*link)->next;
+    MetalView *v = *link;
+    if (v) *link = v->next;
+    pthread_mutex_unlock(&lock);
+    if (v) { SDL_Metal_DestroyView(v->view); free(v); }
+}
+
+// CAMetalLayer* de la fenêtre et taille de rendu du jeu en pixels (celle du
+// tampon arrière qu'il choisit : points × échelle Retina de la fenêtre).
+// NULL si la fenêtre n'est pas une fenêtre Metal du pont.
+void *rt_sdl_metal_layer(void *window, uint32_t *width, uint32_t *height) {
+    SDL_Window *w = window;
+    MetalView *v = find_metal_view(w);
+    if (!v) v = create_metal_view(w);
+    if (!v) return NULL;
+    int dw = 0, dh = 0;
+    drawable_size(w, &dw, &dh);
+    if (width) *width = (uint32_t)dw;
+    if (height) *height = (uint32_t)dh;
+    return SDL_Metal_GetLayer(v->view);
+}
+
 static int sdl_video(CPU *c, const char *name) {
     if (strncmp(name, "SDL_", 4)) return 0;
     const char *n = name + 4;
@@ -540,13 +602,14 @@ static int sdl_video(CPU *c, const char *name) {
         require_main_thread(c, "SDL_CreateWindow must run on the macOS main thread");
         // Mode diagnostic P2_HIDDEN_WINDOWS=1 : la fenêtre existe (contexte GL
         // réel) mais n'est jamais montrée ; le jeu n'en voit aucune différence.
-        uint32_t flags = arg(c, 5) | (hidden_windows() ? SDL_WINDOW_HIDDEN : 0);
+        uint32_t flags = rt_sdl_window_flags(arg(c, 5)) | (hidden_windows() ? SDL_WINDOW_HIDDEN : 0);
         SDL_Window *w = create_window(guest_string(c, arg(c, 0)), (int)arg(c, 1), (int)arg(c, 2),
                                       (int)arg(c, 3), (int)arg(c, 4), flags);
         if (w && !(r = rt_handle_new(w, RT_SDL_WINDOW))) { SDL_DestroyWindow(w); rt_trap(c, c->eip, "SDL: handle table full"); }
+        if (w && (flags & SDL_WINDOW_METAL)) create_metal_view(w);   // thread principal : vue prête pour Direct3D 9
     } else if (!strcmp(n, "DestroyWindow")) {
         SDL_Window *w = WINDOW(0);
-        if (w) rt_handle_free(arg(c, 0), RT_SDL_WINDOW);
+        if (w) { rt_handle_free(arg(c, 0), RT_SDL_WINDOW); destroy_metal_view(w); }
         SDL_DestroyWindow(w);
     }
     else if (!strcmp(n, "ShowWindow")) { SDL_Window *w = WINDOW(0); if (!hidden_windows()) SDL_ShowWindow(w); }

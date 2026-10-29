@@ -25,3 +25,8 @@ int rt_sdl_window_scale(void);
 void rt_sdl_force_scales(int display, int window);
 // Encoche : hauteur d'écran annoncée au jeu (celle que reçoit une fenêtre plein écran).
 int rt_sdl_notch_height(int height, int frame_h, int visible_top, double safe_top);
+// Fenêtres Metal (rendu Direct3D 9 natif) : drapeaux SDL invités → hôtes
+// (SDL_WINDOW_VULKAN devient SDL_WINDOW_METAL), et CAMetalLayer* d'une
+// SDL_Window* hôte avec la taille de rendu en pixels (NULL si non Metal).
+uint32_t rt_sdl_window_flags(uint32_t guest_flags);
+void *rt_sdl_metal_layer(void *window, uint32_t *width, uint32_t *height);
