@@ -19,10 +19,12 @@ static void clear_env(void) {
 RT_CHECK(ios_settings_become_environment) {
     clear_env();
     Pref prefs[] = {{"P2ResolutionScale", "1.5"}, {"P2ShowFPS", "0"}, {"P2BackTap", "1"}, {"P2TouchControls", "auto"},
-                    {"P2PortalButtons", "1"}, {"P2Log", "0"}, {"P2BackTapInvert", "1"}, {NULL, NULL}};
+                    {"P2PortalButtons", "1"}, {"P2Log", "0"}, {"P2BackTapInvert", "1"}, {"P2Renderer", "d3d9"},
+                    {NULL, NULL}};
     char summary[512];
     int n = rt_ios_settings_apply(fake_get, prefs, summary, sizeof(summary));
-    assert(n == 5);
+    assert(n == 6);
+    assert(!strcmp(getenv("P2_RENDERER"), "d3d9"));               // Rendu : Metal (src/main.c)
     assert(!strcmp(getenv("P2_IOS_RENDER_SCALE"), "1.5"));
     assert(!strcmp(getenv("P2_SHOW_FPS"), "0"));                 // interrupteur éteint
     assert(!strcmp(getenv("P2_BACKTAP"), "1"));
