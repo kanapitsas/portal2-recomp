@@ -55,7 +55,7 @@ export SteamAppId=620 SteamGameId=620
 mkdir -p "$(dirname "$LOG")" {user_dir}
 # Langue : P2_LANGUAGE, "language" de config/local.json, Steam, système (tools/language.py).
 # Un -language passé au lanceur l'emporte ; en cas d'échec, le jeu reste en anglais.
-LANGUAGE_ARGS=$(/usr/bin/python3 {language_script} -- {game_args} "$@" 2>/dev/null)
+LANGUAGE_ARGS=$(/usr/bin/python3 "$HERE/../Resources/language.py" --config "$HERE/../Resources/local.json" -- {game_args} "$@" 2>/dev/null)
 exec "$HERE/portal2-native" --images "$(dirname "$HERE")/Resources/prep" --game-dir {game_dir} --linux-root {linux_root} \\
     --user-dir {user_dir} -- {game_args} $LANGUAGE_ARGS "$@" >"$LOG" 2>&1
 '''
@@ -209,10 +209,15 @@ def main():
     # Dans l'app plutôt que dans Application Support : 75 Mo liés à cette
     # compilation précise, retirés avec l'app (corbeille comprise).
     copy_tree(prep, resources / 'prep')
+    # Le lanceur ne lit plus rien dans le dépôt : script de langue (bibliothèque
+    # standard seule) et instantané de la config ; relancer make_app.py après
+    # une modification de config/local.json.
+    shutil.copy(ROOT / 'tools/language.py', resources / 'language.py')
+    shutil.copy(ROOT / 'config/local.json', resources / 'local.json')
 
     launcher = macos / 'launcher'
     launcher.write_text(LAUNCHER.format(
-        name=NAME, language_script=shlex.quote(str(ROOT / 'tools/language.py')), game_args=shlex.join(game_args or DEFAULT_ARGS),
+        name=NAME, game_args=shlex.join(game_args or DEFAULT_ARGS),
         binary_text=str(binary), game_dir_text=str(paths['game_dir']).replace('"', ''),
         **{key: shlex.quote(str(value)) for key, value in paths.items()}))
     launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)

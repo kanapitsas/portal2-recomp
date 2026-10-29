@@ -26,6 +26,8 @@ class MakeAppTests(unittest.TestCase):
         (self.root / 'build/game/prep/engine.so').write_bytes(b'\x7fELF')
         (self.root / 'build/portal2-native').write_text('')
         (self.root / 'config').mkdir()
+        (self.root / 'tools').mkdir(exist_ok=True)
+        (self.root / 'tools/language.py').write_text('')
         self.config = {'game_root': str(self.tmp / 'Portal 2'), 'linux_root': str(self.tmp / 'depot')}
         self.support = self.tmp / 'support'
         self.old = self.tmp / 'work/portal2-userdata'
@@ -42,6 +44,12 @@ class MakeAppTests(unittest.TestCase):
         with mock.patch.object(sys, 'argv', ['make_app.py', '--dest', str(dest)]), mock.patch('builtins.print'):
             make_app.main()
         return dest / 'Portal 2 Natif.app'
+
+    def test_launcher_reads_nothing_from_repo(self):
+        app = self.run_main()
+        self.assertTrue((app / 'Contents/Resources/language.py').exists())
+        self.assertTrue((app / 'Contents/Resources/local.json').exists())
+        self.assertNotIn(str(self.root), (app / 'Contents/MacOS/launcher').read_text())
 
     def test_prep_copied_into_bundle(self):
         app = self.run_main()
