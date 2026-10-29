@@ -87,8 +87,11 @@ P2_RENDERER=d3d9 P2_D3D9METAL=/path/to/libd3d9metal.dylib \
    `GetData` with `D3DGETDATA_FLUSH` spinning) in `blocking_begin` /
    `blocking_end`, and touch no guest memory in between.
 6. `Release` returns the true remaining count (0 = destroyed). Texture
-   levels and cube faces may share their container's count: their proxies
-   are retired with the container's. A host address reused by a new object
+   levels, cube faces and volume levels must forward AddRef/Release to their
+   container (d3d9 semantics): a level reaching 0 retires the container and
+   all its levels, and the container reaching 0 retires its levels. Back
+   buffers may keep their own count; they are retired with the device or
+   swap chain that returned them. A host address reused by a new object
    of another type gets a new proxy. `QueryInterface` must answer for every
    d3d9 IID the object implements (the bridge uses it to type an object
    returned as `IUnknown`, e.g. a back buffer's swap chain container).

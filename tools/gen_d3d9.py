@@ -18,8 +18,10 @@ Types d'argument (un mot de pile chacun, d3d9 n'a aucun argument 64 bits) :
   out:EXPR           idem, écrit par l'hôte
   if:IFACE           interface en entrée (mandataire → objet hôte)
   pp:IFACE           interface en sortie (objet hôte → mandataire unique)
-  child:IFACE        idem, objet appartenant à this (niveau de texture) : son
-                     mandataire est retiré avec celui du conteneur
+  child:IFACE        idem, niveau de texture partageant le compte de this :
+                     le groupe entier est retiré quand le compte tombe à 0
+  owned:IFACE        idem, objet qui dépend de this sans partager son compte
+                     (tampon arrière) : retiré avec this
   hwnd               HWND : handle SDL_Window invité → SDL_Window* hôte
   shared             HANDLE *pSharedHandle (doit être NULL en d3d9 non Ex)
   params, params_out D3DPRESENT_PARAMETERS (56 octets i386, 64 arm64) entrée/sortie, sortie
@@ -87,7 +89,7 @@ interface IDirect3DDevice9 : IUnknown {D0223B96-BF7A-43FD-92BD-A43B0D82B9EB}
     UINT GetNumberOfSwapChains()
     HRESULT Reset(params pPresentationParameters)
     HRESULT Present(in:16 pSourceRect, in:16 pDestRect, hwnd hDestWindowOverride, rgndata pDirtyRegion)
-    HRESULT GetBackBuffer(u iSwapChain, u iBackBuffer, u Type, pp:IDirect3DSurface9 ppBackBuffer)
+    HRESULT GetBackBuffer(u iSwapChain, u iBackBuffer, u Type, owned:IDirect3DSurface9 ppBackBuffer)
     HRESULT GetRasterStatus(u iSwapChain, out:8 pRasterStatus)
     HRESULT SetDialogBoxMode(u bEnableDialogs)
     void SetGammaRamp(u iSwapChain, u Flags, in:1536 pRamp)
@@ -192,7 +194,7 @@ interface IDirect3DDevice9 : IUnknown {D0223B96-BF7A-43FD-92BD-A43B0D82B9EB}
 interface IDirect3DSwapChain9 : IUnknown {794950F2-ADFC-458A-905E-10A10B0B503B}
     HRESULT Present(in:16 pSourceRect, in:16 pDestRect, hwnd hDestWindowOverride, rgndata pDirtyRegion, u dwFlags)
     HRESULT GetFrontBufferData(if:IDirect3DSurface9 pDestSurface)
-    HRESULT GetBackBuffer(u iBackBuffer, u Type, pp:IDirect3DSurface9 ppBackBuffer)
+    HRESULT GetBackBuffer(u iBackBuffer, u Type, owned:IDirect3DSurface9 ppBackBuffer)
     HRESULT GetRasterStatus(out:8 pRasterStatus)
     HRESULT GetDisplayMode(out:16 pMode)
     HRESULT GetDevice(pp:IDirect3DDevice9 ppDevice)
@@ -300,7 +302,7 @@ class Param:
     def __init__(self, kind, name):
         self.name = name
         self.kind, _, self.extra = kind.partition(':')
-        if self.kind not in ('u', 'i', 'f', 'in', 'out', 'if', 'pp', 'child') and self.kind not in SIMPLE:
+        if self.kind not in ('u', 'i', 'f', 'in', 'out', 'if', 'pp', 'child', 'owned') and self.kind not in SIMPLE:
             raise SystemExit(f'type inconnu {kind} pour {name}')
         if self.kind in ('in', 'out') and not self.extra:
             raise SystemExit(f'{name} : taille manquante')
@@ -450,7 +452,7 @@ def thunk(interfaces, method):
             if not target:
                 raise SystemExit(f'{method.full} : interface {p.extra} inconnue')
             lines.append(f'    void *a_{n} = d3d9_iface_in(c, g_{n}, 0x{derived(interfaces, target):x}u);')
-        elif p.kind in ('pp', 'child'):
+        elif p.kind in ('pp', 'child', 'owned'):
             target = by_name.get(p.extra)
             if not target:
                 raise SystemExit(f'{method.full} : interface {p.extra} inconnue')
@@ -458,7 +460,8 @@ def thunk(interfaces, method):
             if p.kind == 'pp':
                 after.append(f'    d3d9_iface_out(c, g_{n}, h_{n}, D3D9_{target.name});')
             else:
-                after.append(f'    d3d9_child_out(c, g_{n}, h_{n}, D3D9_{target.name}, self);')
+                shared = int(p.kind == 'child')
+                after.append(f'    d3d9_child_out(c, g_{n}, h_{n}, D3D9_{target.name}, self, {shared});')
         elif p.kind == 'hwnd':
             lines.append(f'    void *a_{n} = d3d9_hwnd(c, g_{n});')
         elif p.kind == 'shared':
@@ -482,7 +485,7 @@ def thunk(interfaces, method):
         elif p.kind in ('shader', 'decl', 'rgndata'):
             lines.append(f'    const void *a_{n} = d3d9_{p.kind}(c, g_{n});')
         call_args.append(f'a_{n}')
-        types.append('void **' if p.kind in ('pp', 'child', 'lockptr') else
+        types.append('void **' if p.kind in ('pp', 'child', 'owned', 'lockptr') else
                      'const void *' if p.kind in ('shader', 'decl', 'rgndata') else ctype(p))
     rtype = RETURNS[method.ret]
     signature = f'{rtype} (*)({", ".join(["void *"] + types)})'

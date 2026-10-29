@@ -207,7 +207,7 @@ static void t_IDirect3DCubeTexture9_GetCubeMapSurface(CPU *c, void *self, uint32
     uint32_t a_Level = g_Level;
     void *h_ppCubeMapSurface = NULL, **a_ppCubeMapSurface = d3d9_out_slot(c, g_ppCubeMapSurface) ? &h_ppCubeMapSurface : NULL;
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, void **))D3D9_VTBL(self)[18])(self, a_FaceType, a_Level, a_ppCubeMapSurface);
-    d3d9_child_out(c, g_ppCubeMapSurface, h_ppCubeMapSurface, D3D9_IDirect3DSurface9, self);
+    d3d9_child_out(c, g_ppCubeMapSurface, h_ppCubeMapSurface, D3D9_IDirect3DSurface9, self, 1);
     c->eax = (uint32_t)hr;
 }
 
@@ -614,7 +614,7 @@ static void t_IDirect3DDevice9_GetBackBuffer(CPU *c, void *self, uint32_t a) {
     uint32_t a_Type = g_Type;
     void *h_ppBackBuffer = NULL, **a_ppBackBuffer = d3d9_out_slot(c, g_ppBackBuffer) ? &h_ppBackBuffer : NULL;
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, void **))D3D9_VTBL(self)[18])(self, a_iSwapChain, a_iBackBuffer, a_Type, a_ppBackBuffer);
-    d3d9_iface_out(c, g_ppBackBuffer, h_ppBackBuffer, D3D9_IDirect3DSurface9);
+    d3d9_child_out(c, g_ppBackBuffer, h_ppBackBuffer, D3D9_IDirect3DSurface9, self, 0);
     c->eax = (uint32_t)hr;
 }
 
@@ -1574,7 +1574,7 @@ static void t_IDirect3DSwapChain9_GetBackBuffer(CPU *c, void *self, uint32_t a) 
     uint32_t a_Type = g_Type;
     void *h_ppBackBuffer = NULL, **a_ppBackBuffer = d3d9_out_slot(c, g_ppBackBuffer) ? &h_ppBackBuffer : NULL;
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, void **))D3D9_VTBL(self)[5])(self, a_iBackBuffer, a_Type, a_ppBackBuffer);
-    d3d9_iface_out(c, g_ppBackBuffer, h_ppBackBuffer, D3D9_IDirect3DSurface9);
+    d3d9_child_out(c, g_ppBackBuffer, h_ppBackBuffer, D3D9_IDirect3DSurface9, self, 0);
     c->eax = (uint32_t)hr;
 }
 
@@ -1652,7 +1652,7 @@ static void t_IDirect3DTexture9_GetSurfaceLevel(CPU *c, void *self, uint32_t a) 
     uint32_t a_Level = g_Level;
     void *h_ppSurfaceLevel = NULL, **a_ppSurfaceLevel = d3d9_out_slot(c, g_ppSurfaceLevel) ? &h_ppSurfaceLevel : NULL;
     int32_t hr = ((int32_t (*)(void *, uint32_t, void **))D3D9_VTBL(self)[18])(self, a_Level, a_ppSurfaceLevel);
-    d3d9_child_out(c, g_ppSurfaceLevel, h_ppSurfaceLevel, D3D9_IDirect3DSurface9, self);
+    d3d9_child_out(c, g_ppSurfaceLevel, h_ppSurfaceLevel, D3D9_IDirect3DSurface9, self, 1);
     c->eax = (uint32_t)hr;
 }
 
@@ -1802,7 +1802,7 @@ static void t_IDirect3DVolumeTexture9_GetVolumeLevel(CPU *c, void *self, uint32_
     uint32_t a_Level = g_Level;
     void *h_ppVolumeLevel = NULL, **a_ppVolumeLevel = d3d9_out_slot(c, g_ppVolumeLevel) ? &h_ppVolumeLevel : NULL;
     int32_t hr = ((int32_t (*)(void *, uint32_t, void **))D3D9_VTBL(self)[18])(self, a_Level, a_ppVolumeLevel);
-    d3d9_child_out(c, g_ppVolumeLevel, h_ppVolumeLevel, D3D9_IDirect3DVolume9, self);
+    d3d9_child_out(c, g_ppVolumeLevel, h_ppVolumeLevel, D3D9_IDirect3DVolume9, self, 1);
     c->eax = (uint32_t)hr;
 }
 
