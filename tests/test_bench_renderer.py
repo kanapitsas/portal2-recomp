@@ -154,3 +154,13 @@ class Plan(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ColdRunFilterTests(unittest.TestCase):
+    def test_invalid_cold_runs_stay_out_of_the_summary(self):
+        # A cold run reset by the game (wrong settings) must not supply the cold stutter figures.
+        good = {'renderer': 'gl', 'cold': True, 'steady': {'avg_fps': 60.0}, 'stutter': {'max_ms': 10}, 'load_seconds': 20}
+        reset = dict(good, video_reset=True, stutter={'max_ms': 999}, load_seconds=99)
+        summary = bench.summarize([reset, good])
+        self.assertEqual(summary['gl']['cold_max_ms'], 10)
+        self.assertEqual(summary['gl']['cold_load_s'], 20)

@@ -401,7 +401,7 @@ def summarize(results):
         runs = [r for r in results if r['renderer'] == renderer and r.get('steady') and not r.get('error')
                 and not r.get('video_reset')]
         warm = [r for r in runs if not r.get('cold')] or runs
-        cold = [r for r in results if r['renderer'] == renderer and r.get('cold') and r.get('stutter')]
+        cold = [r for r in runs if r.get('cold') and r.get('stutter')]   # same validity filters as warm runs
 
         def med(group, path):
             values = []

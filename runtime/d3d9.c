@@ -299,6 +299,15 @@ int rt_renderer_request(const char *value) {
     return 0;
 }
 
+// Que faire de -vulkan : 1 = l'ajouter, 0 = arguments inchangés, -1 = le
+// retirer (OpenGL imposé l'emporte sur un -vulkan donné). request vient de
+// rt_renderer_request ; available n'est évalué que s'il faut décider.
+int rt_renderer_plan(int request, int vulkan_given, int (*available)(void)) {
+    if (request < 0) return vulkan_given ? -1 : 0;
+    if (vulkan_given) return 0;
+    return available() ? 1 : 0;
+}
+
 int rt_d3d9_available(void) { return load_library(); }
 
 // ---------------------------------------------------------------- mandataires

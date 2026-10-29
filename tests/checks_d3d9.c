@@ -825,3 +825,17 @@ RT_CHECK(d3d9_renderer_request_defaults_to_d3d9) {
     assert(rt_renderer_request("d3d9") > 0 && rt_renderer_request("Metal") > 0);
     assert(rt_renderer_request("vulkan") == 0);
 }
+
+int rt_renderer_plan(int request, int vulkan_given, int (*available)(void));
+static int lib_yes(void) { return 1; }
+static int lib_no(void) { return 0; }
+static int lib_unexpected(void) { assert(!"availability must not be probed"); return 0; }
+// OpenGL imposé (réglage, repli iOS sans BC) retire un -vulkan donné ; sinon un
+// -vulkan explicite est respecté sans charger la bibliothèque.
+RT_CHECK(d3d9_renderer_plan_forced_opengl_strips_vulkan) {
+    assert(rt_renderer_plan(-1, 1, lib_unexpected) == -1);
+    assert(rt_renderer_plan(-1, 0, lib_unexpected) == 0);
+    assert(rt_renderer_plan(0, 1, lib_unexpected) == 0 && rt_renderer_plan(1, 1, lib_unexpected) == 0);
+    assert(rt_renderer_plan(0, 0, lib_yes) == 1 && rt_renderer_plan(1, 0, lib_yes) == 1);
+    assert(rt_renderer_plan(0, 0, lib_no) == 0);
+}
