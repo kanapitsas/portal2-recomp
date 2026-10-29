@@ -23,7 +23,7 @@
 #include "d3d9_bridge.h"
 #include "metal_ios.h"
 
-extern unsigned long rt_ios_frames;   // gl_ios.m
+extern _Atomic unsigned long rt_ios_frames;   // gl_ios.m
 float rt_ios_render_scale(void);       // sdl_ios.m
 void rt_ios_request_frame_rate(void);  // gl_ios.m
 

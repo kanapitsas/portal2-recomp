@@ -852,7 +852,7 @@ static void probe_frame(void) {
 }
 
 void rt_ios_draws_frame_end(void);
-unsigned long rt_ios_frames;   // images présentées (compteur affiché par touch_controls.m)
+_Atomic unsigned long rt_ios_frames;   // images présentées (thread du jeu ; lues par touch_controls.m, thread principal)
 void rt_ios_gl_swap_window(SDL_Window *window) {
     ++rt_ios_frames;
     rt_ios_draws_frame_end();
