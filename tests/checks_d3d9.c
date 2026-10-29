@@ -457,3 +457,79 @@ RT_CHECK(d3d9_alloc_app_is_guest_memory) {
     unsetenv("P2_D3D9METAL");
     rt_d3d9_set_library(NULL, NULL);
 }
+
+// ---------------------------------------------------------------- identité COM
+// Objet aux pointeurs d'interface distincts (permis par COM) : chaîne d'échange
+// en multi_a, requête en multi_b, et IUnknown = multi_b (première base, comme
+// en héritage multiple C++). Compte unique pour l'objet.
+static int multi_refs;
+static void *multi_a_vtbl[10], *multi_b_vtbl[8];
+static Fake multi_a = {multi_a_vtbl, 0, 0, NULL, NULL}, multi_b = {multi_b_vtbl, 0, 0, NULL, NULL};
+static uint32_t m_addref(Fake *self) { (void)self; return (uint32_t)++multi_refs; }
+static uint32_t m_release(Fake *self) { (void)self; assert(multi_refs > 0); return (uint32_t)--multi_refs; }
+static int32_t m_query(Fake *self, const uint8_t *iid, void **out) {
+    (void)self;
+    Fake *typed = !memcmp(iid, iid_unknown, 16) ? &multi_b
+                  : !memcmp(iid, rt_d3d9_interfaces[D3D9_IDirect3DSwapChain9].iid, 16) ? &multi_a
+                  : !memcmp(iid, rt_d3d9_interfaces[D3D9_IDirect3DQuery9].iid, 16) ? &multi_b : NULL;
+    *out = typed;
+    if (!typed) return (int32_t)D3D9_E_NOINTERFACE;
+    ++multi_refs;
+    return 0;
+}
+
+RT_CHECK(d3d9_iunknown_identity_is_stable_across_interface_pointers) {
+    fill(multi_a_vtbl, 10); fill(multi_b_vtbl, 8);
+    multi_a_vtbl[0] = multi_b_vtbl[0] = (void *)m_query;
+    multi_a_vtbl[1] = multi_b_vtbl[1] = (void *)m_addref;
+    multi_a_vtbl[2] = multi_b_vtbl[2] = (void *)m_release;
+    unsigned live = rt_d3d9_live_proxies();
+    CPU c; rt_cpu_reset(&c); c.esp = STACK;
+    multi_refs = 1;
+    uint32_t a = d3d9_proxy(&c, &multi_a, D3D9_IDirect3DSwapChain9), out = SCRATCH + 0x100;
+    uint32_t unknown = SCRATCH + 0x700, query = SCRATCH + 0x600;
+    memcpy(GPTR(unknown), iid_unknown, 16);
+    memcpy(GPTR(query), rt_d3d9_interfaces[D3D9_IDirect3DQuery9].iid, 16);
+    assert(CALL(a, IUnknown, QueryInterface, unknown, out).eax == 0);
+    uint32_t identity = R32(out);
+    assert(identity == a && multi_refs == 2);
+    assert(CALL(a, IUnknown, QueryInterface, query, out).eax == 0);
+    uint32_t b = R32(out);
+    assert(b != a && R32(b + 4) == tag(D3D9_IDirect3DQuery9) && R64(b + 8) == (uintptr_t)&multi_b && multi_refs == 3);
+    // QueryInterface(IID_IUnknown) rend le même pointeur quel que soit le mandataire interrogé.
+    assert(CALL(b, IUnknown, QueryInterface, unknown, out).eax == 0 && R32(out) == identity && multi_refs == 4);
+    assert(CALL(a, IUnknown, QueryInterface, unknown, out).eax == 0 && R32(out) == identity && multi_refs == 5);
+    assert(CALL(b, IUnknown, QueryInterface, query, out).eax == 0 && R32(out) == b && multi_refs == 6);
+    for (int expected = 5; expected >= 1; --expected)
+        assert(CALL0(expected & 1 ? a : b, IUnknown, Release).eax == (uint32_t)expected);
+    // Dernier Release par l'autre interface : tout l'objet est retiré.
+    assert(CALL0(b, IUnknown, Release).eax == 0);
+    assert(!rt_d3d9_find_proxy(&multi_a) && !rt_d3d9_find_proxy(&multi_b) && rt_d3d9_live_proxies() == live);
+}
+
+// GetContainer(IID_IUnknown) vers un conteneur jamais vu dont l'interface typée
+// est le même pointeur : une seule référence rendue au jeu.
+static void *orphan_level_vtbl[17];
+static Fake orphan = {texture_vtbl, 0, 3, NULL, NULL}, orphan_level = {orphan_level_vtbl, 0, 1, NULL, NULL};
+static int32_t orphan_container(Fake *self, const uint8_t *iid, void **out) {
+    (void)self; assert(!memcmp(iid, iid_unknown, 16));
+    ++orphan.refs; *out = &orphan; return 0;
+}
+
+RT_CHECK(d3d9_get_container_iunknown_keeps_one_reference) {
+    setup_vtables();
+    fill(orphan_level_vtbl, 17);
+    orphan_level_vtbl[1] = (void *)f_addref; orphan_level_vtbl[2] = (void *)f_release;
+    orphan_level_vtbl[11] = (void *)orphan_container;
+    unsigned live = rt_d3d9_live_proxies();
+    CPU c; rt_cpu_reset(&c); c.esp = STACK;
+    orphan.refs = 1; orphan_level.refs = 1;
+    uint32_t level = d3d9_proxy(&c, &orphan_level, D3D9_IDirect3DSurface9), out = SCRATCH + 0x100, unknown = SCRATCH + 0x700;
+    memcpy(GPTR(unknown), iid_unknown, 16);
+    assert(CALL(level, IDirect3DSurface9, GetContainer, unknown, out).eax == 0);
+    uint32_t container = R32(out);
+    assert(R32(container + 4) == tag(D3D9_IDirect3DTexture9) && R64(container + 8) == (uintptr_t)&orphan);
+    assert(orphan.refs == 2);
+    assert(CALL0(container, IUnknown, Release).eax == 1 && CALL0(container, IUnknown, Release).eax == 0);
+    assert(CALL0(level, IUnknown, Release).eax == 0 && rt_d3d9_live_proxies() == live);
+}

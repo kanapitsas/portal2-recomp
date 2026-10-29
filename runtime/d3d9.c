@@ -236,15 +236,28 @@ static int load_library(void) {
 }
 
 // ---------------------------------------------------------------- mandataires
-// Table objet hôte → mandataire invité, adressage ouvert (puissance de 2).
-// Accès sous le verrou invité uniquement (voir d3d9_bridge.h). parent : objet
-// hôte propriétaire (d3d9_child_out) ; shared : l'objet partage le compte du
-// parent (niveau de texture) plutôt que d'en dépendre seulement (tampon
+// Table pointeur d'interface hôte → mandataire invité, adressage ouvert
+// (puissance de 2). Accès sous le verrou invité uniquement (voir
+// d3d9_bridge.h). parent : objet hôte propriétaire (d3d9_child_out) ;
+// shared : l'objet partage le compte du parent (niveau de texture, autre
+// interface du même objet) plutôt que d'en dépendre seulement (tampon
 // arrière) ; children : nombre d'entrées qui désignent celle-ci.
-typedef struct { const void *host; uint32_t proxy, children; const void *parent; uint8_t shared; } Entry;
+//
+// Identité COM : un objet peut avoir des pointeurs d'interface distincts, un
+// mandataire par pointeur. QueryInterface(IID_IUnknown) doit pourtant rendre
+// toujours le même pointeur : l'entrée de clé U (pointeur IUnknown hôte)
+// retient dans canon le mandataire rendu pour IUnknown, choisi à la première
+// demande puis stable. Si U n'est le pointeur d'aucune interface pontée,
+// l'entrée est un alias (proxy 0). L'entrée du mandataire canonique garde U
+// dans identity pour effacer canon quand elle est retirée.
+typedef struct {
+    const void *host, *parent, *identity;
+    uint32_t proxy, children, canon;
+    uint8_t shared;
+} Entry;
 #define TOMBSTONE ((const void *)1)
 static Entry *entries;
-static size_t capacity, used, live;
+static size_t capacity, used, filled, live;   // used : cases non vides (pierres tombales comprises) ; filled : entrées ; live : mandataires
 static uint32_t vtables[D3D9_INTERFACE_COUNT];
 
 static size_t hash(const void *host) {
@@ -270,18 +283,33 @@ static int grow(void) {
         fresh[j] = entries[i];
     }
     free(entries);
-    entries = fresh; capacity = next; used = live;
+    entries = fresh; capacity = next; used = filled;
     return 0;
 }
-static void insert(CPU *c, const void *host, uint32_t proxy) {
-    Entry *existing = find(host);
-    if (existing) { existing->proxy = proxy; return; }
+// Nouvelle entrée (host absent de la table). Les pointeurs Entry * obtenus
+// avant peuvent être invalidés (agrandissement).
+static Entry *insert(CPU *c, const void *host, uint32_t proxy) {
     if ((used + 1) * 4 > capacity * 3 && grow()) fail(c, "D3D9 bridge: out of memory (proxy table)");
     size_t i = hash(host) & (capacity - 1);
     while (entries[i].host && entries[i].host != TOMBSTONE) i = (i + 1) & (capacity - 1);
     if (!entries[i].host) ++used;
-    entries[i] = (Entry){host, proxy, 0, NULL, 0};
-    ++live;
+    entries[i] = (Entry){.host = host, .proxy = proxy};
+    ++filled;
+    if (proxy) ++live;
+    return &entries[i];
+}
+static void erase(Entry *e) {
+    *e = (Entry){.host = TOMBSTONE};
+    --filled;
+}
+// Le mandataire de e cesse d'être le représentant IUnknown de son objet.
+static void forget_identity(Entry *e) {
+    if (!e->identity) return;
+    Entry *u = find(e->identity);
+    e->identity = NULL;
+    if (!u || u->canon != e->proxy) return;
+    u->canon = 0;
+    if (!u->proxy && u != e) erase(u);   // alias devenu inutile
 }
 
 uint32_t rt_d3d9_find_proxy(const void *host) { Entry *e = host ? find(host) : NULL; return e ? e->proxy : 0; }
@@ -328,19 +356,20 @@ uint32_t d3d9_proxy(CPU *c, void *host, unsigned iface) {
     // Mandataire existant d'un type compatible : même identité pour le jeu.
     // Sinon (adresse hôte réutilisée par un objet d'un autre type après la
     // destruction d'un conteneur), un nouveau mandataire remplace l'ancien.
-    if (e && proxy_accepts(tag_of(e->proxy), rt_d3d9_interfaces[iface].derived)) return e->proxy;
+    if (e && e->proxy && proxy_accepts(tag_of(e->proxy), rt_d3d9_interfaces[iface].derived)) return e->proxy;
     unsigned type = concrete(c, host, iface);
     uint32_t table = vtable(c, type), proxy = rt_alloc(D3D9_PROXY_SIZE);
     if (!proxy) fail(c, "D3D9 bridge: guest proxy allocation failed");
     W32(proxy, table);
     W32(proxy + 4, D3D9_TAG << 8 | type);
     W64(proxy + 8, (uint64_t)(uintptr_t)host);
-    if (e) {   // ancien mandataire laissé (jamais libéré : peut être encore référencé)
-        if (e->parent) { Entry *p = find(e->parent); if (p && p->children) --p->children; }
-        e->proxy = proxy; e->parent = NULL; e->shared = 0;
-        return proxy;
-    }
-    insert(c, host, proxy);
+    if (!e) { insert(c, host, proxy); return proxy; }
+    if (!e->proxy) { e->proxy = proxy; ++live; return proxy; }   // alias IUnknown : canon conservé
+    // Objet nouveau à cette adresse : ancien mandataire laissé (jamais libéré,
+    // peut être encore référencé), liens et identité de l'ancien objet oubliés.
+    if (e->parent) { Entry *p = find(e->parent); if (p && p->children) --p->children; }
+    forget_identity(e);
+    e->proxy = proxy; e->parent = NULL; e->shared = 0; e->canon = 0;
     return proxy;
 }
 
@@ -351,7 +380,8 @@ static void retire(uint32_t proxy) {
 }
 static void unlink_entry(Entry *e) {
     if (e->parent) { Entry *p = find(e->parent); if (p && p->children) --p->children; }
-    *e = (Entry){TOMBSTONE, 0, 0, NULL, 0};
+    forget_identity(e);
+    erase(e);
     --live;
 }
 // Retire une entrée, son mandataire et tous les objets qui en dépendent.
@@ -366,6 +396,22 @@ static void retire_group(Entry *e) {
             retire_group(&entries[i]);
             --children;
         }
+}
+
+// host dépend de parent (premier propriétaire seulement, jamais de cycle :
+// deux interfaces d'un même objet peuvent se désigner l'une l'autre).
+static void link_child(const void *host, const void *parent, int shared) {
+    Entry *e = find(host), *p = find(parent);
+    if (!e || !e->proxy || !p || !p->proxy || e->parent || e == p) return;
+    for (const Entry *up = p; up->parent; ) {
+        if (up->parent == host) return;
+        if (!(up = find(up->parent))) break;
+    }
+    {
+        e->parent = parent;
+        e->shared = (uint8_t)shared;
+        ++p->children;
+    }
 }
 
 // Release a rendu 0 : l'objet hôte n'existe plus, ni ce qui en dépend. Un
@@ -417,12 +463,7 @@ void d3d9_child_out(CPU *c, uint32_t guest, void *host, unsigned iface, const vo
     if (!guest) return;
     uint32_t proxy = d3d9_proxy(c, host, iface);
     W32(guest, proxy);
-    Entry *e = proxy ? find(host) : NULL, *p = find(parent);
-    if (e && p && !e->parent && e != p) {   // premier propriétaire seulement
-        e->parent = parent;
-        e->shared = (uint8_t)shared;
-        ++p->children;
-    }
+    if (proxy) link_child(host, parent, shared);
 }
 
 void *d3d9_hwnd(CPU *c, uint32_t guest) {
@@ -563,13 +604,16 @@ static int interface_of_iid(const uint8_t *iid) {
     return -1;
 }
 
+typedef int32_t (*Query)(void *, const void *, void **);
+static uint32_t host_addref(void *object) { return ((uint32_t (*)(void *))D3D9_VTBL(object)[1])(object); }
+static uint32_t host_release(void *object) { return ((uint32_t (*)(void *))D3D9_VTBL(object)[2])(object); }
+
 // Type concret d'un objet rendu comme IUnknown sans mandataire connu
 // (conteneur d'une surface : texture, cube ou chaîne d'échange) : demandé à
-// l'objet lui-même par QueryInterface. -1 si aucune interface d3d9 ; sinon
-// *typed reçoit le pointeur de cette interface (avec sa référence), qui peut
-// différer du pointeur IUnknown selon COM.
+// l'objet lui-même par QueryInterface, dans l'ordre fixe des interfaces. -1
+// si aucune interface d3d9 ; sinon *typed reçoit le pointeur de cette
+// interface (avec sa référence), qui peut différer du pointeur IUnknown.
 static int identify(void *object, void **typed) {
-    typedef int32_t (*Query)(void *, const void *, void **);
     for (unsigned i = 0; i < rt_d3d9_interface_count; ++i) {
         if (rt_d3d9_interfaces[i].abstract) continue;
         void *same = NULL;
@@ -581,31 +625,53 @@ static int identify(void *object, void **typed) {
     return -1;
 }
 
+// Mandataire représentant l'identité de l'objet dont unknown est le pointeur
+// IUnknown hôte (rendu par QueryInterface(IID_IUnknown) ou GetContainer). La
+// référence portée par unknown est consommée ; le mandataire rendu en porte
+// une sur son propre pointeur d'interface. 0 si l'objet n'a aucune interface d3d9.
+static uint32_t identity_proxy(CPU *c, void *unknown) {
+    Entry *u = find(unknown);
+    uint32_t proxy;
+    if (u && u->canon) {
+        proxy = u->canon;
+        void *typed = proxy_host(proxy);
+        if (typed != unknown) { host_addref(typed); host_release(unknown); }
+        return proxy;
+    }
+    if (u && u->proxy) proxy = u->proxy;   // le pointeur IUnknown est aussi celui d'une interface pontée
+    else {
+        void *typed = NULL;
+        int iface = identify(unknown, &typed);
+        host_release(unknown);   // garder une seule référence, celle de l'interface typée
+        if (iface < 0) return 0;
+        proxy = d3d9_proxy(c, typed, (unsigned)iface);
+    }
+    u = find(unknown);
+    if (!u) u = insert(c, unknown, 0);   // alias : U n'est le pointeur d'aucune interface pontée
+    u->canon = proxy;
+    Entry *e = find(proxy_host(proxy));
+    if (e && e->proxy == proxy) {
+        if (e->identity && e->identity != unknown) forget_identity(e);
+        e->identity = unknown;
+    }
+    return proxy;
+}
+
 // Objet rendu par QueryInterface/GetContainer pour riid : mandataire du type
-// demandé ; IUnknown ou abstrait : mandataire existant, sinon type déduit.
+// demandé ; IUnknown : mandataire d'identité ; abstrait : type déduit.
 static int32_t wrap_by_iid(CPU *c, int32_t hr, const uint8_t *riid, void *object, uint32_t out) {
     if (hr < 0 || !object) { if (out) W32(out, 0); return hr; }
     int iface = interface_of_iid(riid);
     if (iface < 0) {
         static int logged;
         if (!logged) { logged = 1; fprintf(stderr, "d3d9: interface id not bridged, object released (E_NOINTERFACE)\n"); }
-        ((uint32_t (*)(void *))D3D9_VTBL(object)[2])(object);
+        host_release(object);
         if (out) W32(out, 0);
         return (int32_t)D3D9_E_NOINTERFACE;
     }
-    if (iface == D3D9_IUnknown) {
-        uint32_t existing = rt_d3d9_find_proxy(object);
-        void *typed = object;
-        iface = existing ? (int)(tag_of(existing) & 0xff) : identify(object, &typed);
-        if (typed != object || iface < 0) ((uint32_t (*)(void *))D3D9_VTBL(object)[2])(object);   // garder une seule référence
-        if (iface < 0) {
-            if (out) W32(out, 0);
-            return (int32_t)D3D9_E_NOINTERFACE;
-        }
-        object = typed;
-    }
-    if (out) W32(out, d3d9_proxy(c, object, (unsigned)iface));
-    return hr;
+    uint32_t proxy = iface == D3D9_IUnknown ? identity_proxy(c, object) : d3d9_proxy(c, object, (unsigned)iface);
+    if (out) W32(out, proxy);
+    return proxy ? hr : (int32_t)D3D9_E_NOINTERFACE;
 }
 
 void d3d9_manual_IUnknown_QueryInterface(CPU *c, void *self, uint32_t a) {
@@ -613,13 +679,17 @@ void d3d9_manual_IUnknown_QueryInterface(CPU *c, void *self, uint32_t a) {
     uint32_t out = R32(a + 4);
     if (out) rt_write_span(c, out, 4);
     void *object = NULL;
-    int32_t hr = ((int32_t (*)(void *, const void *, void **))D3D9_VTBL(self)[0])(self, riid, out ? &object : NULL);
+    int32_t hr = ((Query)D3D9_VTBL(self)[0])(self, riid, out ? &object : NULL);
     c->eax = (uint32_t)wrap_by_iid(c, hr, riid, object, out);
+    // Autre pointeur d'interface du même objet : même compte, retiré avec lui.
+    uint32_t proxy = out && (int32_t)c->eax >= 0 ? R32(out) : 0;
+    void *typed = proxy ? proxy_host(proxy) : NULL;
+    if (typed && typed != self) link_child(typed, self, 1);
 }
 
 void d3d9_manual_IUnknown_Release(CPU *c, void *self, uint32_t a) {
     uint32_t proxy = R32(a - 4);
-    uint32_t count = ((uint32_t (*)(void *))D3D9_VTBL(self)[2])(self);
+    uint32_t count = host_release(self);
     if (!count) drop(proxy);
     c->eax = count;
 }
@@ -629,7 +699,7 @@ static void get_container(CPU *c, void *self, uint32_t a, unsigned slot) {
     uint32_t out = R32(a + 4);
     if (out) rt_write_span(c, out, 4);
     void *object = NULL;
-    int32_t hr = ((int32_t (*)(void *, const void *, void **))D3D9_VTBL(self)[slot])(self, riid, out ? &object : NULL);
+    int32_t hr = ((Query)D3D9_VTBL(self)[slot])(self, riid, out ? &object : NULL);
     c->eax = (uint32_t)wrap_by_iid(c, hr, riid, object, out);
 }
 void d3d9_manual_IDirect3DSurface9_GetContainer(CPU *c, void *self, uint32_t a) {
