@@ -17,6 +17,11 @@ OpenGL, and the map loaded in 13 s instead of 25 s.
 
 ## Using it
 
+`./setup.sh` does all of this when Rust is installed: it fetches a pinned
+commit of the mtld3d native host branch into `deps/mtld3d`, builds
+`libd3d9metal`, records it in `config/local.json` and bundles it into the app.
+The steps below are the manual equivalent.
+
 ```sh
 python3 tools/gameprep.py                 # shaderapivk.so is now prepared (module bases shift)
 python3 tools/build_game.py --release     # full rebuild after gameprep
