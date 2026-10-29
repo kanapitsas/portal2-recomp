@@ -107,8 +107,11 @@ data to the phone (about 11.5 GB, only the first time). On the phone, trust
 your developer account in Settings > General > VPN & Device Management.
 Re-run `./setup.sh --ios` every 7 days with a free account.
 
-Saves and settings go to `~/Library/Application Support/Portal2Recomp`; the
-game folder is never written to.
+The app carries its own copy of the prepared Linux modules (about 75 MB, in
+`Contents/Resources/prep`); saves and settings go to `~/Library/Application
+Support/Portal 2 Natif/userdata`. The game files (about 12 GB) and the Linux
+depot stay where Steam put them, and the game folder is never written to. The
+app still runs the executable from this folder's `build/`, so keep the folder.
 
 ### Game language
 
@@ -155,7 +158,10 @@ from. On the iPhone, the language is written into the app at build time
 
 `ios_bundle_id` must be unique to your Apple account (free accounts cannot
 share identifiers); it can also be given with `P2_BUNDLE_ID`. Without
-`user_dir`, saves go to `../work/portal2-userdata`, next to this folder.
+`user_dir`, the app keeps saves in `~/Library/Application Support/Portal 2
+Natif/userdata`; `tools/make_app.py` copies the older default
+`../work/portal2-userdata` there once if it exists (the original stays), and
+`tools/run_game.py` still uses that older default.
 
 macOS:
 
@@ -163,7 +169,7 @@ macOS:
 python3 tools/gameprep.py                 # prepare the Linux modules (seconds)
 python3 tools/build_game.py --release     # lift and compile (~10 min the first time)
 python3 tools/run_game.py --show --timeout 3600
-python3 tools/make_app.py                 # optional: an app for the Dock / Finder
+python3 tools/make_app.py                 # optional: an app for the Dock / Finder (re-run after a rebuild)
 ```
 
 iPhone:
@@ -188,6 +194,20 @@ artifacts that do not exist on the device.
 or trackpad), buttons for jump, crouch, use and pause; tap the back of the phone on
 the left or right to fire the blue or orange portal. Everything can be
 tuned in the iOS Settings app, under Portal 2.
+
+## Uninstall
+
+```sh
+./uninstall.sh
+```
+
+It lists what is installed, then asks twice (default: no): first to move the
+app and its log (`~/Library/Logs/Portal2Natif.log`) to the Trash, then
+separately for the saves and settings (`~/Library/Application Support/Portal 2
+Natif`, and `user_dir` if it points elsewhere). It never touches the Steam game
+files or the Linux depot, which may be your real Steam install: it prints their
+paths from `config/local.json` and what to do with them. Delete this folder
+afterwards if you no longer need it.
 
 ## Tests
 

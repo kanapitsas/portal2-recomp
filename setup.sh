@@ -12,7 +12,8 @@
 #
 # Re-running is safe: finished steps are skipped and unchanged code is not
 # recompiled. Downloads and iOS libraries go to ./deps (P2_DEPS overrides it).
-# Saves go to ~/Library/Application Support/Portal2Recomp (config key user_dir).
+# Saves go to ~/Library/Application Support/Portal 2 Natif/userdata (config key
+# user_dir). ./uninstall.sh removes the app and, if asked, the saves.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
@@ -23,7 +24,7 @@ ARGS=()
 for a in "$@"; do
     case "$a" in
         --ios) IOS=1 ;;
-        -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*) echo "unknown option $a" >&2; exit 2 ;;
         *) ARGS+=("$a") ;;
     esac
@@ -166,7 +167,7 @@ config.update(game_root=os.path.normpath(game), linux_root=os.path.normpath(linu
 config.setdefault('steam_appid', 620)
 config.setdefault('depot_id', 661)
 if fresh:
-    config['user_dir'] = str(Path.home() / 'Library/Application Support/Portal2Recomp')
+    config['user_dir'] = str(Path.home() / 'Library/Application Support/Portal 2 Natif/userdata')
 if team and not config.get('ios_bundle_id'):
     # Unique to the team: free accounts cannot reuse an identifier taken elsewhere.
     config['ios_bundle_id'] = f'local.portal2recomp.{team.lower()}'
@@ -216,12 +217,19 @@ if [ $IOS = 1 ]; then
     fi
 fi
 
+SAVES_DIR="$(config_get user_dir)"
+SAVES_DIR="${SAVES_DIR:-$HOME/Library/Application Support/Portal 2 Natif/userdata}"
 cat <<EOF
 
 Done: ~/Applications/Portal 2 Natif.app
 - Start Steam and sign in with the account that owns Portal 2, then open the app
   (it starts Steam itself if needed). Log: ~/Library/Logs/Portal2Natif.log
+- The app carries its own copy of the game binary and libraries: Homebrew is only
+  needed to rebuild. After a rebuild, run python3 tools/make_app.py to update it.
 - Keep the build to yourself: it is made from Valve's game.
+- The app carries its own prepared modules; saves and settings are in
+  ${SAVES_DIR}. The game files stay where Steam put them.
+  To remove the app (and, if you confirm, the saves): ./uninstall.sh
 EOF
 if [ $IOS = 1 ]; then
     if [ -n "$DEVICE" ]; then
