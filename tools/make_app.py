@@ -6,6 +6,12 @@ lien vers build/portal2-native de ce dépôt (une recompilation est donc prise e
 compte sans refaire l'app), et le lanceur reprend les chemins de
 config/local.json. Il démarre Steam s'il ne tourne pas et écrit le journal dans ~/Library/Logs/Portal2Natif.log.
 
+Les modules préparés (build/game/prep, ~75 Mo) sont copiés dans
+Contents/Resources/prep : refaire l'app après tools/gameprep.py. Sans user_dir
+dans config/local.json, les sauvegardes vont dans
+~/Library/Application Support/Portal 2 Natif/userdata (l'ancien défaut
+../work/portal2-userdata y est recopié une fois). ./uninstall.sh retire le tout.
+
     python3 tools/make_app.py                      # ~/Applications
     python3 tools/make_app.py --dest /Applications
     python3 tools/make_app.py -- -game portal2 -novid -windowed -w 2560 -h 1440
@@ -16,6 +22,7 @@ import plistlib
 import shlex
 import shutil
 import stat
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -23,6 +30,9 @@ NAME = 'Portal 2 Natif'
 # Sans -w/-h/-windowed : résolution et mode choisis dans le menu Vidéo du jeu
 # (enregistrés dans update/cfg/video.txt) ; Retina selon la résolution.
 DEFAULT_ARGS = ['-game', 'portal2', '-novid']
+# Données propres à l'app, hors du dépôt : ./uninstall.sh supprime ce dossier.
+SUPPORT = Path.home() / 'Library/Application Support' / NAME
+OLD_USER_DIR = '../work/portal2-userdata'  # ancien défaut, relatif au dépôt
 
 LAUNCHER = '''#!/bin/bash
 # Lanceur généré par tools/make_app.py : le modifier là-bas.
@@ -42,9 +52,31 @@ mkdir -p "$(dirname "$LOG")" {user_dir}
 # Langue : P2_LANGUAGE, "language" de config/local.json, Steam, système (tools/language.py).
 # Un -language passé au lanceur l'emporte ; en cas d'échec, le jeu reste en anglais.
 LANGUAGE_ARGS=$(/usr/bin/python3 {language_script} -- {game_args} "$@" 2>/dev/null)
-exec "$HERE/portal2-native" --images {images} --game-dir {game_dir} --linux-root {linux_root} \\
+exec "$HERE/portal2-native" --images "$(dirname "$HERE")/Resources/prep" --game-dir {game_dir} --linux-root {linux_root} \\
     --user-dir {user_dir} -- {game_args} $LANGUAGE_ARGS "$@" >"$LOG" 2>&1
 '''
+
+
+def user_dir(config):
+    """Dossier des sauvegardes : user_dir de la config, sinon SUPPORT/userdata,
+    initialisé une fois par copie (jamais déplacement) de l'ancien défaut."""
+    if config.get('user_dir'): return Path(config['user_dir']).expanduser().resolve()
+    new, old = SUPPORT / 'userdata', ROOT / OLD_USER_DIR
+    if not new.exists() and old.is_dir():
+        partial = new.with_name(new.name + '.partial')
+        if partial.exists(): shutil.rmtree(partial)
+        shutil.copytree(old, partial, symlinks=True)
+        partial.rename(new)
+        print(f'saves copied: {old.resolve()} -> {new} (original kept)')
+    return new
+
+
+def copy_tree(source, dest):
+    """Copie source vers dest ; clones APFS (cp -c, sans espace disque en plus) si possible."""
+    if dest.exists(): shutil.rmtree(dest)
+    if subprocess.run(['/bin/cp', '-cR', str(source), str(dest)], capture_output=True).returncode:
+        if dest.exists(): shutil.rmtree(dest)
+        shutil.copytree(source, dest)
 
 
 def main():
@@ -55,9 +87,11 @@ def main():
     game_args = args.game_args[1:] if args.game_args[:1] == ['--'] else args.game_args
     config = json.loads((ROOT / 'config/local.json').read_text())
     binary = ROOT / 'build/portal2-native'
+    prep = ROOT / 'build/game/prep'
+    if not (prep / 'layout.json').exists(): raise SystemExit(f'{prep} absent : lancer tools/gameprep.py')
     paths = {
-        'binary': binary, 'images': ROOT / 'build/game/prep', 'game_dir': Path(config['game_root']),
-        'linux_root': Path(config['linux_root']), 'user_dir': Path(config.get('user_dir') or ROOT / '../work/portal2-userdata').expanduser().resolve(),
+        'binary': binary, 'game_dir': Path(config['game_root']),
+        'linux_root': Path(config['linux_root']), 'user_dir': user_dir(config),
     }
 
     app = args.dest / f'{NAME}.app'
@@ -66,6 +100,9 @@ def main():
     resources = app / 'Contents/Resources'
     macos.mkdir(parents=True)
     resources.mkdir()
+    # Dans l'app plutôt que dans Application Support : 75 Mo liés à cette
+    # compilation précise, retirés avec l'app (corbeille comprise).
+    copy_tree(prep, resources / 'prep')
 
     launcher = macos / 'launcher'
     launcher.write_text(LAUNCHER.format(
