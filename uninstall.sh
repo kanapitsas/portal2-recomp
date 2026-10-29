@@ -52,9 +52,28 @@ SAVES=()
 [ -e "$SUPPORT" ] && SAVES+=("$SUPPORT")
 USER_DIR="$(config_get user_dir)"
 USER_DIR="${USER_DIR/#\~/$H}"
+# A custom user_dir is only trashed if it is safe: not the home folder or one of
+# its ancestors, and neither inside nor around the game, the depot or this repo.
+safe_user_dir() {  # path home protected... -> 0 if the path may be trashed
+    python3 - "$@" <<'PY'
+import os, sys
+real = lambda p: os.path.realpath(os.path.expanduser(p))
+path, home = real(sys.argv[1]), real(sys.argv[2])
+inside = lambda a, b: a == b or a.startswith(b.rstrip('/') + '/')
+bad = inside(home, path) or any(inside(path, p) or inside(p, path) for p in map(real, filter(None, sys.argv[3:])))
+sys.exit(1 if bad else 0)
+PY
+}
 case "$USER_DIR" in
     ""|"$SUPPORT"|"$SUPPORT"/*) ;;
-    *) [ -e "$USER_DIR" ] && SAVES+=("$USER_DIR") ;;
+    *)
+        if [ -e "$USER_DIR" ]; then
+            if safe_user_dir "$USER_DIR" "$H" "$(config_get game_root)" "$(config_get linux_root)" "$REPO"; then
+                SAVES+=("$USER_DIR")
+            else
+                echo "Not offering to trash user_dir $USER_DIR: it overlaps your home, the game, the depot or this folder." >&2
+            fi
+        fi ;;
 esac
 
 echo "App:"
