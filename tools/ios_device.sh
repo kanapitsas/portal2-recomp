@@ -3,6 +3,7 @@
 #   tools/ios_device.sh probe [VAR=valeur...]   sonde (P2_PROBE_CLIP=1 : découpe au plan proche)
 #   tools/ios_device.sh install                  installe build/ios/device/Portal2.app
 #   tools/ios_device.sh data                     copie les données dans Documents (prep, game, linux)
+#   tools/ios_device.sh prep                     recopie seulement Documents/prep (après un gameprep : ~80 Mo)
 #   tools/ios_device.sh run [secondes] [VAR=valeur...]   lance, puis rapatrie Documents/game.log
 # Appareil : P2_DEVICE (UDID ou nom), sinon le premier iPhone/iPad connecté.
 set -euo pipefail
@@ -47,6 +48,12 @@ data)
     [ -e "$GAME_ROOT/$d" ] && copy_to $APP_ID "$GAME_ROOT/$d" "Documents/game/$d"
   done
   ;;
+prep)
+  # Fichier par fichier : chacun remplace son homologue (les adresses des
+  # modules suivent build/game/prep, celui avec lequel l'app a été construite).
+  for f in build/game/prep/*; do copy_to $APP_ID "$f" "Documents/prep/$(basename "$f")" >/dev/null; done
+  echo "Documents/prep : $(ls build/game/prep | wc -l | tr -d ' ') fichiers copiés"
+  ;;
 run)
   shift
   SECONDS_MAX=${1:-180}; shift || true
@@ -58,5 +65,5 @@ run)
     --source Documents/game.log --destination build/ios/device/game.log
   echo "journal : build/ios/device/game.log ($(wc -l < build/ios/device/game.log) lignes)"
   ;;
-*) sed -n '2,7p' "$0"; exit 2 ;;
+*) sed -n '2,8p' "$0"; exit 2 ;;
 esac
