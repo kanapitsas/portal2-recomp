@@ -11,6 +11,20 @@ static uint32_t guest_string(const char *value) {
     memcpy(GPTR(address), value, length);
     return address;
 }
+int rt_d3d9_available(void);   // runtime/d3d9.c
+
+// P2_RENDERER=d3d9 : rendu Direct3D 9 natif. Le jeu prend alors shaderapivk.so
+// (-vulkan), dont le Direct3D 9 vient de libd3d9metal.dylib (runtime/d3d9.c).
+// Sans la bibliothèque, on reste en OpenGL plutôt que d'échouer au démarrage.
+static int wants_d3d9(int first, int argc, char **argv) {
+    const char *renderer = getenv("P2_RENDERER");
+    if (!renderer || (strcmp(renderer, "d3d9") && strcmp(renderer, "metal"))) return 0;
+    for (int i = first; i < argc; ++i) if (!strcmp(argv[i], "-vulkan")) return 0;
+    if (rt_d3d9_available()) { fputs("renderer: Direct3D 9 (native library), adding -vulkan\n", stderr); return 1; }
+    fputs("renderer: P2_RENDERER=d3d9 but libd3d9metal.dylib was not found, staying on OpenGL\n", stderr);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     // Qualité de service d'un jeu au premier plan : sans elle (lancé depuis un
     // terminal), macOS place souvent le thread principal sur un cœur économie
@@ -34,10 +48,12 @@ int main(int argc, char **argv) {
     if (linux && user && rt_paths_init(game, linux, user)) { perror("game paths"); rt_destroy(); return 2; }
     if (chdir(game)) { perror(game); rt_destroy(); return 2; }
     CPU cpu; rt_cpu_reset(&cpu); cpu.esp = 0x70800000;
-    uint32_t count = (uint32_t)(argc - first + 1), vector = rt_alloc((count + 1) * 4);
+    int vulkan = wants_d3d9(first, argc, argv);
+    uint32_t given = (uint32_t)(argc - first + 1), count = given + (uint32_t)vulkan, vector = rt_alloc((count + 1) * 4);
     if (!vector) { rt_destroy(); return 2; }
     W32(vector, guest_string("portal2_linux"));
-    for (uint32_t i = 1; i < count; ++i) W32(vector + i * 4, guest_string(argv[first + (int)i - 1]));
+    for (uint32_t i = 1; i < given; ++i) W32(vector + i * 4, guest_string(argv[first + (int)i - 1]));
+    if (vulkan) W32(vector + given * 4, guest_string("-vulkan"));
     W32(vector + count * 4, 0);
     {   // /proc/self/cmdline : arguments invités séparés par des NUL
         size_t total = 0;
