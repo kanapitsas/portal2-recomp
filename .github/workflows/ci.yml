@@ -1,0 +1,30 @@
+# Tests that run without Portal 2's files: tooling (Python) and the runtime
+# against generated fixtures. Recompiling the game itself needs the game data,
+# which cannot live on GitHub, so it stays a manual check.
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: macos-15  # Apple Silicon, like the target
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install host libraries
+        run: brew install sdl2 freetype fontconfig
+      - name: Python tests
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Runtime checks (abi-smoke)
+        run: make PYTHON=python build/abi-smoke && ./build/abi-smoke
+      - name: Runtime checks under UBSan
+        run: make PYTHON=python build/abi-smoke-ubsan && ./build/abi-smoke-ubsan
