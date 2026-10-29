@@ -17,11 +17,14 @@ togl (D3D9 → OpenGL 2.1) → `runtime/gl.c` → `runtime/ios/gl_ios.m` → gl4
   as half floats, unsynchronized `glBufferSubData` writes
   (`glMapBufferRange` + `GL_MAP_UNSYNCHRONIZED_BIT`).
 
-## Metal renderer (experimental)
+## Metal renderer (default)
 
 Instead of gl4es, the app can render through the native Direct3D 9 path
 described in [d3d9-bridge.md](d3d9-bridge.md): `shaderapivk.so` → bridge →
-libd3d9metal (mtld3d) → Metal. OpenGL stays the default.
+libd3d9metal (mtld3d) → Metal. It is the default when the app is built with the
+library and the GPU supports BC textures; otherwise the app uses gl4es. On an
+iPhone 15 Pro Max it ran at 71–77 fps against 60 for OpenGL (same room, MSAA 4,
+scale 2, no vsync), and fixes the too-dark image of the gl4es path.
 
 ```sh
 # in the mtld3d checkout (branch feat/native-host), once per mtld3d change:
@@ -39,9 +42,9 @@ statically (iOS does not `dlopen` a dylib outside the signed app):
 `runtime/d3d9.c` is compiled with `RT_D3D9METAL_STATIC`. Without it the app is
 OpenGL only and the setting below falls back to OpenGL.
 
-On the phone: Settings > Portal 2 > Rendu > Metal (expérimental), or
-`tools/ios_device.sh run 120 P2_RENDERER=d3d9`. `Documents/game.log` (with the
-Journal setting) then shows `[ios] renderer: Metal requested (...)`,
+On the phone: Settings > Portal 2 > Rendu chooses Metal (default) or OpenGL;
+`P2_RENDERER=opengl` or `=d3d9` in `tools/ios_device.sh run` overrides it. `Documents/game.log` (with the
+Journal setting) then shows `[ios] renderer: Metal (...)`,
 `d3d9: libd3d9metal (linked in) ready` and `[ios] Metal view: ...`.
 
 - Device check first (`runtime/ios/metal_ios.m`): Source's compressed
@@ -119,7 +122,7 @@ The setting titles below are the ones shown in the app, which is still in French
 |---|---|---|
 | Résolution (Resolution) | `P2_IOS_RENDER_SCALE` (+ the game's `-w`/`-h`) | native, ×2 (default), ×1.5, ×1 |
 | Images par seconde (Frames per second) | `P2_IOS_MAX_FPS` | 60 (default), 120 |
-| Moteur de rendu (Renderer) | `P2_RENDERER` | OpenGL (default), Metal: `d3d9`, see "Metal renderer" |
+| Moteur de rendu (Renderer) | `P2_RENDERER` | Metal: `d3d9` (default), `opengl`; see "Metal renderer" |
 | Compteur d'images (FPS counter) | `P2_SHOW_FPS` | shown by default; tapping the top-left corner shows or hides it (choice is remembered) |
 | Commandes à l'écran (On-screen controls) | `P2_TOUCH_CONTROLS` | automatic (hidden when a controller is connected), always, never |
 | Caméra en trackpad (Trackpad camera) | key `P2TouchTrackpad` | also toggled by the button at the bottom left |

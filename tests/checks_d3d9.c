@@ -815,3 +815,13 @@ RT_CHECK(d3d9_bridge_against_real_native_library) {
     if (saved) setenv("MTLD3D_CONFIG", saved, 1); else unsetenv("MTLD3D_CONFIG");
     free(saved);
 }
+
+int rt_renderer_request(const char *value);
+// Direct3D 9 par défaut : seul « opengl »/« gl » force OpenGL ; une valeur
+// inconnue ne doit pas désactiver le rendu par défaut.
+RT_CHECK(d3d9_renderer_request_defaults_to_d3d9) {
+    assert(rt_renderer_request(NULL) == 0 && rt_renderer_request("") == 0);
+    assert(rt_renderer_request("opengl") < 0 && rt_renderer_request("GL") < 0);
+    assert(rt_renderer_request("d3d9") > 0 && rt_renderer_request("Metal") > 0);
+    assert(rt_renderer_request("vulkan") == 0);
+}

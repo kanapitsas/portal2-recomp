@@ -68,7 +68,7 @@
 		</dict>
 		<dict>
 			<key>FooterText</key>
-			<string>Metal : rendu Direct3D 9 natif du jeu (libd3d9metal), expérimental. Sans la bibliothèque dans l'app, ou si l'appareil ne la prend pas en charge, le jeu reste en OpenGL.</string>
+			<string>Metal : rendu Direct3D 9 natif du jeu (libd3d9metal), plus rapide et plus fidèle qu'OpenGL. Sans la bibliothèque dans l'app, ou si l'appareil ne la prend pas en charge, le jeu reste en OpenGL.</string>
 			<key>Title</key>
 			<string>Rendu</string>
 			<key>Type</key>
@@ -76,22 +76,22 @@
 		</dict>
 		<dict>
 			<key>DefaultValue</key>
-			<string>opengl</string>
+			<string>d3d9</string>
 			<key>Key</key>
 			<string>P2Renderer</string>
 			<key>Title</key>
 			<string>Moteur de rendu</string>
 			<key>Titles</key>
 			<array>
-				<string>OpenGL (recommandé)</string>
-				<string>Metal (expérimental)</string>
+				<string>Metal (recommandé)</string>
+				<string>OpenGL</string>
 			</array>
 			<key>Type</key>
 			<string>PSMultiValueSpecifier</string>
 			<key>Values</key>
 			<array>
-				<string>opengl</string>
 				<string>d3d9</string>
+				<string>opengl</string>
 			</array>
 		</dict>
 		<dict>

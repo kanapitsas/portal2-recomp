@@ -13,7 +13,7 @@ obtenu par Xcode pour un appareil (ios/signing).
 
 Rendu Metal (Direct3D 9 natif, docs/d3d9-bridge.md) : --d3d9metal lie
 libd3d9metal.a (mtld3d, make native-ios) dans l'exécutable, sans dlopen ; le
-joueur le choisit ensuite dans Réglages > Portal 2 > Rendu (P2_RENDERER=d3d9).
+rendu par défaut ; le joueur peut repasser en OpenGL dans Réglages > Portal 2 > Rendu.
 """
 import argparse
 import json

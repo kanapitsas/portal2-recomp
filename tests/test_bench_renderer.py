@@ -129,7 +129,7 @@ class Plan(unittest.TestCase):
             self.assertIn('--user-dir', r['command'])
             self.assertEqual(r['command'][r['command'].index('--user-dir') + 1], r['copy'])
             self.assertEqual(r['command'][-2:], ['+map', 'sp_a2_laser_over_goo'])
-            self.assertEqual('P2_RENDERER' in r['env'], r['renderer'] == 'd3d9')
+            self.assertEqual(r['env'].get('P2_RENDERER'), 'd3d9' if r['renderer'] == 'd3d9' else 'opengl')
         self.assertEqual(runs[1]['env']['P2_D3D9METAL'], '/x/libd3d9metal.dylib')
         self.assertTrue(runs[1]['cache'].endswith('portal2-userdata-bench-d3d9/d3d9metal-cache'))
         self.assertTrue(runs[0]['cache'].endswith('portal2-userdata-bench-gl/update/glshaders.cfg'))

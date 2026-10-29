@@ -26,6 +26,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -284,6 +286,17 @@ static int load_library(void) {
     int ready = library_state > 0;
     pthread_mutex_unlock(&library_lock);
     return ready;
+}
+
+// Choix du rendu d'après P2_RENDERER : -1 = OpenGL demandé (opengl, gl),
+// 1 = Direct3D 9 demandé (d3d9, metal), 0 = rien de dit, donc Direct3D 9 par
+// défaut s'il est utilisable. Une valeur inconnue compte comme rien de dit.
+int rt_renderer_request(const char *value) {
+    if (!value || !*value) return 0;
+    if (!strcasecmp(value, "opengl") || !strcasecmp(value, "gl")) return -1;
+    if (!strcasecmp(value, "d3d9") || !strcasecmp(value, "metal")) return 1;
+    fprintf(stderr, "renderer: unknown P2_RENDERER=%s (use opengl or d3d9)\n", value);
+    return 0;
 }
 
 int rt_d3d9_available(void) { return load_library(); }

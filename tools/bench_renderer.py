@@ -238,7 +238,9 @@ def build_plan(args, config):
                            P2_D3D9_CACHE=str(copy / 'd3d9metal-cache'))
                 if args.mtld3d_config: env['MTLD3D_CONFIG'] = args.mtld3d_config
                 if args.gpu_timing: env['RUST_LOG'] = 'mtld3d::perf=info'
-            elif args.gpu_timing: env['P2_GPU_TIMING'] = '1'
+            else:
+                env['P2_RENDERER'] = 'opengl'   # Direct3D 9 is the default when the library is found
+                if args.gpu_timing: env['P2_GPU_TIMING'] = '1'
             game_args = ['-game', 'portal2', '-novid', '-windowed', '-w', str(width), '-h', str(height),
                          '-condebug', *shlex.split(args.extra), '+map', args.map]
             command = [str(Path(args.binary).resolve()), '--images', str(ROOT / 'build/game/prep'),

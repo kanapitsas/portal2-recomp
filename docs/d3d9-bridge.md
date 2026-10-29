@@ -1,25 +1,34 @@
-# Direct3D 9 bridge (native renderer, experimental)
+# Direct3D 9 bridge (native renderer, default)
 
 Portal 2's Linux release ships two renderers: `shaderapidx9.so` + `libtogl.so`
-(Direct3D 9 translated to OpenGL, the default here) and `shaderapivk.so`,
+(Direct3D 9 translated to OpenGL) and `shaderapivk.so`,
 selected with `-vulkan`, which expects DXVK (`libdxvk_d3d9.so`). Its only
 graphics import is `Direct3DCreate9`. Instead of recompiling DXVK, the
 runtime forwards the guest's Direct3D 9 COM calls to a **native arm64
 Direct3D 9 implementation**, `libd3d9metal.dylib`, built separately (from
-mtld3d). Without that library everything stays on OpenGL.
+mtld3d). It is the default renderer whenever that library is found and
+initializes; without it everything stays on OpenGL.
+
+The library is [mtld3d](https://github.com/athei/mtld3d) (zlib licence) by
+Alexander Theissen, built without Wine through a native host linkage that is
+not upstream yet (see [athei/mtld3d#1193](https://github.com/athei/mtld3d/issues/1193)).
+On macOS (laser_over_goo, 2560×1440, MSAA 4) it ran at 122 fps against 81 for
+OpenGL, and the map loaded in 13 s instead of 25 s.
 
 ## Using it
 
 ```sh
 python3 tools/gameprep.py                 # shaderapivk.so is now prepared (module bases shift)
 python3 tools/build_game.py --release     # full rebuild after gameprep
-P2_RENDERER=d3d9 P2_D3D9METAL=/path/to/libd3d9metal.dylib \
+P2_D3D9METAL=/path/to/libd3d9metal.dylib \
     SteamAppId=620 python3 tools/run_game.py --show --timeout 3600
 ```
 
-- `P2_RENDERER=d3d9` (or `metal`) loads and initializes the library
+- By default the runtime loads and initializes the library
   (`d3d9metal_init`) before the game starts and adds `-vulkan` only if that
-  succeeds; otherwise a message says the game stays on OpenGL. Passing
+  succeeds; otherwise the game stays on OpenGL and the log says why.
+  `P2_RENDERER=opengl` forces OpenGL; `P2_RENDERER=d3d9` (or `metal`) makes a
+  missing library an explicit message. Passing
   `-vulkan` yourself forces the path (and `Direct3DCreate9` returns NULL if
   the library is missing or refuses to initialize: the game reports "Failed
   to create D3D9!").
@@ -29,8 +38,8 @@ P2_RENDERER=d3d9 P2_D3D9METAL=/path/to/libd3d9metal.dylib \
   `Contents/Frameworks` when `config/local.json` has
   `"d3d9metal_dylib": "/path/to/libd3d9metal.dylib"` (it links only system
   frameworks).
-- From the app: `P2_RENDERER=d3d9 "~/Applications/Portal 2
-  Natif.app/Contents/MacOS/launcher"` (add `P2_D3D9METAL=…` if not bundled).
+- From the app: the bundled library is used by default; `P2_RENDERER=opengl
+  "~/Applications/Portal 2 Natif.app/Contents/MacOS/launcher"` forces OpenGL.
 - `P2_D3D9_VENDOR_ID` / `P2_D3D9_DEVICE_ID` (hex): PCI ids handed to the
   library for `D3DADAPTER_IDENTIFIER9` (default Apple `106b` / `0000`; Source
   keys vendor-specific paths on them). `P2_D3D9_CACHE`: shader/PSO cache

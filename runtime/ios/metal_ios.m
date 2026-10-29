@@ -27,6 +27,7 @@ extern _Atomic unsigned long rt_ios_frames;   // gl_ios.m
 float rt_ios_render_scale(void);       // sdl_ios.m
 void rt_ios_request_frame_rate(void);  // gl_ios.m
 
+int rt_renderer_request(const char *value);   // runtime/d3d9.c
 uint64_t rt_frame_log_tick(void);   // runtime/sdl_video.c : cadence P2_FRAME_LOG
 static void presented(void) { ++rt_ios_frames; rt_frame_log_tick(); }
 
@@ -52,15 +53,16 @@ void rt_ios_metal_config(char *out, size_t size) {
 }
 
 int rt_ios_metal_prepare(void) {
-    const char *renderer = getenv("P2_RENDERER");
-    if (!renderer || (strcmp(renderer, "d3d9") && strcmp(renderer, "metal"))) return 0;
+    // Metal par défaut ; le réglage ou P2_RENDERER=opengl gardent OpenGL.
+    if (rt_renderer_request(getenv("P2_RENDERER")) < 0) return 0;
     char why[256];
     if (!rt_ios_metal_usable(why, sizeof(why))) {
         fprintf(stderr, "[ios] renderer: Metal unusable (%s), staying on OpenGL\n", why);
-        unsetenv("P2_RENDERER");
+        setenv("P2_RENDERER", "opengl", 1);   // src/main.c ne tente alors pas libd3d9metal
         return 0;
     }
-    fprintf(stderr, "[ios] renderer: Metal requested (%s)\n", why);
+    setenv("P2_RENDERER", "d3d9", 1);
+    fprintf(stderr, "[ios] renderer: Metal (%s)\n", why);
     const char *home = getenv("HOME");
     if (!getenv("P2_D3D9_CACHE") && home) {
         char cache[1024];
