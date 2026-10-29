@@ -58,6 +58,8 @@ share the built app or the generated code**, they contain Valve's game.
 More details: [docs/ios.md](docs/ios.md) (iOS port, controls, settings),
 [docs/steam.md](docs/steam.md) (Steam bridge),
 [docs/fast-path.md](docs/fast-path.md) (fast memory mode),
+[docs/d3d9-bridge.md](docs/d3d9-bridge.md) (experimental native Direct3D 9
+renderer, `P2_RENDERER=d3d9`),
 [docs/gl-audit.md](docs/gl-audit.md),
 [docs/lifter-coverage.md](docs/lifter-coverage.md), and
 [STATUS.md](STATUS.md), the development log with every measurement.
