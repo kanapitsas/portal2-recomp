@@ -16,6 +16,7 @@
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "metal_ios.h"
 #include "settings.h"
 
 int p2_main(int argc, char **argv);
@@ -61,6 +62,9 @@ int main(int argc, char **argv) {
         fprintf(stderr, "[ios] descripteurs de fichiers : %llu\n", (unsigned long long)files.rlim_cur);
     }
     fprintf(stderr, "[ios] réglages : %s\n", applied ? settings : "aucun modifié");
+    // Rendu Metal (P2_RENDERER=d3d9, Réglages > Rendu) : vérifié avant que
+    // src/main.c initialise libd3d9metal ; OpenGL sinon.
+    rt_ios_metal_prepare();
     char exe[PATH_MAX], bundle[PATH_MAX];
     uint32_t size = sizeof(exe);
     if (_NSGetExecutablePath(exe, &size)) return 2;

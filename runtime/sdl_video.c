@@ -525,6 +525,9 @@ static SDL_Window *create_window(const char *title, int x, int y, int w, int h, 
 // Ici, pas de chargeur Vulkan : la fenêtre devient SDL_WINDOW_METAL et reçoit
 // une SDL_MetalView (thread principal) dont la CAMetalLayer est remise à la
 // bibliothèque Direct3D 9 native par rt_sdl_metal_layer.
+#if TARGET_OS_IPHONE
+#include "metal_ios.h"
+#endif
 typedef struct MetalView { SDL_Window *window; SDL_MetalView view; struct MetalView *next; } MetalView;
 static MetalView *metal_views;
 
@@ -553,6 +556,9 @@ static MetalView *create_metal_view(SDL_Window *window) {
     pthread_mutex_lock(&lock);
     v->next = metal_views; metal_views = v;
     pthread_mutex_unlock(&lock);
+#if TARGET_OS_IPHONE
+    rt_ios_metal_view_created(view);   // échelle de rendu de l'app (ios/metal_ios.m)
+#endif
     return v;
 }
 static void destroy_metal_view(SDL_Window *window) {
