@@ -149,42 +149,47 @@ fi
 # only costs the Metal renderer: the game then uses OpenGL.
 D3D9METAL=""
 D3D9METAL_IOS=""
+METAL_SRC="$DEPS/mtld3d-native"        # owned by setup.sh (marker file); never a checkout of yours
+fetch_mtld3d() {
+    if [ -e "$METAL_SRC" ] && [ ! -f "$METAL_SRC/.p2-setup" ]; then
+        warn "$METAL_SRC exists and was not made by setup.sh: leaving it alone"; return 1
+    fi
+    [ "$(git -C "$METAL_SRC" rev-parse HEAD 2>/dev/null)" = "$MTLD3D_REV" ] && return 0
+    mkdir -p "$METAL_SRC" && touch "$METAL_SRC/.p2-setup" && git -C "$METAL_SRC" init -q \
+        && git -C "$METAL_SRC" fetch -q --depth 1 "$MTLD3D_URL" "$MTLD3D_REV" \
+        && git -C "$METAL_SRC" checkout -q --force FETCH_HEAD
+}
 build_d3d9metal() {
-    local src="$DEPS/mtld3d"
     if ! command -v cargo >/dev/null 2>&1; then
         warn "Rust not found: the game will use OpenGL. For the faster Metal renderer,
   install Rust (https://rustup.rs) and re-run ./setup.sh."
         return 0
     fi
     step "Building libd3d9metal for the Metal renderer (a few minutes the first time)"
-    if [ "$(git -C "$src" rev-parse HEAD 2>/dev/null)" != "$MTLD3D_REV" ]; then
-        mkdir -p "$src"
-        git -C "$src" init -q
-        git -C "$src" remote remove origin 2>/dev/null || true
-        git -C "$src" remote add origin "$MTLD3D_URL"
-        git -C "$src" fetch -q --depth 1 origin "$MTLD3D_REV" && git -C "$src" checkout -q --force FETCH_HEAD \
-            || { warn "could not fetch mtld3d from $MTLD3D_URL: the game will use OpenGL"; return 0; }
-    fi
-    if command -v rustup >/dev/null 2>&1; then
-        rustup update stable >/dev/null 2>&1 || true   # mtld3d needs a recent Rust
-        [ $IOS = 1 ] && rustup target add aarch64-apple-ios >/dev/null 2>&1 || true
-    fi
-    if (cd "$src/native" && cargo build -q --profile production); then
-        D3D9METAL="$src/native/target/production/libd3d9metal.dylib"
+    fetch_mtld3d || { warn "could not get mtld3d from $MTLD3D_URL: the game will use OpenGL"; return 0; }
+    local target="$METAL_SRC/native/target" out
+    out="$target/production/libd3d9metal.dylib"
+    if (cd "$METAL_SRC/native" && CARGO_TARGET_DIR="$target" cargo build -q --profile production) && [ -f "$out" ]; then
+        D3D9METAL="$out"
     else
-        warn "libd3d9metal did not build (Rust too old? run: rustup update): the game will use OpenGL"
+        warn "libd3d9metal did not build (mtld3d needs Rust 1.99 or newer: rustup update): the game will use OpenGL"
         return 0
     fi
     if [ $IOS = 1 ]; then
-        if (cd "$src/native" && cargo build -q --profile production --target aarch64-apple-ios); then
-            D3D9METAL_IOS="$src/native/target/aarch64-apple-ios/production/libd3d9metal.a"
+        out="$target/aarch64-apple-ios/production/libd3d9metal.a"
+        if { ! command -v rustup >/dev/null 2>&1 || rustup target add aarch64-apple-ios >/dev/null 2>&1; } \
+            && (cd "$METAL_SRC/native" && CARGO_TARGET_DIR="$target" cargo build -q --profile production --target aarch64-apple-ios) \
+            && [ -f "$out" ]; then
+            D3D9METAL_IOS="$out"
         else
             warn "libd3d9metal for iOS did not build: the iPhone app will use OpenGL"
         fi
     fi
 }
+METAL_OFF=0
 if [ -n "${P2_NO_METAL:-}" ] && [ "$P2_NO_METAL" != 0 ]; then
     echo "P2_NO_METAL set: OpenGL renderer only"
+    METAL_OFF=1
 else
     build_d3d9metal
 fi
@@ -206,19 +211,26 @@ fi
 # --- config/local.json ----------------------------------------------------
 step "Writing config/local.json"
 mkdir -p "$REPO/config"
-python3 - "$CONFIG" "$GAME" "$LINUX" "$DYLIB" "$TEAM" "$D3D9METAL" "$D3D9METAL_IOS" <<'EOF'
+python3 - "$CONFIG" "$GAME" "$LINUX" "$DYLIB" "$TEAM" "$D3D9METAL" "$D3D9METAL_IOS" "$METAL_OFF" <<'EOF'
 import json, os, sys
 from pathlib import Path
-path, game, linux, dylib, team, metal, metal_ios = sys.argv[1:]
+path, game, linux, dylib, team, metal, metal_ios, metal_off = sys.argv[1:]
 p = Path(path)
 config = json.loads(p.read_text()) if p.exists() else {}
 fresh = not config
 config.update(game_root=os.path.normpath(game), linux_root=os.path.normpath(linux), steam_api_dylib=os.path.normpath(dylib))
-# Metal renderer: set when built here, dropped when this run could not build it.
-if metal: config['d3d9metal_dylib'] = metal
-else: config.pop('d3d9metal_dylib', None)
-if metal_ios: config['d3d9metal_ios'] = {'device': metal_ios}
-elif team: config.pop('d3d9metal_ios', None)
+# Metal renderer: recorded when built here; P2_NO_METAL=1 removes it; a path
+# that still exists (set by hand, or by an earlier run) is otherwise kept.
+if metal_off == '1':
+    config.pop('d3d9metal_dylib', None); config.pop('d3d9metal_ios', None)
+else:
+    if metal: config['d3d9metal_dylib'] = metal
+    elif config.get('d3d9metal_dylib') and not Path(config['d3d9metal_dylib']).expanduser().is_file():
+        config.pop('d3d9metal_dylib')
+    if metal_ios:
+        ios = config.get('d3d9metal_ios') if isinstance(config.get('d3d9metal_ios'), dict) else {}
+        ios['device'] = metal_ios
+        config['d3d9metal_ios'] = ios
 config.setdefault('steam_appid', 620)
 config.setdefault('depot_id', 661)
 if fresh:
@@ -274,6 +286,7 @@ fi
 
 SAVES_DIR="$(config_get user_dir)"
 SAVES_DIR="${SAVES_DIR:-$HOME/Library/Application Support/Portal 2 Natif/userdata}"
+D3D9METAL="${D3D9METAL:-$(config_get d3d9metal_dylib)}"
 if [ -n "$D3D9METAL" ]; then RENDERER="Metal (libd3d9metal); P2_RENDERER=opengl forces OpenGL"
 else RENDERER="OpenGL (install Rust from https://rustup.rs and re-run for Metal)"; fi
 cat <<EOF

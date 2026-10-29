@@ -18,7 +18,7 @@ OpenGL, and the map loaded in 13 s instead of 25 s.
 ## Using it
 
 `./setup.sh` does all of this when Rust is installed: it fetches a pinned
-commit of the mtld3d native host branch into `deps/mtld3d`, builds
+commit of the mtld3d native host branch into `deps/mtld3d-native`, builds
 `libd3d9metal`, records it in `config/local.json` and bundles it into the app.
 The steps below are the manual equivalent.
 
