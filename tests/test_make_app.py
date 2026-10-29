@@ -78,6 +78,19 @@ class MakeAppTests(unittest.TestCase):
         self.assertIn(str(self.tmp / 'mine'), launcher)
         self.assertFalse(self.support.exists())
 
+    def test_d3d9metal_bundled_only_when_configured(self):
+        frameworks = self.run_main() / 'Contents/Frameworks'
+        self.assertFalse((frameworks / 'libd3d9metal.dylib').exists())
+        library = self.tmp / 'mtld3d/libd3d9metal.dylib'
+        library.parent.mkdir()
+        library.write_bytes(b'metal')
+        self.config['d3d9metal_dylib'] = str(library)
+        frameworks = self.run_main() / 'Contents/Frameworks'
+        self.assertEqual((frameworks / 'libd3d9metal.dylib').read_bytes(), b'metal')
+        library.unlink()
+        with self.assertRaises(SystemExit):
+            self.run_main()
+
     def test_missing_prep_keeps_existing_app(self):
         app = self.run_main()
         (self.root / 'build/game/prep/layout.json').unlink()
