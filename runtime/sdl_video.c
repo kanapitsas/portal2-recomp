@@ -580,6 +580,34 @@ void *rt_sdl_metal_layer(void *window, uint32_t *width, uint32_t *height) {
     return SDL_Metal_GetLayer(v->view);
 }
 
+unsigned rt_sdl_game_modes(uint32_t (*modes)[3], unsigned capacity) {
+    int temporary = 0;
+    if (!SDL_WasInit(SDL_INIT_VIDEO)) {
+        if (!pthread_main_np() || SDL_InitSubSystem(SDL_INIT_VIDEO)) return 0;
+        temporary = 1;
+    }
+    unsigned count = 0;
+    SDL_DisplayMode desktop;
+    if (capacity && !SDL_GetDesktopDisplayMode(0, &desktop) && desktop.w > 0 && desktop.h > 0) {
+        desktop.h = fullscreen_height(0, desktop.h);
+        scale_mode(&desktop, 1);
+        modes[count][0] = (uint32_t)desktop.w; modes[count][1] = (uint32_t)desktop.h;
+        modes[count++][2] = (uint32_t)(desktop.refresh_rate > 0 ? desktop.refresh_rate : 0);
+        for (int i = 0, n = SDL_GetNumDisplayModes(0); i < n && count < capacity; ++i) {
+            SDL_DisplayMode mode;
+            if (SDL_GetDisplayMode(0, i, &mode)) continue;
+            scale_mode(&mode, 1);
+            uint32_t w = (uint32_t)mode.w, h = (uint32_t)mode.h, hz = (uint32_t)(mode.refresh_rate > 0 ? mode.refresh_rate : 0);
+            if (!w || !h || w > modes[0][0] || h > modes[0][1]) continue;
+            unsigned j = 0;
+            while (j < count && (modes[j][0] != w || modes[j][1] != h || modes[j][2] != hz)) ++j;
+            if (j == count) { modes[count][0] = w; modes[count][1] = h; modes[count++][2] = hz; }
+        }
+    }
+    if (temporary) SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    return count;
+}
+
 static int sdl_video(CPU *c, const char *name) {
     if (strncmp(name, "SDL_", 4)) return 0;
     const char *n = name + 4;

@@ -107,5 +107,6 @@ void rt_d3d9_set_library(d3d9metal_init_fn init, d3d9metal_create_fn create);
 const D3D9MetalHost *rt_d3d9_host(void);
 uint32_t rt_d3d9_find_proxy(const void *host);   // 0 si aucun
 unsigned rt_d3d9_live_proxies(void);
-// libd3d9metal.dylib chargeable (sans l'initialiser) : choix du rendu au lancement.
+// libd3d9metal.dylib chargée et initialisée (d3d9metal_init réussi), une
+// fois pour toutes : choix du rendu au lancement, avant que le jeu démarre.
 int rt_d3d9_available(void);

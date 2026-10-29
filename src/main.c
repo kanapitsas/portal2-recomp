@@ -15,13 +15,14 @@ int rt_d3d9_available(void);   // runtime/d3d9.c
 
 // P2_RENDERER=d3d9 : rendu Direct3D 9 natif. Le jeu prend alors shaderapivk.so
 // (-vulkan), dont le Direct3D 9 vient de libd3d9metal.dylib (runtime/d3d9.c).
-// Sans la bibliothèque, on reste en OpenGL plutôt que d'échouer au démarrage.
+// La bibliothèque est chargée et initialisée ici : absente ou refusant
+// d3d9metal_init, on reste en OpenGL plutôt que d'échouer au démarrage.
 static int wants_d3d9(int first, int argc, char **argv) {
     const char *renderer = getenv("P2_RENDERER");
     if (!renderer || (strcmp(renderer, "d3d9") && strcmp(renderer, "metal"))) return 0;
     for (int i = first; i < argc; ++i) if (!strcmp(argv[i], "-vulkan")) return 0;
     if (rt_d3d9_available()) { fputs("renderer: Direct3D 9 (native library), adding -vulkan\n", stderr); return 1; }
-    fputs("renderer: P2_RENDERER=d3d9 but libd3d9metal.dylib was not found, staying on OpenGL\n", stderr);
+    fputs("renderer: P2_RENDERER=d3d9 but libd3d9metal.dylib is missing or failed to initialize, staying on OpenGL\n", stderr);
     return 0;
 }
 

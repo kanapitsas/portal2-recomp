@@ -30,3 +30,9 @@ int rt_sdl_notch_height(int height, int frame_h, int visible_top, double safe_to
 // SDL_Window* hôte avec la taille de rendu en pixels (NULL si non Metal).
 uint32_t rt_sdl_window_flags(uint32_t guest_flags);
 void *rt_sdl_metal_layer(void *window, uint32_t *width, uint32_t *height);
+// Modes de l'écran 0 tels que le jeu les voit par SDL_GetDesktopDisplayMode
+// (pixels, hauteur sous l'encoche) : {largeur, hauteur, Hz}, celui du bureau
+// d'abord, puis les modes SDL plus petits sans doublon. Démarre la vidéo SDL
+// le temps de la lecture si elle ne l'est pas (thread principal seulement).
+// Rend le nombre de modes écrits (0 si indisponible).
+unsigned rt_sdl_game_modes(uint32_t (*modes)[3], unsigned capacity);

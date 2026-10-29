@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <execinfo.h>
+#include <SDL2/SDL.h>
 
 #define STACK 0x2001c000u
 #define SCRATCH 0x2001d000u
@@ -215,6 +216,15 @@ static void setup_vtables(void) {
 
 static int fake_init(const D3D9MetalHost *host) { fake_host = host; return host->size == sizeof(D3D9MetalHost) ? 0 : -1; }
 static void *fake_create(unsigned sdk) { assert(sdk == 32); d3d.refs = 1; return &d3d; }
+// Le chargement lit les modes d'affichage par SDL : pilote dummy, pas d'écran réel.
+static void use_test_library(d3d9metal_init_fn init) {
+    SDL_SetHint(SDL_HINT_VIDEODRIVER, "dummy");
+    rt_d3d9_set_library(init, fake_create);
+}
+static void drop_test_library(void) {
+    rt_d3d9_set_library(NULL, NULL);
+    SDL_ResetHint(SDL_HINT_VIDEODRIVER);
+}
 
 // ---------------------------------------------------------------- appels invités
 static uint32_t slot_of(const char *iface, const char *method) {
@@ -272,7 +282,7 @@ RT_CHECK(d3d9_window_flags_become_metal) {
 RT_CHECK(d3d9_bridge_against_fake_native_library) {
     setup_vtables();
     memset(&seen, 0, sizeof(seen));
-    rt_d3d9_set_library(fake_init, fake_create);
+    use_test_library(fake_init);
     unsigned proxies_before = rt_d3d9_live_proxies();
     uint32_t hwnd = rt_handle_new(&fake_window, RT_SDL_WINDOW);
     assert(hwnd);
@@ -429,11 +439,11 @@ RT_CHECK(d3d9_bridge_against_fake_native_library) {
     assert(rt_d3d9_live_proxies() == proxies_before + 2);
 
     rt_handle_free(hwnd, RT_SDL_WINDOW);
-    rt_d3d9_set_library(NULL, NULL);
+    drop_test_library();
 }
 
 RT_CHECK(d3d9_alloc_app_is_guest_memory) {
-    rt_d3d9_set_library(fake_init, fake_create);
+    use_test_library(fake_init);
     CPU c; rt_cpu_reset(&c); c.esp = STACK;
     PUSH(&c, 32); PUSH(&c, RT_RETURN_SENTINEL);
     assert(rt_shim(&c, "Direct3DCreate9") == 1 && c.eax);
@@ -449,13 +459,43 @@ RT_CHECK(d3d9_alloc_app_is_guest_memory) {
     fake_host->free_app(fake_host->user, p, 3 * page + 5);
     // Échec propre sans bibliothèque : Direct3DCreate9 rend NULL.
     rt_d3d9_set_library(NULL, NULL);
+    const char *given = getenv("P2_D3D9METAL");
+    char *saved = given ? strdup(given) : NULL;
     setenv("P2_D3D9METAL", "/nonexistent/libd3d9metal.dylib", 1);
     assert(!rt_d3d9_available());
     rt_cpu_reset(&c); c.esp = STACK;
     PUSH(&c, 32); PUSH(&c, RT_RETURN_SENTINEL);
     assert(rt_shim(&c, "Direct3DCreate9") == 1 && c.eax == 0);
-    unsetenv("P2_D3D9METAL");
-    rt_d3d9_set_library(NULL, NULL);
+    if (saved) setenv("P2_D3D9METAL", saved, 1); else unsetenv("P2_D3D9METAL");
+    free(saved);
+    drop_test_library();
+}
+
+// Le choix du rendu (src/main.c) initialise la bibliothèque : un refus de
+// d3d9metal_init laisse le jeu en OpenGL au lieu d'un Direct3DCreate9 NULL.
+static int refusing_init(const D3D9MetalHost *host) { (void)host; return -2; }
+RT_CHECK(d3d9_available_means_initialized) {
+    use_test_library(refusing_init);
+    assert(!rt_d3d9_available());
+    CPU c; rt_cpu_reset(&c); c.esp = STACK;
+    PUSH(&c, 32); PUSH(&c, RT_RETURN_SENTINEL);
+    assert(rt_shim(&c, "Direct3DCreate9") == 1 && c.eax == 0);
+    drop_test_library();
+}
+
+// Modes d'affichage remis à la bibliothèque : ceux que le jeu voit par SDL
+// (pixels), le mode du bureau en premier (pilote dummy : 1024x768 points).
+RT_CHECK(d3d9_host_gets_sdl_display_modes) {
+    assert(!SDL_WasInit(SDL_INIT_VIDEO) || !strcmp(SDL_GetCurrentVideoDriver(), "dummy"));
+    rt_sdl_force_scales(2, 2);
+    use_test_library(fake_init);
+    assert(rt_d3d9_available());
+    assert(fake_host->size == sizeof(D3D9MetalHost) && fake_host->mode_count >= 1 && fake_host->modes);
+    assert(fake_host->modes[0].width == 2048 && fake_host->modes[0].height == 1536);
+    for (unsigned i = 1; i < fake_host->mode_count; ++i)
+        assert(fake_host->modes[i].width <= 2048 && fake_host->modes[i].height <= 1536);
+    drop_test_library();
+    rt_sdl_force_scales(0, 0);
 }
 
 // ---------------------------------------------------------------- identité COM

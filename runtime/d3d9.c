@@ -104,15 +104,6 @@ static void *open_library(char *path, size_t size) {
     return NULL;
 }
 
-int rt_d3d9_available(void) {
-    if (test_init) return 1;
-    char path[PATH_MAX];
-    void *handle = open_library(path, sizeof(path));
-    int ok = handle && dlsym(handle, "d3d9metal_init") && dlsym(handle, "d3d9metal_Direct3DCreate9");
-    if (handle) dlclose(handle);
-    return ok;
-}
-
 void rt_d3d9_set_library(d3d9metal_init_fn init, d3d9metal_create_fn create) {
     pthread_mutex_lock(&library_lock);
     test_init = init; test_create = create;
@@ -188,8 +179,16 @@ static uint16_t env_id(const char *name, uint16_t fallback) {
     return *end || parsed > 0xffff ? fallback : (uint16_t)parsed;
 }
 
+// Disposition arm64 de la table hôte, la même que dans mtld3d (native/include/d3d9metal.h).
+_Static_assert(OFF(D3D9MetalHost, metal_layer) == 16 && OFF(D3D9MetalHost, vendor_id) == 56 &&
+               OFF(D3D9MetalHost, cache_dir) == 64 && OFF(D3D9MetalHost, modes) == 72 &&
+               OFF(D3D9MetalHost, mode_count) == 80 && sizeof(D3D9MetalHost) == 88, "D3D9MetalHost");
+_Static_assert(sizeof(D3D9MetalDisplayMode) == 12, "D3D9MetalDisplayMode");
+
 static D3D9MetalHost host;
 static char cache_dir[PATH_MAX];
+enum { MODE_CAPACITY = 64 };
+static D3D9MetalDisplayMode modes[MODE_CAPACITY];   // prêtés à la bibliothèque pour toute la vie du processus
 const D3D9MetalHost *rt_d3d9_host(void) { return &host; }
 
 static void fill_host(void) {
@@ -205,9 +204,19 @@ static void fill_host(void) {
     if (env && *env) snprintf(cache_dir, sizeof(cache_dir), "%s", env);
     else if (user && *user) snprintf(cache_dir, sizeof(cache_dir), "%s/d3d9metal-cache", user);
     if (cache_dir[0] && (!mkdir(cache_dir, 0755) || access(cache_dir, W_OK) == 0)) host.cache_dir = cache_dir;
+    // Modes de l'écran tels que le jeu les voit par SDL (EnumAdapterModes).
+    uint32_t found[MODE_CAPACITY][3];
+    unsigned count = rt_sdl_game_modes(found, MODE_CAPACITY);
+    for (unsigned i = 0; i < count; ++i) modes[i] = (D3D9MetalDisplayMode){found[i][0], found[i][1], found[i][2]};
+    host.modes = count ? modes : NULL;
+    host.mode_count = count;
 }
 
+// Charge et initialise la bibliothèque une fois (d3d9metal_init n'accepte
+// qu'une table par processus : une seconde initialisation par la même
+// fonction, après rt_d3d9_set_library dans les tests, garde la première).
 static int load_library(void) {
+    static d3d9metal_init_fn initialized;
     pthread_mutex_lock(&library_lock);
     if (!library_state) {
         library_state = -1;
@@ -220,13 +229,17 @@ static int load_library(void) {
             if (!init || !create) fprintf(stderr, "d3d9: %s: %s\n", library_path, handle ? "d3d9metal_* exports missing" : "not found");
         } else snprintf(library_path, sizeof(library_path), "(test library)");
         if (init && create) {
-            fill_host();
-            int status = init(&host);
+            int status = 0;
+            if (init != initialized) {
+                fill_host();
+                status = init(&host);
+            }
             if (status) fprintf(stderr, "d3d9: d3d9metal_init failed (%d)\n", status);
             else {
+                if (!test_init) initialized = init;
                 library_init = init; library_create = create; library_state = 1;
-                fprintf(stderr, "d3d9: %s ready (vendor %04x device %04x, cache %s)\n", library_path, host.vendor_id,
-                        host.device_id, host.cache_dir ? host.cache_dir : "none");
+                fprintf(stderr, "d3d9: %s ready (vendor %04x device %04x, %u display modes, cache %s)\n", library_path,
+                        host.vendor_id, host.device_id, host.mode_count, host.cache_dir ? host.cache_dir : "none");
             }
         }
     }
@@ -234,6 +247,8 @@ static int load_library(void) {
     pthread_mutex_unlock(&library_lock);
     return ready;
 }
+
+int rt_d3d9_available(void) { return load_library(); }
 
 // ---------------------------------------------------------------- mandataires
 // Table pointeur d'interface hôte → mandataire invité, adressage ouvert

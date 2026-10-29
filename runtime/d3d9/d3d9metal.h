@@ -14,20 +14,27 @@
 // arm64 layout of DXVK's native headers. Every other d3d9 structure has the
 // same layout as on i386 and may be read or written in place in guest memory.
 //
-// Rules the implementation must follow (see docs/d3d9-bridge.md):
+// Rules the implementation must follow (see docs/d3d9-bridge.md; this file
+// is an additive copy of mtld3d's native/include/d3d9metal.h):
 // - HWND values are SDL_Window* of the host SDL; call metal_layer to get the
-//   CAMetalLayer to present into.
+//   CAMetalLayer to present into. The library sets its drawableSize itself
+//   (bounds x contentsScale) and resamples a back buffer of another size.
 // - Every pointer returned by Lock/LockRect/LockBox must point into memory
 //   obtained from alloc_app (guest-addressable): the game dereferences it.
+//   The library's own threads read and write that memory at any time, so it
+//   stays mapped at the same address until free_app.
 // - Interface pointers returned (out parameters) are AddRef'd as d3d9.h
 //   requires; Release returns the new reference count, 0 meaning the object
 //   is gone. A child object (texture level, back buffer) may share the
 //   container's count.
 // - Around any wait that may last (nextDrawable, GPU fence, readback,
 //   vsync), call blocking_begin/blocking_end on the calling thread so other
-//   guest threads may run. Do not touch guest memory between the two.
+//   guest threads may run. Do not touch guest memory between the two. The
+//   library brackets nearly every call this way and does not nest the pair;
+//   the runtime's implementation tolerates nesting anyway.
 // - Calls arrive on whatever guest thread issues them, serialized by the
-//   guest gate except inside blocking_begin/end windows.
+//   guest gate except inside blocking_begin/end windows. No call needs the
+//   main thread.
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
@@ -36,10 +43,17 @@
 extern "C" {
 #endif
 
-#define D3D9METAL_HOST_VERSION 1u
+#define D3D9METAL_HOST_VERSION 2u   // 2: modes/mode_count
 
+// One display mode the adapter reports. A refresh rate of 0 reads as 60 Hz.
+typedef struct D3D9MetalDisplayMode {
+    uint32_t width, height, refresh_hz;
+} D3D9MetalDisplayMode;
+
+// Copied by d3d9metal_init; cache_dir and modes are borrowed and must stay
+// valid for the life of the process.
 typedef struct D3D9MetalHost {
-    uint32_t size;            // sizeof(D3D9MetalHost)
+    uint32_t size;            // sizeof(D3D9MetalHost); fields past it read as absent
     void *user;
     // HWND given by the app (here: the host SDL_Window*) -> CAMetalLayer*,
     // plus drawable size in pixels (the size the game renders at).
@@ -55,10 +69,20 @@ typedef struct D3D9MetalHost {
     void (*blocking_end)(void *user);
     uint16_t vendor_id, device_id;   // reported in D3DADAPTER_IDENTIFIER9 (drives Source's vendor hacks)
     const char *cache_dir;           // shader/PSO cache, may be NULL
+    // Optional (absent from a struct whose size stops before them): display
+    // modes, the first being the current one; NULL/0 gives 1920x1080 at 60 Hz.
+    const D3D9MetalDisplayMode *modes;
+    uint32_t mode_count;
 } D3D9MetalHost;
 
+// d3d9metal_init results.
+#define D3D9METAL_OK 0
+#define D3D9METAL_E_NULL (-1)         // host is NULL
+#define D3D9METAL_E_INVALID (-2)      // size too small, or a required callback is NULL
+#define D3D9METAL_E_ALREADY (-3)      // already initialised; the first table stays
+
 // Exported by libd3d9metal.dylib (C linkage).
-int d3d9metal_init(const D3D9MetalHost *host);          // 0 on success; host stays valid until exit
+int d3d9metal_init(const D3D9MetalHost *host);          // 0 on success; once per process
 void *d3d9metal_Direct3DCreate9(unsigned sdk_version);  // returns IDirect3D9* (host), NULL on failure
 
 typedef int (*d3d9metal_init_fn)(const D3D9MetalHost *host);
