@@ -296,7 +296,9 @@ static uint32_t intern_name(CPU *c, const char *text) {
 // Diagnostic (P2_INPUT_LOG=1) : boutons de souris, touchers, manettes et mode
 // relatif tels que le jeu les reçoit, horodatés ; rien quand il est éteint.
 static int input_log = -1;
-static int input_logging(void) {
+int rt_input_logging(void);
+#define input_logging rt_input_logging
+int rt_input_logging(void) {
     if (input_log < 0) input_log = getenv("P2_INPUT_LOG") != NULL;
     return input_log;
 }
@@ -309,6 +311,12 @@ static void log_input_event(const SDL_Event *e) {
                 e->type == SDL_MOUSEBUTTONDOWN ? "down" : "up", e->button.button, e->button.x, e->button.y,
                 e->button.which, SDL_GetRelativeMouseMode());
         break;
+    case SDL_MOUSEMOTION: {
+        static unsigned last;
+        if (t - last >= 100) fprintf(stderr, "[input] %u mouse motion to %d,%d (which %u)\n", t, e->motion.x, e->motion.y, e->motion.which);
+        last = t;
+        break;
+    }
     case SDL_FINGERDOWN: case SDL_FINGERUP:
         fprintf(stderr, "[input] %u finger %s at %.3f,%.3f\n", t, e->type == SDL_FINGERDOWN ? "down" : "up",
                 e->tfinger.x, e->tfinger.y);
@@ -422,11 +430,20 @@ static int sdl_input_shim(CPU *c, const char *name) {
         uint32_t px = argument(c, 0), py = argument(c, 1);
         int x, y;
         c->eax = SDL_GetMouseState(&x, &y);
+        if (input_logging()) {
+            static int lx = -1, ly = -1; static uint32_t lb;
+            if (x != lx || y != ly || c->eax != lb)
+                fprintf(stderr, "[input] %u GetMouseState %d,%d buttons %u\n", SDL_GetTicks(), x, y, c->eax);
+            lx = x; ly = y; lb = c->eax;
+        }
         if (px) W32(px, (uint32_t)(x * rt_sdl_window_scale()));
         if (py) W32(py, (uint32_t)(y * rt_sdl_window_scale()));
     } else if (!strcmp(n, "SetRelativeMouseMode")) {
         c->eax = (uint32_t)SDL_SetRelativeMouseMode(argument(c, 0) ? SDL_TRUE : SDL_FALSE);
-        if (input_logging()) fprintf(stderr, "[input] %u relative mouse mode %u\n", SDL_GetTicks(), argument(c, 0));
+        static int last_relative = -1;
+        if (input_logging() && (int)argument(c, 0) != last_relative)
+            fprintf(stderr, "[input] %u relative mouse mode %u\n", SDL_GetTicks(), argument(c, 0));
+        last_relative = (int)argument(c, 0);
     } else if (!strcmp(n, "SetModState")) {
         SDL_SetModState((SDL_Keymod)argument(c, 0));
     } else if (!strcmp(n, "NumJoysticks")) {

@@ -30,6 +30,7 @@
 void rt_gl_timing_add(const char *label, uint64_t ticks);
 void rt_gl_pass_frame(void);
 void fps_overlay_frame(int drawable_width, int drawable_height);
+int rt_input_logging(void);   // sdl_input.c : P2_INPUT_LOG
 #include "sdl_common.h"
 #define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
@@ -699,13 +700,19 @@ static int sdl_video(CPU *c, const char *name) {
     else if (!strcmp(n, "GetWindowDisplayIndex")) r = (uint32_t)SDL_GetWindowDisplayIndex(WINDOW(0));
     else if (!strcmp(n, "GetWindowID")) r = SDL_GetWindowID(WINDOW(0));
     else if (!strcmp(n, "GetWindowGrab")) r = (uint32_t)SDL_GetWindowGrab(WINDOW(0));
-    else if (!strcmp(n, "SetWindowGrab")) SDL_SetWindowGrab(WINDOW(0), arg(c, 1) ? SDL_TRUE : SDL_FALSE);
+    else if (!strcmp(n, "SetWindowGrab")) {
+        SDL_SetWindowGrab(WINDOW(0), arg(c, 1) ? SDL_TRUE : SDL_FALSE);
+        if (rt_input_logging()) fprintf(stderr, "[input] %u SetWindowGrab %u\n", SDL_GetTicks(), arg(c, 1));
+    }
     else if (!strcmp(n, "SetWindowGammaRamp")) {
         SDL_Window *w = WINDOW(0);
         const Uint16 *ramp[3];
         for (unsigned i = 0; i < 3; ++i) ramp[i] = arg(c, 1 + i) ? rt_span(c, arg(c, 1 + i), 512) : NULL;
         r = (uint32_t)SDL_SetWindowGammaRamp(w, ramp[0], ramp[1], ramp[2]);
-    } else if (!strcmp(n, "WarpMouseInWindow")) SDL_WarpMouseInWindow(WINDOW(0), (int)arg(c, 1) / window_scale_value, (int)arg(c, 2) / window_scale_value);
+    } else if (!strcmp(n, "WarpMouseInWindow")) {
+        SDL_WarpMouseInWindow(WINDOW(0), (int)arg(c, 1) / window_scale_value, (int)arg(c, 2) / window_scale_value);
+        if (rt_input_logging()) fprintf(stderr, "[input] %u WarpMouseInWindow %d,%d\n", SDL_GetTicks(), (int)arg(c, 1), (int)arg(c, 2));
+    }
     // Écrans
     else if (!strcmp(n, "GetNumVideoDisplays")) r = (uint32_t)SDL_GetNumVideoDisplays();
     else if (!strcmp(n, "GetDisplayBounds")) {
@@ -812,7 +819,13 @@ static int sdl_video(CPU *c, const char *name) {
         SDL_Cursor *cursor = handle(c, arg(c, 0), RT_SDL_CURSOR, "SDL: invalid SDL_Cursor handle");
         if (cursor) { rt_handle_free(arg(c, 0), RT_SDL_CURSOR); SDL_FreeCursor(cursor); }
     }
-    else if (!strcmp(n, "ShowCursor")) r = (uint32_t)SDL_ShowCursor((int)arg(c, 0));
+    else if (!strcmp(n, "ShowCursor")) {
+        r = (uint32_t)SDL_ShowCursor((int)arg(c, 0));
+        static int last = -2;
+        if (rt_input_logging() && (int)arg(c, 0) != last && (int)arg(c, 0) >= 0)
+            fprintf(stderr, "[input] %u ShowCursor %d\n", SDL_GetTicks(), (int)arg(c, 0));
+        if ((int)arg(c, 0) >= 0) last = (int)arg(c, 0);
+    }
     // Presse-papiers
     else if (!strcmp(n, "GetClipboardText")) {
         char *text = SDL_GetClipboardText();
