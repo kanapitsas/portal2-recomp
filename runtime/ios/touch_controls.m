@@ -48,7 +48,7 @@
 #include "back_tap.h"
 
 int rt_ios_game_ui_visible(void);   // game_state.c
-extern unsigned long rt_ios_frames;  // gl_ios.m : images présentées
+extern _Atomic unsigned long rt_ios_frames;  // gl_ios.m : images présentées
 void rt_ios_move_response_linear(int on);
 int rt_ios_move_response(void);
 void rt_ios_console_command(const char *name);   // game_state.c

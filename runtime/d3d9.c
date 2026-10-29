@@ -75,6 +75,12 @@ static d3d9metal_create_fn library_create, test_create;
 static int library_state;   // 0 : à charger, 1 : prête, -1 : absente ou refusée
 static char library_path[PATH_MAX];
 
+#ifdef RT_D3D9METAL_STATIC
+// Bibliothèque liée statiquement (app iOS : pas de dlopen d'une dylib hors de
+// l'app signée ; tools/build_ios.py --d3d9metal lie libd3d9metal.a).
+int d3d9metal_init(const D3D9MetalHost *host);
+void *d3d9metal_Direct3DCreate9(unsigned sdk_version);
+#else
 static int executable_dir(char *out, size_t size) {
     char exe[PATH_MAX], real[PATH_MAX];
     uint32_t length = sizeof(exe);
@@ -104,6 +110,7 @@ static void *open_library(char *path, size_t size) {
     snprintf(path, size, "libd3d9metal.dylib (P2_D3D9METAL, Frameworks/ or next to the executable)");
     return NULL;
 }
+#endif
 
 void rt_d3d9_set_library(d3d9metal_init_fn init, d3d9metal_create_fn create) {
     pthread_mutex_lock(&library_lock);
@@ -249,10 +256,15 @@ static int load_library(void) {
         d3d9metal_init_fn init = test_init;
         d3d9metal_create_fn create = test_create;
         if (!init) {
+#ifdef RT_D3D9METAL_STATIC
+            init = d3d9metal_init; create = d3d9metal_Direct3DCreate9;
+            snprintf(library_path, sizeof(library_path), "libd3d9metal (linked in)");
+#else
             void *handle = open_library(library_path, sizeof(library_path));
             init = handle ? (d3d9metal_init_fn)dlsym(handle, "d3d9metal_init") : NULL;
             create = handle ? (d3d9metal_create_fn)dlsym(handle, "d3d9metal_Direct3DCreate9") : NULL;
             if (!init || !create) fprintf(stderr, "d3d9: %s: %s\n", library_path, handle ? "d3d9metal_* exports missing" : "not found");
+#endif
         } else snprintf(library_path, sizeof(library_path), "(test library)");
         if (init && create) {
             int status = 0;
@@ -803,20 +815,29 @@ static int d3d9_call(CPU *c, const char *name, void *data) {
     return 1;
 }
 
-// P2_FRAME_TIMES : les deux Present passent par un aiguillage qui les date ;
-// choisi à la résolution de la route, il ne coûte rien quand le journal est
-// éteint (les autres méthodes ne le voient jamais).
+// Present (appareil et chaîne d'échange) : route à part, qui prévient ensuite
+// rt_d3d9_on_present (compteur d'images de l'app iOS) ; avec P2_FRAME_TIMES,
+// une variante datée, choisie à la résolution de la route, qui ne coûte donc
+// rien quand le journal est éteint. Les autres méthodes ne voient ni l'une ni l'autre.
+void (*volatile rt_d3d9_on_present)(void);
+static int d3d9_present_call(CPU *c, const char *name, void *data) {
+    d3d9_call(c, name, data);
+    void (*hook)(void) = rt_d3d9_on_present;
+    if (hook && (int32_t)c->eax >= 0) hook();
+    return 1;
+}
 static int d3d9_timed_present(CPU *c, const char *name, void *data) {
     uint64_t start = rt_frame_times_now();
-    d3d9_call(c, name, data);
+    d3d9_present_call(c, name, data);
     rt_frame_times_record('d', start);
     return 1;
 }
+static int is_present(const D3d9Method *m) {
+    return !strcmp(m->name, "IDirect3DDevice9::Present") || !strcmp(m->name, "IDirect3DSwapChain9::Present");
+}
 static rt_shim_handler handler_of(const D3d9Method *m) {
-    if (rt_frame_times_enabled() && (!strcmp(m->name, "IDirect3DDevice9::Present") ||
-                                     !strcmp(m->name, "IDirect3DSwapChain9::Present")))
-        return d3d9_timed_present;
-    return d3d9_call;
+    if (!is_present(m)) return d3d9_call;
+    return rt_frame_times_enabled() ? d3d9_timed_present : d3d9_present_call;
 }
 
 static int compare_method(const void *key, const void *item) {

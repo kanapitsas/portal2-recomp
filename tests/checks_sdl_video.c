@@ -343,3 +343,10 @@ RT_CHECK(sdl_video_swap_writes_frame_times) {
     fclose(file); unlink(path);
     assert(lines == 3);
 }
+
+uint64_t rt_frame_log_tick(void);
+// Le compteur d'images est partagé : Present (Direct3D 9) l'avance comme l'échange GL.
+RT_CHECK(sdl_video_frame_log_tick_is_shared_and_monotonic) {
+    uint64_t a = rt_frame_log_tick(), b = rt_frame_log_tick();
+    assert(b == a + 1);
+}

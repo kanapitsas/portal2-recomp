@@ -23,7 +23,7 @@ P2_RENDERER=d3d9 P2_D3D9METAL=/path/to/libd3d9metal.dylib \
   `-vulkan` yourself forces the path (and `Direct3DCreate9` returns NULL if
   the library is missing or refuses to initialize: the game reports "Failed
   to create D3D9!").
-- Library lookup: `P2_D3D9METAL`, then `<exe>/../Frameworks/libd3d9metal.dylib`
+- Library lookup (macOS; the iOS app links it statically): `P2_D3D9METAL`, then `<exe>/../Frameworks/libd3d9metal.dylib`
   (macOS app), `<exe>/Frameworks/` (iOS app), `<exe>/libd3d9metal.dylib`
   (e.g. `build/`). `tools/make_app.py` copies it into the app's
   `Contents/Frameworks` when `config/local.json` has
@@ -171,8 +171,10 @@ P2_RENDERER=d3d9 P2_D3D9METAL=/path/to/libd3d9metal.dylib \
 - Retina: `metal_layer` reports the game's back buffer size (window points ×
   window scale), the same rule as the OpenGL path; mtld3d resamples to the
   layer's bounds × contentsScale if they differ.
-- iOS: compiles (syntax checked against the iOS SDK) but the library would
-  have to be embedded and signed in the app; not tried.
+- iOS: libd3d9metal is linked statically into the app
+  (`tools/build_ios.py --d3d9metal`, `RT_D3D9METAL_STATIC`), selected in the
+  Settings page; see "Metal renderer" in [ios.md](ios.md). Not run on a
+  device yet.
 - Threading: Source may call Direct3D from its material system thread
   (`mat_queue_mode`); the bridge relies on the guest gate, so calls are
   serialized, but the library sees them from different host threads.
