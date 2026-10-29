@@ -112,5 +112,8 @@ unsigned rt_d3d9_live_proxies(void);
 // libd3d9metal.dylib chargée et initialisée (d3d9metal_init réussi), une
 // fois pour toutes : choix du rendu au lancement, avant que le jeu démarre.
 int rt_d3d9_available(void);
+// Appelé après chaque Present réussi (NULL : rien), sur le thread du jeu,
+// verrou invité tenu : doit rester bref.
+extern void (*volatile rt_d3d9_on_present)(void);
 // Plafonds mémoire posés devant MTLD3D_CONFIG avant d3d9metal_init.
 extern const char rt_d3d9_memory_defaults[];

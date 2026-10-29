@@ -814,6 +814,20 @@ static int d3d9_call(CPU *c, const char *name, void *data) {
     return 1;
 }
 
+// Present (appareil et chaîne d'échange) : route à part, qui prévient ensuite
+// rt_d3d9_on_present (compteur d'images de l'app iOS) ; les autres méthodes
+// n'en paient rien.
+void (*volatile rt_d3d9_on_present)(void);
+static int d3d9_present_call(CPU *c, const char *name, void *data) {
+    d3d9_call(c, name, data);
+    void (*hook)(void) = rt_d3d9_on_present;
+    if (hook && (int32_t)c->eax >= 0) hook();
+    return 1;
+}
+static int is_present(const D3d9Method *m) {
+    return !strcmp(m->name, "IDirect3DDevice9::Present") || !strcmp(m->name, "IDirect3DSwapChain9::Present");
+}
+
 static int compare_method(const void *key, const void *item) {
     return strcmp((const char *)key, ((const D3d9Method *)item)->name);
 }
@@ -837,12 +851,12 @@ static int d3d9_shim(CPU *c, const char *name) {
         return 1;
     }
     const D3d9Method *m = find_method(name);
-    return m ? d3d9_call(c, name, (void *)m) : 0;
+    return !m ? 0 : is_present(m) ? d3d9_present_call(c, name, (void *)m) : d3d9_call(c, name, (void *)m);
 }
 static int d3d9_resolve(const char *name, RtShimRoute *route) {
     const D3d9Method *m = find_method(name);
     if (!m) return 0;
-    route->handler = d3d9_call;
+    route->handler = is_present(m) ? d3d9_present_call : d3d9_call;
     route->data = (void *)m;
     return 1;
 }

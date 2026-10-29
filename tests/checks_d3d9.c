@@ -248,6 +248,8 @@ static CPU call(uint32_t proxy, uint32_t slot, unsigned count, const uint32_t *a
 #define CALL(proxy, iface, method, ...) \
     call((proxy), slot_of(#iface, #method), sizeof((uint32_t[]){__VA_ARGS__}) / 4, (uint32_t[]){__VA_ARGS__})
 #define CALL0(proxy, iface, method) call((proxy), slot_of(#iface, #method), 0, NULL)
+static unsigned presents;
+static void count_present(void) { ++presents; }
 static uint32_t tag(unsigned iface) { return D3D9_TAG << 8 | iface; }
 static uint32_t bits_of(float f) { uint32_t u; memcpy(&u, &f, 4); return u; }
 
@@ -407,10 +409,17 @@ RT_CHECK(d3d9_bridge_against_fake_native_library) {
     assert(!strcmp(rt_dynamic_import_name(R32(R32(cube) + 4 * 18)), "IDirect3DCubeTexture9::GetCubeMapSurface"));
     assert(CALL0(cube, IUnknown, Release).eax == 1);
 
-    // Present : attentes hôtes imbriquées autour du verrou invité.
+    // Present : attentes hôtes imbriquées autour du verrou invité ; chaque
+    // Present réussi prévient rt_d3d9_on_present (compteur d'images iOS), par
+    // la première résolution de l'import comme par la route mémorisée.
+    presents = 0;
+    rt_d3d9_on_present = count_present;
     assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0 && seen.blocking == 1);
+    assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0 && presents == 2);
     // Méthode non pontée : E_NOTIMPL sans appel hôte.
     assert(CALL(dev, IDirect3DDevice9, DrawRectPatch, 0, 0, 0).eax == D3D9_E_NOTIMPL);
+    assert(presents == 2);
+    rt_d3d9_on_present = NULL;
 
     // Release à 0 : mandataire libéré, objet suivant à la même adresse = nouveau mandataire.
     unsigned live = rt_d3d9_live_proxies();
