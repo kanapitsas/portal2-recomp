@@ -11,6 +11,7 @@
 // SHIMS: SDL_HapticOpenFromJoystick SDL_HapticClose SDL_HapticRumbleInit SDL_HapticRumblePlay
 #include "modules.h"
 #include "sdl_common.h"
+#include "touch_shaper.h"
 #include <SDL2/SDL.h>
 #include <TargetConditionals.h>
 #if TARGET_OS_IPHONE
@@ -335,6 +336,52 @@ static void log_input_event(const SDL_Event *e) {
     }
 }
 
+// Touchers iOS (souris SDL_TOUCH_MOUSEID) : SDL envoie le déplacement et le
+// clic d'un toucher au même instant, mais les menus de Source ne savent quel
+// élément est sous le curseur qu'à l'image suivante ; le premier toucher ne
+// faisait que survoler. Les boutons d'un toucher sont donc retenus au moins
+// TOUCH_CLICK_DELAY_MS après leur arrivée (ordre conservé), le déplacement
+// passant tout de suite. Une vraie souris n'est jamais retardée.
+static int is_touch_button(const SDL_Event *e) {
+    return (e->type == SDL_MOUSEBUTTONDOWN || e->type == SDL_MOUSEBUTTONUP) && e->button.which == SDL_TOUCH_MOUSEID;
+}
+// Vrai si l'événement est retenu (rendu plus tard par touch_shaper_pop).
+int rt_touch_shaper_hold(TouchShaper *t, const SDL_Event *e, uint32_t now) {
+    if (!is_touch_button(e) || t->count == TOUCH_HELD_MAX) return 0;
+    uint32_t release = now + TOUCH_CLICK_DELAY_MS;
+    if (t->count && (int32_t)(t->items[t->count - 1].release - release) > 0) release = t->items[t->count - 1].release;
+    t->items[t->count++] = (HeldEvent){*e, release};
+    return 1;
+}
+int rt_touch_shaper_pop(TouchShaper *t, uint32_t now, SDL_Event *out) {
+    if (!t->count || (int32_t)(now - t->items[0].release) < 0) return 0;
+    *out = t->items[0].event;
+    memmove(t->items, t->items + 1, --t->count * sizeof(*t->items));
+    return 1;
+}
+static TouchShaper touch_shaper;
+
+// Déplacement de souris synthétique (aller-retour d'un pixel, souris réelle et
+// non tactile) demandé par runtime/ios/game_state.c à l'ouverture d'un menu.
+static _Atomic int nudge_steps;
+void rt_input_nudge_mouse(void) { nudge_steps = 2; }
+static int nudge_event(SDL_Event *e) {
+    int step = nudge_steps;
+    if (step <= 0) return 0;
+    nudge_steps = step - 1;
+    int x = 0, y = 0;
+    SDL_GetMouseState(&x, &y);
+    SDL_Window *w = SDL_GetMouseFocus();
+    memset(e, 0, sizeof(*e));
+    e->type = SDL_MOUSEMOTION;
+    e->motion.timestamp = SDL_GetTicks();
+    e->motion.windowID = w ? SDL_GetWindowID(w) : 0;
+    e->motion.which = 0;
+    e->motion.x = x + (step == 2); e->motion.y = y;
+    e->motion.xrel = step == 2 ? 1 : -1;
+    return 1;
+}
+
 static void poll_into(CPU *c, uint32_t guest, int *got) {
     SDL_Event event;
     if (!guest) {
@@ -366,7 +413,10 @@ static void poll_into(CPU *c, uint32_t guest, int *got) {
         *got = 1;
         return;
     }
-    while ((*got = SDL_PollEvent(&event)) && !rt_sdl_event_is_sdl2(event.type)) {}
+    uint32_t now = SDL_GetTicks();
+    if (!(*got = nudge_event(&event)) && !(*got = rt_touch_shaper_pop(&touch_shaper, now, &event)))
+        while ((*got = SDL_PollEvent(&event)) &&
+               (!rt_sdl_event_is_sdl2(event.type) || rt_touch_shaper_hold(&touch_shaper, &event, now))) {}
     // F3 : compteur d'images hôte (fps_overlay.c). La touche reste transmise au
     // jeu, qui ne l'associe à rien par défaut.
     if (*got && event.type == SDL_KEYDOWN && !event.key.repeat && event.key.keysym.scancode == SDL_SCANCODE_F3)

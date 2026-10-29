@@ -36,3 +36,4 @@ void *rt_sdl_metal_layer(void *window, uint32_t *width, uint32_t *height);
 // le temps de la lecture si elle ne l'est pas (thread principal seulement).
 // Rend le nombre de modes écrits (0 si indisponible).
 unsigned rt_sdl_game_modes(uint32_t (*modes)[3], unsigned capacity);
+

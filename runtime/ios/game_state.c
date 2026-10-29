@@ -27,6 +27,7 @@ static uint32_t engine_vgui;      // objet IEngineVGui invité (0 : pas encore)
 static int ui_visible = 1;        // menus au démarrage
 static uint64_t next_query, next_lookup;
 
+void rt_input_nudge_mouse(void);   // runtime/sdl_input.c
 int rt_ios_game_ui_visible(void) { return ui_visible; }
 
 // ---- Courbe de réponse du déplacement au joystick ------------------------
@@ -217,6 +218,10 @@ void rt_ios_game_state_poll(void) {
     uint32_t method = R32(R32(engine_vgui) + 3 * 4);
     int visible = (rt_invoke(c, method, &engine_vgui, 1) & 0xff) != 0;
     if (visible != ui_visible) fprintf(stderr, "[ios] interface du jeu %s\n", visible ? "affichée" : "masquée");
+    // En jeu, les commandes tactiles sont une manette : Source ouvre alors ses
+    // menus en mode manette, curseur caché et souris ignorée. Un vrai
+    // déplacement de souris le ramène en mode souris (runtime/sdl_input.c).
+    if (visible && !ui_visible) rt_input_nudge_mouse();
     ui_visible = visible;
     if (linear_wanted || saved_response[0]) update_move_response(c);
     if (pending_command[0]) { char line[256]; snprintf(line, sizeof(line), "%s", pending_command); pending_command[0] = 0; run_console_command(c, line); }

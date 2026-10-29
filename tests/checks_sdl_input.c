@@ -1,6 +1,7 @@
 // Pont SDL2 d'entrée : traduction i386 de SDL_Event, rappels invités,
 // retour de structure par valeur (`ret 4`) et handles de manettes, via des
 // événements synthétiques et un joystick virtuel SDL (aucun matériel requis).
+#include "touch_shaper.h"
 #include "checks.h"
 #include "sdl_common.h"
 #include <SDL2/SDL.h>
@@ -297,4 +298,23 @@ RT_CHECK(sdl_input_retina_scales_absolute_coordinates) {
     host.motion.type = SDL_MOUSEMOTION; host.motion.x = 10;
     rt_sdl_event_to_guest(c, &host, EVENT, 0);
     assert(R32(EVENT + 20) == 10);
+}
+
+// Toucher iOS : le déplacement passe, le clic est retenu une image (le menu
+// sait alors ce qui est sous le doigt), l'ordre bas/haut est gardé ; une vraie
+// souris n'est jamais retenue.
+RT_CHECK(sdl_input_touch_clicks_wait_one_frame) {
+    TouchShaper t = {0};
+    SDL_Event motion = {.type = SDL_MOUSEMOTION}, down = {.type = SDL_MOUSEBUTTONDOWN}, up = {.type = SDL_MOUSEBUTTONUP}, out;
+    motion.motion.which = down.button.which = up.button.which = SDL_TOUCH_MOUSEID;
+    assert(!rt_touch_shaper_hold(&t, &motion, 1000));
+    assert(rt_touch_shaper_hold(&t, &down, 1000) && rt_touch_shaper_hold(&t, &up, 1010));
+    assert(!rt_touch_shaper_pop(&t, 1000 + TOUCH_CLICK_DELAY_MS - 1, &out));
+    assert(rt_touch_shaper_pop(&t, 1000 + TOUCH_CLICK_DELAY_MS, &out) && out.type == SDL_MOUSEBUTTONDOWN);
+    assert(!rt_touch_shaper_pop(&t, 1000 + TOUCH_CLICK_DELAY_MS, &out) || out.type == SDL_MOUSEBUTTONUP);
+    assert(rt_touch_shaper_pop(&t, 1010 + TOUCH_CLICK_DELAY_MS, &out) || t.count == 0);
+    assert(t.count == 0);
+    SDL_Event mouse = {.type = SDL_MOUSEBUTTONDOWN};
+    mouse.button.which = 0;
+    assert(!rt_touch_shaper_hold(&t, &mouse, 2000));
 }
