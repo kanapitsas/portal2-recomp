@@ -221,6 +221,8 @@ cat <<EOF
 Done: ~/Applications/Portal 2 Natif.app
 - Start Steam and sign in with the account that owns Portal 2, then open the app
   (it starts Steam itself if needed). Log: ~/Library/Logs/Portal2Natif.log
+- The app carries its own copy of the game binary and libraries: Homebrew is only
+  needed to rebuild. After a rebuild, run python3 tools/make_app.py to update it.
 - Keep the build to yourself: it is made from Valve's game.
 EOF
 if [ $IOS = 1 ]; then

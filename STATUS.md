@@ -160,11 +160,14 @@ SteamAppId=620 python3 tools/run_game.py --show --timeout 3600
 ```
 
 To play without a terminal: `python3 tools/make_app.py` creates
-`~/Applications/Portal 2 Natif.app` (a link to `build/portal2-native`, paths
-from `config/local.json`, starts Steam if needed, no `-w/-h`: resolution and
-mode come from the Video menu, saved in `update/cfg/video.txt`).
-Log: `~/Library/Logs/Portal2Natif.log`. Only needs redoing if the paths or
-arguments change; otherwise a rebuild is enough.
+`~/Applications/Portal 2 Natif.app` (a copy of `build/portal2-native` with
+its Homebrew dylibs — SDL2/sdl2-compat and the SDL3 it loads, FreeType,
+Fontconfig and their dependencies — in `Contents/Frameworks` and the
+Fontconfig configuration in `Contents/Resources/fonts`, so it runs without
+Homebrew; paths from `config/local.json`, starts Steam if needed, no `-w/-h`:
+resolution and mode come from the Video menu, saved in `update/cfg/video.txt`).
+Log: `~/Library/Logs/Portal2Natif.log`. Re-run it after a rebuild (the app
+holds a copy of the binary) or when the paths or arguments change.
 
 Retina (on by default, `P2_RETINA=0` restores the old behavior): the screen
 is reported in pixels (3024×1964), so the Video menu also offers the large

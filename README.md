@@ -163,7 +163,7 @@ macOS:
 python3 tools/gameprep.py                 # prepare the Linux modules (seconds)
 python3 tools/build_game.py --release     # lift and compile (~10 min the first time)
 python3 tools/run_game.py --show --timeout 3600
-python3 tools/make_app.py                 # optional: an app for the Dock / Finder
+python3 tools/make_app.py                 # optional: an app for the Dock / Finder (re-run after a rebuild)
 ```
 
 iPhone:
