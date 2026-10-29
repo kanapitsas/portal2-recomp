@@ -97,6 +97,9 @@ around host waits, Metal windows for `-vulkan`, `shaderapivk.so` prepared by
 `gameprep.py`, `P2_RENDERER=d3d9`. Verified: unit and abi-smoke checks
 against a fake native library (`tests/checks_d3d9.c`). Not verified: any run
 of the game on this path (no native library yet); OpenGL remains the default.
+`build_game.py --release` with shaderapivk.so (29 Oct.): 126,854 functions,
+15.2 M instructions, none of the 15 uncompiled functions (rdrand/rdseed) in
+shaderapivk.so, no new unimplemented import; 379 files in 528 s, 359 MB binary.
 
 ## CPU work of the translated code (night of 27 to 28 October, branch perf/code-traduit)
 
