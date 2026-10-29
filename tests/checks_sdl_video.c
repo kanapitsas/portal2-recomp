@@ -2,6 +2,8 @@
 // (aucune fenêtre visible, presse-papiers interne de SDL, pas celui du Mac).
 #include "checks.h"
 #include "sdl_common.h"
+#include "frame_times.h"
+#include <limits.h>
 #define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
 #include <pthread.h>
@@ -315,4 +317,36 @@ RT_CHECK(sdl_video_notch_height) {
     // Zone visible absente ou incohérente : l'écran entier.
     assert(rt_sdl_notch_height(1169, 1169, 0, 38.0) == 1169);
     assert(rt_sdl_notch_height(1169, 1169, 1169, 38.0) == 1169);
+}
+
+// P2_FRAME_TIMES : SDL_GL_SwapWindow écrit une ligne « g » par échange (même
+// sans fenêtre : l'appel est daté avant que SDL ne le refuse), rien fermé.
+RT_CHECK(sdl_video_swap_writes_frame_times) {
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s/p2-gl-frame-times-%d.log", getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp", (int)getpid());
+    assert(rt_frame_times_open(path));
+    uint64_t before = rt_frame_times_count();
+    for (int i = 0; i < 3; ++i) call("SDL_GL_SwapWindow", 1, 0);
+    assert(rt_frame_times_count() == before + 3);
+    assert(!rt_frame_times_open(NULL));
+    call("SDL_GL_SwapWindow", 1, 0);
+    assert(rt_frame_times_count() == before + 3);
+    FILE *file = fopen(path, "r");
+    assert(file);
+    char line[256]; unsigned lines = 0;
+    unsigned long long start, present, cpu, last = 0;
+    assert(fgets(line, sizeof(line), file) && !strncmp(line, "# p2-frame-times v1 ", 20));
+    while (fgets(line, sizeof(line), file)) {
+        assert(sscanf(line, "g %llu %llu %llu", &start, &present, &cpu) == 3 && start > last);
+        last = start; ++lines;
+    }
+    fclose(file); unlink(path);
+    assert(lines == 3);
+}
+
+uint64_t rt_frame_log_tick(void);
+// Le compteur d'images est partagé : Present (Direct3D 9) l'avance comme l'échange GL.
+RT_CHECK(sdl_video_frame_log_tick_is_shared_and_monotonic) {
+    uint64_t a = rt_frame_log_tick(), b = rt_frame_log_tick();
+    assert(b == a + 1);
 }

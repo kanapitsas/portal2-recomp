@@ -779,7 +779,8 @@ void *rt_ios_gl_share_group(void *context) {
     }
 }
 @end
-static void request_frame_rate(void) {
+// Aussi pour le rendu Metal (metal_ios.m).
+void rt_ios_request_frame_rate(void) {
     static CADisplayLink *link;
     if (link) return;
     const char *e = getenv("P2_IOS_MAX_FPS");
@@ -824,7 +825,7 @@ SDL_GLContext rt_ios_gl_create_context(SDL_Window *window) {
         }
     }
     SDL_GL_GetDrawableSize(window, &drawable_width, &drawable_height);
-    request_frame_rate();
+    rt_ios_request_frame_rate();
     pthread_once(&once, start_gl4es);
     fprintf(stderr, "[gl-ios] contexte ES 3, FBO système %u, %dx%d\n", system_framebuffer,
             drawable_width, drawable_height);
@@ -851,7 +852,7 @@ static void probe_frame(void) {
 }
 
 void rt_ios_draws_frame_end(void);
-unsigned long rt_ios_frames;   // images présentées (compteur affiché par touch_controls.m)
+_Atomic unsigned long rt_ios_frames;   // images présentées (thread du jeu ; lues par touch_controls.m, thread principal)
 void rt_ios_gl_swap_window(SDL_Window *window) {
     ++rt_ios_frames;
     rt_ios_draws_frame_end();

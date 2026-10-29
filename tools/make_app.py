@@ -169,6 +169,17 @@ def bundle_steam_api(app, config):
     shutil.copy(source, frameworks / 'libsteam_api.dylib')
 
 
+def bundle_d3d9metal(app, config):
+    """Copie la libd3d9metal.dylib configurée (rendu Direct3D 9 natif, chargée
+    par dlopen depuis Frameworks/, rendu par défaut) ; rien sans clé."""
+    if not config.get('d3d9metal_dylib'): return
+    source = Path(config['d3d9metal_dylib']).expanduser()
+    if not source.is_file(): sys.exit(f'make_app: d3d9metal_dylib {source} not found')
+    frameworks = app / 'Contents/Frameworks'
+    frameworks.mkdir(parents=True, exist_ok=True)
+    shutil.copy(source, frameworks / 'libd3d9metal.dylib')
+
+
 def sign_app(app):
     """Signature ad hoc : install_name_tool invalide celle de l'éditeur de liens."""
     for lib in sorted((app / 'Contents/Frameworks').glob('*.dylib')):
@@ -221,6 +232,7 @@ def build_app(app, binary, prep, config, paths, game_args):
     launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     bundle_libraries(app, binary)
     bundle_steam_api(app, config)
+    bundle_d3d9metal(app, config)
 
     icon = paths['game_dir'] / 'portal2/resource/game.icns'
     if icon.exists(): shutil.copy(icon, resources / 'portal2.icns')

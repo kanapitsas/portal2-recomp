@@ -1,6 +1,6 @@
 RUNTIME := $(sort $(wildcard runtime/*.c))
 CHECKS := $(sort $(wildcard tests/checks_*.c))
-HEADERS := $(sort $(wildcard runtime/*.h))
+HEADERS := $(sort $(wildcard runtime/*.h runtime/d3d9/*.h))
 PYTHON ?= python3
 CC = clang
 CFLAGS ?= -O2 -g -Wall -Wextra -Werror
@@ -64,3 +64,14 @@ build/abi-smoke-ubsan: build/abi-fixture.c build/pe-fixture.c $(RUNTIME) $(HEADE
 sanitize: build/tier0-smoke-ubsan build/abi-smoke-ubsan
 	./build/tier0-smoke-ubsan $(PREP)
 	./build/abi-smoke-ubsan
+
+# libd3d9metal seule, liée statiquement comme dans l'app iOS (sans le pont) :
+# make d3d9metal-check D3D9METAL_A=…/mtld3d/native/target/release/libd3d9metal.a
+.PHONY: d3d9metal-check
+D3D9METAL_LIBS = -framework Metal -framework MetalFX -framework QuartzCore -framework CoreGraphics -framework CoreVideo \
+	-framework Foundation -framework CoreFoundation -lobjc -liconv
+build/d3d9metal-check: tests/d3d9metal_native_check.c runtime/d3d9/d3d9metal.h $(D3D9METAL_A)
+	@test -n "$(D3D9METAL_A)" || { echo "D3D9METAL_A=/path/to/libd3d9metal.a (mtld3d: make native)"; exit 2; }
+	$(CC) -O1 -g -Wall -Wextra -Werror tests/d3d9metal_native_check.c $(D3D9METAL_A) $(D3D9METAL_LIBS) -o $@
+d3d9metal-check: build/d3d9metal-check
+	./build/d3d9metal-check

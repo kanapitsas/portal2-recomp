@@ -11,6 +11,28 @@ static uint32_t guest_string(const char *value) {
     memcpy(GPTR(address), value, length);
     return address;
 }
+int rt_d3d9_available(void);   // runtime/d3d9.c
+
+int rt_renderer_request(const char *value);   // runtime/d3d9.c
+
+// Rendu Direct3D 9 natif par défaut : le jeu prend alors shaderapivk.so
+// (-vulkan), dont le Direct3D 9 vient de libd3d9metal (runtime/d3d9.c).
+// La bibliothèque est chargée et initialisée ici : absente ou refusant
+// d3d9metal_init, on reste en OpenGL plutôt que d'échouer au démarrage.
+// P2_RENDERER=opengl force OpenGL ; P2_RENDERER=d3d9 le signale s'il manque.
+int rt_renderer_plan(int request, int vulkan_given, int (*available)(void));   // runtime/d3d9.c
+static int wants_d3d9(int first, int argc, char **argv) {
+    int request = rt_renderer_request(getenv("P2_RENDERER")), given = 0;
+    for (int i = first; i < argc; ++i) if (!strcmp(argv[i], "-vulkan")) given = 1;
+    int plan = rt_renderer_plan(request, given, rt_d3d9_available);
+    if (plan > 0) fputs("renderer: Direct3D 9 (native library), adding -vulkan\n", stderr);
+    else if (plan < 0) fputs("renderer: OpenGL (P2_RENDERER), ignoring -vulkan\n", stderr);
+    else if (request < 0) fputs("renderer: OpenGL (P2_RENDERER)\n", stderr);
+    else if (!given) fputs(request > 0 ? "renderer: P2_RENDERER=d3d9 but libd3d9metal is missing or failed to initialize, staying on OpenGL\n"
+                                       : "renderer: OpenGL (no usable libd3d9metal)\n", stderr);
+    return plan;
+}
+
 int main(int argc, char **argv) {
     // Qualité de service d'un jeu au premier plan : sans elle (lancé depuis un
     // terminal), macOS place souvent le thread principal sur un cœur économie
@@ -34,10 +56,13 @@ int main(int argc, char **argv) {
     if (linux && user && rt_paths_init(game, linux, user)) { perror("game paths"); rt_destroy(); return 2; }
     if (chdir(game)) { perror(game); rt_destroy(); return 2; }
     CPU cpu; rt_cpu_reset(&cpu); cpu.esp = 0x70800000;
-    uint32_t count = (uint32_t)(argc - first + 1), vector = rt_alloc((count + 1) * 4);
+    int renderer = wants_d3d9(first, argc, argv);
+    uint32_t count = 1, vector = rt_alloc(((uint32_t)(argc - first) + 3) * 4);
     if (!vector) { rt_destroy(); return 2; }
     W32(vector, guest_string("portal2_linux"));
-    for (uint32_t i = 1; i < count; ++i) W32(vector + i * 4, guest_string(argv[first + (int)i - 1]));
+    for (int i = first; i < argc; ++i)
+        if (renderer >= 0 || strcmp(argv[i], "-vulkan")) W32(vector + count++ * 4, guest_string(argv[i]));
+    if (renderer > 0) W32(vector + count++ * 4, guest_string("-vulkan"));
     W32(vector + count * 4, 0);
     {   // /proc/self/cmdline : arguments invités séparés par des NUL
         size_t total = 0;

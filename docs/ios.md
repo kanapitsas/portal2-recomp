@@ -17,6 +17,54 @@ togl (D3D9 → OpenGL 2.1) → `runtime/gl.c` → `runtime/ios/gl_ios.m` → gl4
   as half floats, unsynchronized `glBufferSubData` writes
   (`glMapBufferRange` + `GL_MAP_UNSYNCHRONIZED_BIT`).
 
+## Metal renderer (default)
+
+Instead of gl4es, the app can render through the native Direct3D 9 path
+described in [d3d9-bridge.md](d3d9-bridge.md): `shaderapivk.so` → bridge →
+libd3d9metal (mtld3d) → Metal. It is the default when the app is built with the
+library and the GPU supports BC textures; otherwise the app uses gl4es. On an
+iPhone 15 Pro Max it ran at 71–77 fps against 60 for OpenGL (same room, MSAA 4,
+scale 2, no vsync), and fixes the too-dark image of the gl4es path.
+
+```sh
+# in the mtld3d checkout (branch feat/native-host), once per mtld3d change:
+make native-ios PROFILE=production        # native/target/aarch64-apple-ios/production/libd3d9metal.a
+# here: gameprep must have kept shaderapivk.so (it does on this branch)
+python3 tools/build_ios.py --target device --release \
+    --d3d9metal ../mtld3d/native/target/aarch64-apple-ios/production/libd3d9metal.a
+tools/ios_device.sh install
+tools/ios_device.sh prep                  # the app's module layout includes shaderapivk.so now
+```
+
+`"d3d9metal_ios": {"device": "/path/to/libd3d9metal.a"}` in
+`config/local.json` replaces `--d3d9metal`. The library is linked
+statically (iOS does not `dlopen` a dylib outside the signed app):
+`runtime/d3d9.c` is compiled with `RT_D3D9METAL_STATIC`. Without it the app is
+OpenGL only and the setting below falls back to OpenGL.
+
+On the phone: Settings > Portal 2 > Rendu chooses Metal (default) or OpenGL;
+`P2_RENDERER=opengl` or `=d3d9` in `tools/ios_device.sh run` overrides it. `Documents/game.log` (with the
+Journal setting) then shows `[ios] renderer: Metal (...)`,
+`d3d9: libd3d9metal (linked in) ready` and `[ios] Metal view: ...`.
+
+- Device check first (`runtime/ios/metal_ios.m`): Source's compressed
+  textures are DXT, and mtld3d creates BC textures with no CPU fallback
+  (gl4es decompressed them). A GPU whose `supportsBCTextureCompression` is
+  false stays on OpenGL, with a log line.
+- Resolution: the Metal view takes the app's render scale (Résolution
+  setting), like the GL view, so the drawable is the game's back buffer
+  size and mtld3d does not resample.
+- Frame rate: `present.maxFps` follows `P2_IOS_MAX_FPS` (60 by default);
+  the 120 Hz display request is the same as on OpenGL. The FPS counter and
+  back taps count frames on `Present` (`rt_d3d9_on_present`).
+- Shader/pipeline cache: `Library/Caches/d3d9metal` (`P2_D3D9_CACHE` to
+  move it). Memory caps: the same `MTLD3D_CONFIG` defaults as on macOS.
+- Simulator: not available. mtld3d links MetalFX, which the iOS Simulator
+  SDK does not have.
+- `make d3d9metal-check D3D9METAL_A=…/libd3d9metal.a` drives the library
+  alone, linked statically as in the app (macOS build of the library); the
+  same source links against the iOS library.
+
 ## Building and running
 
 ```sh
@@ -74,6 +122,7 @@ The setting titles below are the ones shown in the app, which is still in French
 |---|---|---|
 | Résolution (Resolution) | `P2_IOS_RENDER_SCALE` (+ the game's `-w`/`-h`) | native, ×2 (default), ×1.5, ×1 |
 | Images par seconde (Frames per second) | `P2_IOS_MAX_FPS` | 60 (default), 120 |
+| Moteur de rendu (Renderer) | `P2_RENDERER` | Metal: `d3d9` (default), `opengl`; see "Metal renderer" |
 | Compteur d'images (FPS counter) | `P2_SHOW_FPS` | shown by default; tapping the top-left corner shows or hides it (choice is remembered) |
 | Commandes à l'écran (On-screen controls) | `P2_TOUCH_CONTROLS` | automatic (hidden when a controller is connected), always, never |
 | Caméra en trackpad (Trackpad camera) | key `P2TouchTrackpad` | also toggled by the button at the bottom left |

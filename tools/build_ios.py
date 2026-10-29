@@ -10,6 +10,10 @@ obtenu par Xcode pour un appareil (ios/signing).
 
     python3 tools/build_ios.py                       # simulateur
     xcrun simctl install booted build/ios/sim/Portal2.app
+
+Rendu Metal (Direct3D 9 natif, docs/d3d9-bridge.md) : --d3d9metal lie
+libd3d9metal.a (mtld3d, make native-ios) dans l'exécutable, sans dlopen ; le
+rendu par défaut ; le joueur peut repasser en OpenGL dans Réglages > Portal 2 > Rendu.
 """
 import argparse
 import json
@@ -29,6 +33,8 @@ import build_game
 ROOT = Path(__file__).resolve().parent.parent
 FRAMEWORKS = ['UIKit', 'Foundation', 'CoreGraphics', 'QuartzCore', 'OpenGLES', 'Metal', 'AVFoundation',
               'AudioToolbox', 'CoreAudio', 'CoreMotion', 'GameController', 'CoreHaptics', 'CoreBluetooth', 'OpenAL']
+# Frameworks de libd3d9metal en plus de ceux de l'app (otool -L de sa dylib iOS).
+D3D9METAL_FRAMEWORKS = ['MetalFX', 'CoreVideo', 'CoreFoundation']
 TARGETS = {
     'sim': dict(sdk='iphonesimulator', triple='arm64-apple-ios17.0-simulator', platform='ios-simulator',
                 plist='iPhoneSimulator'),
@@ -44,6 +50,9 @@ def main():
     ap.add_argument('--release', action='store_true',
                     help='version pour jouer : --opt 2 --fast-memory, comme build_game.py --release')
     ap.add_argument('--deps', type=Path, help='préfixe des dépendances (défaut ../work/ios-deps/<cible>)')
+    ap.add_argument('--d3d9metal', type=Path,
+                    help='libd3d9metal.a pour cette cible (défaut : "d3d9metal_ios" de config/local.json, '
+                         'un chemin par cible : {"device": ..., "sim": ...}) ; sans elle, OpenGL seulement')
     ap.add_argument('--layout', type=Path, default=Path('build/game/prep/layout.json'))
     ap.add_argument('--jobs', type=int, default=os.cpu_count() or 1)
     args = ap.parse_args()
@@ -52,6 +61,7 @@ def main():
     os.chdir(ROOT)
     target = TARGETS[args.target]
     deps = (args.deps or ROOT.parent / 'work/ios-deps' / args.target).resolve()
+    d3d9metal = d3d9metal_library(args.d3d9metal, args.target)
     sdk = subprocess.run(['xcrun', '--sdk', target['sdk'], '--show-sdk-path'], check=True,
                          capture_output=True, text=True).stdout.strip()
     started = time.time()
@@ -66,7 +76,9 @@ def main():
                      '-DOPENAL_DEPRECATED=', '-DAL_SILENCE_DEPRECATION']
     generated_flags = [*base, f'-O{args.opt}', '-gline-tables-only', *build_game.WARNINGS, *memory, '-Iruntime']
     sources = Path('build/game/gen/src')
-    units = [(str(p), runtime_flags) for p in sorted(Path('runtime').glob('*.c'))]
+    # runtime/d3d9.c : symboles de libd3d9metal.a liés, pas de dlopen.
+    static = ['-DRT_D3D9METAL_STATIC'] if d3d9metal else []
+    units = [(str(p), runtime_flags + (static if p.name == 'd3d9.c' else [])) for p in sorted(Path('runtime').glob('*.c'))]
     units += [(str(p), runtime_flags) for p in sorted(Path('runtime/ios').glob('*.c'))]
     units += [(str(p), runtime_flags + ['-fobjc-arc']) for p in sorted(Path('runtime/ios').glob('*.m'))]
     units.append(('src/main.c', runtime_flags + ['-Dmain=p2_main']))
@@ -86,8 +98,9 @@ def main():
     response = Path(f'build/ios/{args.target}/link.rsp')
     response.write_text('\n'.join(str(o) for o in objects) + '\n')
     libs = [str(deps / 'lib' / n) for n in ('libSDL2main.a', 'libSDL2.a', 'libgl4es.a', 'libfreetype.a')]
-    link = ['clang', *base, f'@{response}', *libs, '-liconv',
-            *[x for f in FRAMEWORKS for x in ('-framework', f)],
+    frameworks = FRAMEWORKS + (D3D9METAL_FRAMEWORKS if d3d9metal else [])
+    link = ['clang', *base, f'@{response}', *libs, *([str(d3d9metal)] if d3d9metal else []), '-liconv',
+            *[x for f in frameworks for x in ('-framework', f)],
             # Le SDK 27 impose UIScene, que SDL2 ignore : déclarer un SDK 18
             # garde le cycle de vie classique d'UIKit (voir ios/probe).
             f'-Wl,-platform_version,{target["platform"]},17.0,18.0',
@@ -113,6 +126,21 @@ def main():
         subprocess.run([sys.executable, str(ROOT / 'ios/signing/sign.py'), str(app)], check=True)
     size = (app / 'portal2').stat().st_size
     print(f'{app} : exécutable {size / 1e6:.0f} Mo, {time.time() - started:.0f} s au total')
+    print(f'rendu Metal : {d3d9metal}' if d3d9metal else 'rendu Metal : absent (OpenGL seulement, voir --d3d9metal)')
+
+
+def d3d9metal_library(given, target):
+    """libd3d9metal.a à lier pour cette cible (argument, sinon config/local.json), ou None."""
+    if given is None:
+        config = json.loads(Path('config/local.json').read_text()) if Path('config/local.json').exists() else {}
+        entry = config.get('d3d9metal_ios')
+        given = entry.get(target) if isinstance(entry, dict) else None
+        if not given:
+            return None
+    path = Path(given).expanduser().resolve()
+    if path.suffix != '.a' or not path.is_file():
+        sys.exit(f'--d3d9metal : {path} n\'est pas une bibliothèque statique (libd3d9metal.a de make native-ios)')
+    return path
 
 
 def app_icon(app):

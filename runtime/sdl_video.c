@@ -25,6 +25,7 @@
 // SHIMS: SDL_GetClipboardText SDL_SetClipboardText SDL_HasClipboardText
 #include "rt.h"
 #include "host_gl.h"   // OpenGL.framework (macOS) ou gl4es (iOS)
+#include "frame_times.h"
 #include <mach/mach_time.h>
 void rt_gl_timing_add(const char *label, uint64_t ticks);
 void rt_gl_pass_frame(void);
@@ -39,6 +40,7 @@ void fps_overlay_frame(int drawable_width, int drawable_height);
 // Mise en page i386 de SDL2 (2.0.x à 2.32 : inchangée).
 _Static_assert(SDL_WINDOW_OPENGL == 0x2 && SDL_WINDOW_FULLSCREEN_DESKTOP == 0x1001, "SDL2 window flags");
 _Static_assert(SDL_INIT_VIDEO == 0x20 && SDL_GL_CONTEXT_PROFILE_MASK == 21, "SDL2 enums");
+_Static_assert(SDL_WINDOW_VULKAN == 0x10000000 && SDL_WINDOW_METAL == 0x20000000, "SDL2 window flags (Vulkan, Metal)");
 
 static uint32_t arg(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
 static const char *guest_string(CPU *c, uint32_t address) {
@@ -235,10 +237,12 @@ static const char *gl_attribute_name(uint32_t attribute) {
 // nombre d'images et leur cadence ; P2_FRAME_DUMP=/chemin.ppm y écrit le
 // tampon arrière toutes les 120 images, avant l'échange (fenêtre cachée).
 static void drawable_size(SDL_Window *window, int *w, int *h);
-static void diagnose_frame(SDL_Window *w) {
+// Compteur et cadence (P2_FRAME_LOG), communs à OpenGL (échange de tampons) et
+// à Direct3D 9 (Present, voir runtime/ios/metal_ios.m) ; renvoie le numéro d'image.
+uint64_t rt_frame_log_tick(void) {
     static uint64_t frames, last_ticks;
-    static int log = -1; static const char *dump;
-    if (log < 0) { log = getenv("P2_FRAME_LOG") != NULL; dump = getenv("P2_FRAME_DUMP"); }
+    static int log = -1;
+    if (log < 0) log = getenv("P2_FRAME_LOG") != NULL;
     ++frames;
     if (log && frames % 60 == 0) {
         uint64_t now = SDL_GetTicks64();
@@ -246,6 +250,13 @@ static void diagnose_frame(SDL_Window *w) {
                 last_ticks ? 60000.0 / (double)(now - last_ticks + 1) : 0.0);
         last_ticks = now;
     }
+    return frames;
+}
+
+static void diagnose_frame(SDL_Window *w) {
+    static const char *dump; static int dump_read;
+    if (!dump_read) { dump = getenv("P2_FRAME_DUMP"); dump_read = 1; }
+    uint64_t frames = rt_frame_log_tick();
     if (!dump || frames % 120 != 1 || !w) return;
     int width = 0, height = 0;
     drawable_size(w, &width, &height);
@@ -518,6 +529,101 @@ static SDL_Window *create_window(const char *title, int x, int y, int w, int h, 
     return window;
 }
 
+// --- Metal (rendu Direct3D 9 natif, runtime/d3d9.c) ---------------------------
+// Avec -vulkan, launcher.so crée sa fenêtre avec SDL_WINDOW_VULKAN et ne crée
+// pas de contexte GL ; shaderapivk.so donne cette fenêtre (HWND) à Direct3D 9.
+// Ici, pas de chargeur Vulkan : la fenêtre devient SDL_WINDOW_METAL et reçoit
+// une SDL_MetalView (thread principal) dont la CAMetalLayer est remise à la
+// bibliothèque Direct3D 9 native par rt_sdl_metal_layer.
+#if TARGET_OS_IPHONE
+#include "metal_ios.h"
+#endif
+typedef struct MetalView { SDL_Window *window; SDL_MetalView view; struct MetalView *next; } MetalView;
+static MetalView *metal_views;
+
+uint32_t rt_sdl_window_flags(uint32_t guest_flags) {
+    if (!(guest_flags & SDL_WINDOW_VULKAN)) return guest_flags;
+    return (guest_flags & ~(uint32_t)(SDL_WINDOW_VULKAN | SDL_WINDOW_OPENGL)) | SDL_WINDOW_METAL;
+}
+
+static MetalView *find_metal_view(SDL_Window *window) {
+    pthread_mutex_lock(&lock);
+    MetalView *v = metal_views;
+    while (v && v->window != window) v = v->next;
+    pthread_mutex_unlock(&lock);
+    return v;
+}
+static MetalView *create_metal_view(SDL_Window *window) {
+    if (!pthread_main_np() || !(SDL_GetWindowFlags(window) & SDL_WINDOW_METAL)) return NULL;
+    SDL_MetalView view = SDL_Metal_CreateView(window);
+    MetalView *v = view ? malloc(sizeof(*v)) : NULL;
+    if (!v) {
+        if (view) SDL_Metal_DestroyView(view);
+        fprintf(stderr, "[sdl] SDL_Metal_CreateView failed: %s\n", SDL_GetError());
+        return NULL;
+    }
+    v->window = window; v->view = view;
+    pthread_mutex_lock(&lock);
+    v->next = metal_views; metal_views = v;
+    pthread_mutex_unlock(&lock);
+#if TARGET_OS_IPHONE
+    rt_ios_metal_view_created(view);   // échelle de rendu de l'app (ios/metal_ios.m)
+#endif
+    return v;
+}
+static void destroy_metal_view(SDL_Window *window) {
+    pthread_mutex_lock(&lock);
+    MetalView **link = &metal_views;
+    while (*link && (*link)->window != window) link = &(*link)->next;
+    MetalView *v = *link;
+    if (v) *link = v->next;
+    pthread_mutex_unlock(&lock);
+    if (v) { SDL_Metal_DestroyView(v->view); free(v); }
+}
+
+// CAMetalLayer* de la fenêtre et taille de rendu du jeu en pixels (celle du
+// tampon arrière qu'il choisit : points × échelle Retina de la fenêtre).
+// NULL si la fenêtre n'est pas une fenêtre Metal du pont.
+void *rt_sdl_metal_layer(void *window, uint32_t *width, uint32_t *height) {
+    SDL_Window *w = window;
+    MetalView *v = find_metal_view(w);
+    if (!v) v = create_metal_view(w);
+    if (!v) return NULL;
+    int dw = 0, dh = 0;
+    drawable_size(w, &dw, &dh);
+    if (width) *width = (uint32_t)dw;
+    if (height) *height = (uint32_t)dh;
+    return SDL_Metal_GetLayer(v->view);
+}
+
+unsigned rt_sdl_game_modes(uint32_t (*modes)[3], unsigned capacity) {
+    int temporary = 0;
+    if (!SDL_WasInit(SDL_INIT_VIDEO)) {
+        if (!pthread_main_np() || SDL_InitSubSystem(SDL_INIT_VIDEO)) return 0;
+        temporary = 1;
+    }
+    unsigned count = 0;
+    SDL_DisplayMode desktop;
+    if (capacity && !SDL_GetDesktopDisplayMode(0, &desktop) && desktop.w > 0 && desktop.h > 0) {
+        desktop.h = fullscreen_height(0, desktop.h);
+        scale_mode(&desktop, 1);
+        modes[count][0] = (uint32_t)desktop.w; modes[count][1] = (uint32_t)desktop.h;
+        modes[count++][2] = (uint32_t)(desktop.refresh_rate > 0 ? desktop.refresh_rate : 0);
+        for (int i = 0, n = SDL_GetNumDisplayModes(0); i < n && count < capacity; ++i) {
+            SDL_DisplayMode mode;
+            if (SDL_GetDisplayMode(0, i, &mode)) continue;
+            scale_mode(&mode, 1);
+            uint32_t w = (uint32_t)mode.w, h = (uint32_t)mode.h, hz = (uint32_t)(mode.refresh_rate > 0 ? mode.refresh_rate : 0);
+            if (!w || !h || w > modes[0][0] || h > modes[0][1]) continue;
+            unsigned j = 0;
+            while (j < count && (modes[j][0] != w || modes[j][1] != h || modes[j][2] != hz)) ++j;
+            if (j == count) { modes[count][0] = w; modes[count][1] = h; modes[count++][2] = hz; }
+        }
+    }
+    if (temporary) SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    return count;
+}
+
 static int sdl_video(CPU *c, const char *name) {
     if (strncmp(name, "SDL_", 4)) return 0;
     const char *n = name + 4;
@@ -540,13 +646,14 @@ static int sdl_video(CPU *c, const char *name) {
         require_main_thread(c, "SDL_CreateWindow must run on the macOS main thread");
         // Mode diagnostic P2_HIDDEN_WINDOWS=1 : la fenêtre existe (contexte GL
         // réel) mais n'est jamais montrée ; le jeu n'en voit aucune différence.
-        uint32_t flags = arg(c, 5) | (hidden_windows() ? SDL_WINDOW_HIDDEN : 0);
+        uint32_t flags = rt_sdl_window_flags(arg(c, 5)) | (hidden_windows() ? SDL_WINDOW_HIDDEN : 0);
         SDL_Window *w = create_window(guest_string(c, arg(c, 0)), (int)arg(c, 1), (int)arg(c, 2),
                                       (int)arg(c, 3), (int)arg(c, 4), flags);
         if (w && !(r = rt_handle_new(w, RT_SDL_WINDOW))) { SDL_DestroyWindow(w); rt_trap(c, c->eip, "SDL: handle table full"); }
+        if (w && (flags & SDL_WINDOW_METAL)) create_metal_view(w);   // thread principal : vue prête pour Direct3D 9
     } else if (!strcmp(n, "DestroyWindow")) {
         SDL_Window *w = WINDOW(0);
-        if (w) rt_handle_free(arg(c, 0), RT_SDL_WINDOW);
+        if (w) { rt_handle_free(arg(c, 0), RT_SDL_WINDOW); destroy_metal_view(w); }
         SDL_DestroyWindow(w);
     }
     else if (!strcmp(n, "ShowWindow")) { SDL_Window *w = WINDOW(0); if (!hidden_windows()) SDL_ShowWindow(w); }
@@ -658,6 +765,7 @@ static int sdl_video(CPU *c, const char *name) {
         r = (uint32_t)SDL_GL_SetSwapInterval(interval);
     }
     else if (!strcmp(n, "GL_SwapWindow")) {
+        uint64_t frame_start = rt_frame_times_enabled() ? rt_frame_times_now() : 0;   // P2_FRAME_TIMES
         SDL_Window *w = WINDOW(0);
         if (w) { int dw = 0, dh = 0; drawable_size(w, &dw, &dh); fps_overlay_frame(dw, dh); }
         static unsigned swaps;
@@ -670,6 +778,7 @@ static int sdl_video(CPU *c, const char *name) {
         rt_gl_timing_add("SwapWindow", mach_absolute_time() - start);
         rt_gl_pass_frame();
         rt_guest_resume(saved);
+        if (frame_start) rt_frame_times_record('g', frame_start);
     } else if (!strcmp(n, "GL_GetProcAddress")) {
         const char *proc = guest_string(c, arg(c, 0));
         r = proc ? rt_gl_proc_address(proc) : 0;

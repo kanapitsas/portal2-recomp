@@ -12,10 +12,12 @@ def plan(config):
     root = Path(config['linux_root'])
     paths = sorted((root / 'bin/linux32').glob('*.so'))
     paths += sorted((root / 'portal2/bin/linux32').glob('*.so'))
-    # Authoring tools, alternative Vulkan renderer and the optional legacy
-    # Steam client are outside the OpenGL game startup module set.
+    # Authoring tools and the optional legacy Steam client are outside the
+    # game. shaderapivk.so (the -vulkan renderer) is kept: its Direct3D 9
+    # comes from the runtime bridge (runtime/d3d9.c) instead of DXVK, so
+    # libdxvk_d3d9.so stays out and Direct3DCreate9 becomes a shim.
     excluded = {'bsppack.so', 'crashhandler.so', 'dedicated.so', 'puzzlemaker_dll.so',
-                'vrad_dll.so', 'vvis_dll.so', 'libsteam.so', 'libdxvk_d3d9.so', 'shaderapivk.so'}
+                'vrad_dll.so', 'vvis_dll.so', 'libsteam.so', 'libdxvk_d3d9.so'}
     paths = [p for p in paths if p.name not in excluded]
     order = ['libtier0.so', 'libvstdlib.so', 'libsteam_api.so', 'libtogl.so']
     by_name = {p.name: p for p in paths}
