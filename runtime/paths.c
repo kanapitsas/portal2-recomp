@@ -89,6 +89,8 @@ static int absolute_path(const char *path,char *output) {
 // Toutes les racines résolvent la casse (APFS insensible, ou iOS via
 // case_path.c) : le correcteur de casse invité est alors inutile (native.c).
 int rt_paths_case_insensitive(void) { return insensitive[0] && insensitive[1] && insensitive[2]; }
+// Racine des écritures (sauvegardes, caches) ; chaîne vide avant rt_paths_init.
+const char *rt_user_root(void) { return user_root; }
 int rt_paths_init(const char *game,const char *linux,const char *user) {
     ++generation;   // nouvelles racines : caches invalides
     if(!realpath(game,game_root) || !realpath(linux,linux_root))return -1;

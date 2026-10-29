@@ -1,6 +1,6 @@
 RUNTIME := $(sort $(wildcard runtime/*.c))
 CHECKS := $(sort $(wildcard tests/checks_*.c))
-HEADERS := $(sort $(wildcard runtime/*.h))
+HEADERS := $(sort $(wildcard runtime/*.h runtime/d3d9/*.h))
 PYTHON ?= python3
 CC = clang
 CFLAGS ?= -O2 -g -Wall -Wextra -Werror
