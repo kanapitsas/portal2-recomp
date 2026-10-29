@@ -41,7 +41,7 @@ LAUNCHER = '''#!/bin/bash
 LOG="$HOME/Library/Logs/Portal2Natif.log"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 alert() {{ /usr/bin/osascript -e "display alert \\"{name}\\" message \\"$1\\" as critical" >/dev/null 2>&1; }}
-if [ ! -x {binary} ]; then alert "Exécutable introuvable : {binary_text}. Lancer tools/build_game.py --release."; exit 1; fi
+if [ ! -x "$HERE/portal2-native" ]; then alert "Exécutable introuvable dans l'app. Relancer tools/make_app.py."; exit 1; fi
 if [ ! -d {game_dir} ]; then alert "Données du jeu introuvables (disque externe débranché ?) : {game_dir_text}"; exit 1; fi
 # L'API Steam a besoin du client Steam ouvert et connecté.
 if ! /usr/bin/pgrep -qx steam_osx; then
