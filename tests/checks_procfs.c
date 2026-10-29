@@ -63,6 +63,8 @@ RT_CHECK(procfs_other_process_cmdline_is_real) {
     char path[64]; snprintf(path, sizeof(path), "/proc/%d/cmdline", (int)getppid());
     const char *host = rt_proc_path(path);
     assert(host);
-    FILE *f = fopen(host, "rb"); char bytes[256]; size_t n = fread(bytes, 1, sizeof(bytes), f); fclose(f);
-    assert(n > 0 && bytes[n - 1] == 0);   // arguments réels du parent, séparés par des NUL
+    // Lecture complète : une ligne de commande parente longue ne doit pas être
+    // tronquée avant son NUL final.
+    FILE *f = fopen(host, "rb"); static char bytes[1 << 16]; size_t n = fread(bytes, 1, sizeof(bytes), f); fclose(f);
+    assert(n > 0 && n < sizeof(bytes) && bytes[n - 1] == 0);   // arguments réels du parent, séparés par des NUL
 }
