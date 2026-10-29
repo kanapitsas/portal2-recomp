@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Crée « Portal 2 Natif.app », lançable depuis le Finder ou le Dock.
 
-L'application ne recopie pas le jeu : Contents/MacOS/portal2-native est un
-lien vers build/portal2-native de ce dépôt (une recompilation est donc prise en
-compte sans refaire l'app), et le lanceur reprend les chemins de
+L'application ne recopie pas les données du jeu, mais embarque une copie de
+build/portal2-native et les dylibs Homebrew dont il dépend
+(Contents/Frameworks) : elle fonctionne sans Homebrew. Après une recompilation,
+relancer ce script pour mettre l'app à jour. Le lanceur reprend les chemins de
 config/local.json. Il démarre Steam s'il ne tourne pas et écrit le journal dans ~/Library/Logs/Portal2Natif.log.
 
     python3 tools/make_app.py                      # ~/Applications
@@ -16,6 +17,8 @@ import plistlib
 import shlex
 import shutil
 import stat
+import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -38,6 +41,8 @@ if ! /usr/bin/pgrep -qx steam_osx; then
     sleep 5
 fi
 export SteamAppId=620 SteamGameId=620
+# Configuration Fontconfig embarquée (sinon cherchée dans /opt/homebrew/etc/fonts).
+[ -d "$HERE/../Resources/fonts" ] && export FONTCONFIG_PATH="$HERE/../Resources/fonts"
 mkdir -p "$(dirname "$LOG")" {user_dir}
 # Langue : P2_LANGUAGE, "language" de config/local.json, Steam, système (tools/language.py).
 # Un -language passé au lanceur l'emporte ; en cas d'échec, le jeu reste en anglais.
@@ -45,6 +50,108 @@ LANGUAGE_ARGS=$(/usr/bin/python3 {language_script} -- {game_args} "$@" 2>/dev/nu
 exec "$HERE/portal2-native" --images {images} --game-dir {game_dir} --linux-root {linux_root} \\
     --user-dir {user_dir} -- {game_args} $LANGUAGE_ARGS "$@" >"$LOG" 2>&1
 '''
+
+
+# --- Bibliothèques embarquées ----------------------------------------------
+# On compile contre Homebrew (SDL2 = sdl2-compat, FreeType, Fontconfig), mais
+# l'app ne doit pas en dépendre à l'exécution : ces dylibs et leurs dépendances
+# non système sont copiées dans Contents/Frameworks, référencées par @rpath.
+# @executable_path suit les liens symboliques : l'exécutable est donc copié
+# (~300 Mo ; install_name_tool et codesign réécrivent tout le fichier, un clone
+# APFS n'économiserait rien).
+HOMEBREW = Path('/opt/homebrew')
+SYSTEM_PREFIXES = ('/usr/lib/', '/System/')
+FRAMEWORKS_RPATH = '@executable_path/../Frameworks'
+# sdl2-compat ne lie pas SDL3 : il le charge par dlopen, en cherchant d'abord
+# @loader_path/libSDL3.dylib, donc à côté de lui dans Frameworks.
+SDL3 = HOMEBREW / 'opt/sdl3/lib/libSDL3.0.dylib'
+SDL3_NAME = 'libSDL3.dylib'
+
+
+def run(*cmd):
+    return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
+
+
+def macho_deps(path):
+    """Dépendances (LC_LOAD_*) d'un Mach-O, sans son propre identifiant."""
+    lines = run('otool', '-L', str(path)).splitlines()[1:]
+    deps = [line.strip().rsplit(' (compatibility', 1)[0] for line in lines if line.strip()]
+    ident = run('otool', '-D', str(path)).splitlines()[1:]
+    return [d for d in deps if d not in ident]
+
+
+def macho_rpaths(path):
+    out = run('otool', '-l', str(path)).splitlines()
+    return [out[i + 2].split()[1] for i, line in enumerate(out) if line.strip() == 'cmd LC_RPATH']
+
+
+def resolve_dep(dep, loader, executable):
+    """Fichier source d'une dépendance, None si elle vient du système."""
+    if dep.startswith(SYSTEM_PREFIXES): return None
+    expand = lambda p: p.replace('@loader_path', str(loader.parent)).replace('@executable_path', str(executable.parent))
+    if dep.startswith('@rpath/'):
+        candidates = [Path(expand(r)) / dep[len('@rpath/'):] for r in macho_rpaths(loader)]
+    else:
+        candidates = [Path(expand(dep))]
+    for c in candidates:
+        if c.exists(): return c.resolve()
+    sys.exit(f'make_app: {dep} (dépendance de {loader}) introuvable')
+
+
+def bundle_libraries(app, binary):
+    """Copie l'exécutable dans l'app avec ses dylibs non système et les réécrit en @rpath."""
+    frameworks = app / 'Contents/Frameworks'
+    frameworks.mkdir(parents=True, exist_ok=True)
+    target = app / 'Contents/MacOS/portal2-native'
+    shutil.copy2(binary, target)
+
+    # Parcours en largeur : fichier source -> nom dans Frameworks.
+    bundled, queue = {}, [(binary, target)]
+    while queue:
+        source, dest = queue.pop(0)
+        changes = []
+        for dep in macho_deps(source):
+            real = resolve_dep(dep, source, binary)
+            if real is None: continue
+            name = Path(dep).name
+            if real not in bundled:
+                bundled[real] = name
+                queue.append((real, frameworks / name))
+            changes += ['-change', dep, f'@rpath/{bundled[real]}']
+        if source != binary:
+            shutil.copy2(source, dest)
+            dest.chmod(0o755)  # Homebrew les installe en lecture seule
+            changes = ['-id', f'@rpath/{dest.name}'] + changes
+            if b'SDL2COMPAT' in source.read_bytes() and SDL3.resolve() not in bundled:
+                if not SDL3.exists(): sys.exit(f'make_app: {SDL3} introuvable (brew install sdl3)')
+                bundled[SDL3.resolve()] = SDL3_NAME
+                queue.append((SDL3.resolve(), frameworks / SDL3_NAME))
+            # Les rpath Homebrew (@loader_path/../lib...) ne veulent plus rien dire ici.
+            rpaths = macho_rpaths(source)
+            changes += [arg for r in rpaths if r != '@loader_path' for arg in ('-delete_rpath', r)]
+            if '@loader_path' not in rpaths: changes += ['-add_rpath', '@loader_path']
+        elif FRAMEWORKS_RPATH not in macho_rpaths(source):
+            changes += ['-add_rpath', FRAMEWORKS_RPATH]
+        if changes: run('install_name_tool', *changes, str(dest))
+
+    leftovers = [f'{f.name}: {d}' for f in [target, *frameworks.iterdir()] for d in macho_deps(f)
+                 if not d.startswith(SYSTEM_PREFIXES + ('@rpath/',))]
+    if leftovers: sys.exit('make_app: dépendances hors de l\'app :\n  ' + '\n  '.join(leftovers))
+
+    # Fontconfig lit sa configuration dans /opt/homebrew/etc/fonts ; le lanceur
+    # pointe FONTCONFIG_PATH vers cette copie (liens de conf.d résolus).
+    fonts = HOMEBREW / 'etc/fonts'
+    if fonts.is_dir():
+        shutil.copytree(fonts, app / 'Contents/Resources/fonts', symlinks=False, dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns('*.default'))
+
+
+def sign_app(app):
+    """Signature ad hoc : install_name_tool invalide celle de l'éditeur de liens."""
+    for lib in sorted((app / 'Contents/Frameworks').glob('*.dylib')):
+        run('codesign', '--force', '-s', '-', str(lib))
+    run('codesign', '--force', '-s', '-', str(app / 'Contents/MacOS/portal2-native'))
+    run('codesign', '--force', '-s', '-', str(app))
 
 
 def main():
@@ -73,9 +180,7 @@ def main():
         binary_text=str(binary), game_dir_text=str(paths['game_dir']).replace('"', ''),
         **{key: shlex.quote(str(value)) for key, value in paths.items()}))
     launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    # Lien et non copie (354 Mo) ; lancé par ce chemin, le processus appartient
-    # à l'app (icône du Dock, nom dans le menu).
-    (macos / 'portal2-native').symlink_to(binary)
+    bundle_libraries(app, binary)
 
     icon = paths['game_dir'] / 'portal2/resource/game.icns'
     if icon.exists(): shutil.copy(icon, resources / 'portal2.icns')
@@ -86,6 +191,7 @@ def main():
         'NSHighResolutionCapable': True, 'LSApplicationCategoryType': 'public.app-category.games',
     }
     with (app / 'Contents/Info.plist').open('wb') as f: plistlib.dump(plist, f)
+    sign_app(app)
     print(app)
 
 
