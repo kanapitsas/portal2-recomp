@@ -74,6 +74,12 @@ static d3d9metal_create_fn library_create, test_create;
 static int library_state;   // 0 : à charger, 1 : prête, -1 : absente ou refusée
 static char library_path[PATH_MAX];
 
+#ifdef RT_D3D9METAL_STATIC
+// Bibliothèque liée statiquement (app iOS : pas de dlopen d'une dylib hors de
+// l'app signée ; tools/build_ios.py --d3d9metal lie libd3d9metal.a).
+int d3d9metal_init(const D3D9MetalHost *host);
+void *d3d9metal_Direct3DCreate9(unsigned sdk_version);
+#else
 static int executable_dir(char *out, size_t size) {
     char exe[PATH_MAX], real[PATH_MAX];
     uint32_t length = sizeof(exe);
@@ -103,6 +109,7 @@ static void *open_library(char *path, size_t size) {
     snprintf(path, size, "libd3d9metal.dylib (P2_D3D9METAL, Frameworks/ or next to the executable)");
     return NULL;
 }
+#endif
 
 void rt_d3d9_set_library(d3d9metal_init_fn init, d3d9metal_create_fn create) {
     pthread_mutex_lock(&library_lock);
@@ -248,10 +255,15 @@ static int load_library(void) {
         d3d9metal_init_fn init = test_init;
         d3d9metal_create_fn create = test_create;
         if (!init) {
+#ifdef RT_D3D9METAL_STATIC
+            init = d3d9metal_init; create = d3d9metal_Direct3DCreate9;
+            snprintf(library_path, sizeof(library_path), "libd3d9metal (linked in)");
+#else
             void *handle = open_library(library_path, sizeof(library_path));
             init = handle ? (d3d9metal_init_fn)dlsym(handle, "d3d9metal_init") : NULL;
             create = handle ? (d3d9metal_create_fn)dlsym(handle, "d3d9metal_Direct3DCreate9") : NULL;
             if (!init || !create) fprintf(stderr, "d3d9: %s: %s\n", library_path, handle ? "d3d9metal_* exports missing" : "not found");
+#endif
         } else snprintf(library_path, sizeof(library_path), "(test library)");
         if (init && create) {
             int status = 0;
