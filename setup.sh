@@ -3,6 +3,8 @@
 # libsteam_api.dylib (inside Steamworks.NET 20.1.0), writes config/local.json,
 # recompiles the game and creates "Portal 2 Natif.app" in ~/Applications.
 # With --ios, also builds, signs and installs the iPhone app.
+# If Rust is installed (https://rustup.rs), it also builds libd3d9metal for the
+# Metal renderer; without it the game uses OpenGL. P2_NO_METAL=1 skips it.
 #
 # usage: ./setup.sh [--ios] ["/path/to/Portal 2" ["/path/to/depot_661"]]
 #
@@ -24,7 +26,7 @@ ARGS=()
 for a in "$@"; do
     case "$a" in
         --ios) IOS=1 ;;
-        -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*) echo "unknown option $a" >&2; exit 2 ;;
         *) ARGS+=("$a") ;;
     esac
@@ -35,6 +37,9 @@ LINUX="${ARGS[1]:-}"
 STEAMWORKS_URL="https://github.com/rlabrecque/Steamworks.NET/releases/download/20.1.0/Steamworks.NET_20.1.0.unitypackage"
 STEAMWORKS_SHA256="3be79e6bdf53c86210267bf39f46362bb839130896006aec26364c5efc37e314"
 STEAM_SUPPORT="$HOME/Library/Application Support/Steam"
+# Metal renderer: libd3d9metal, built from mtld3d's native host branch (zlib).
+MTLD3D_URL="https://github.com/kanapitsas/mtld3d.git"
+MTLD3D_REV="101f37d3d45c760e95e20176f758b9d309c23885"   # feat/native-host, pinned
 
 step() { printf '\n==> %s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
@@ -139,6 +144,51 @@ if [ -z "$DYLIB" ] || [ ! -f "$DYLIB" ]; then
     fi
 fi
 
+# --- Metal renderer: libd3d9metal (optional) -----------------------------
+# Built from a pinned commit of mtld3d's native host branch. Any problem here
+# only costs the Metal renderer: the game then uses OpenGL.
+D3D9METAL=""
+D3D9METAL_IOS=""
+build_d3d9metal() {
+    local src="$DEPS/mtld3d"
+    if ! command -v cargo >/dev/null 2>&1; then
+        warn "Rust not found: the game will use OpenGL. For the faster Metal renderer,
+  install Rust (https://rustup.rs) and re-run ./setup.sh."
+        return 0
+    fi
+    step "Building libd3d9metal for the Metal renderer (a few minutes the first time)"
+    if [ "$(git -C "$src" rev-parse HEAD 2>/dev/null)" != "$MTLD3D_REV" ]; then
+        mkdir -p "$src"
+        git -C "$src" init -q
+        git -C "$src" remote remove origin 2>/dev/null || true
+        git -C "$src" remote add origin "$MTLD3D_URL"
+        git -C "$src" fetch -q --depth 1 origin "$MTLD3D_REV" && git -C "$src" checkout -q --force FETCH_HEAD \
+            || { warn "could not fetch mtld3d from $MTLD3D_URL: the game will use OpenGL"; return 0; }
+    fi
+    if command -v rustup >/dev/null 2>&1; then
+        rustup update stable >/dev/null 2>&1 || true   # mtld3d needs a recent Rust
+        [ $IOS = 1 ] && rustup target add aarch64-apple-ios >/dev/null 2>&1 || true
+    fi
+    if (cd "$src/native" && cargo build -q --profile production); then
+        D3D9METAL="$src/native/target/production/libd3d9metal.dylib"
+    else
+        warn "libd3d9metal did not build (Rust too old? run: rustup update): the game will use OpenGL"
+        return 0
+    fi
+    if [ $IOS = 1 ]; then
+        if (cd "$src/native" && cargo build -q --profile production --target aarch64-apple-ios); then
+            D3D9METAL_IOS="$src/native/target/aarch64-apple-ios/production/libd3d9metal.a"
+        else
+            warn "libd3d9metal for iOS did not build: the iPhone app will use OpenGL"
+        fi
+    fi
+}
+if [ -n "${P2_NO_METAL:-}" ] && [ "$P2_NO_METAL" != 0 ]; then
+    echo "P2_NO_METAL set: OpenGL renderer only"
+else
+    build_d3d9metal
+fi
+
 # --- iOS identity (before writing the config) -----------------------------
 TEAM=""
 if [ $IOS = 1 ]; then
@@ -156,14 +206,19 @@ fi
 # --- config/local.json ----------------------------------------------------
 step "Writing config/local.json"
 mkdir -p "$REPO/config"
-python3 - "$CONFIG" "$GAME" "$LINUX" "$DYLIB" "$TEAM" <<'EOF'
+python3 - "$CONFIG" "$GAME" "$LINUX" "$DYLIB" "$TEAM" "$D3D9METAL" "$D3D9METAL_IOS" <<'EOF'
 import json, os, sys
 from pathlib import Path
-path, game, linux, dylib, team = sys.argv[1:]
+path, game, linux, dylib, team, metal, metal_ios = sys.argv[1:]
 p = Path(path)
 config = json.loads(p.read_text()) if p.exists() else {}
 fresh = not config
 config.update(game_root=os.path.normpath(game), linux_root=os.path.normpath(linux), steam_api_dylib=os.path.normpath(dylib))
+# Metal renderer: set when built here, dropped when this run could not build it.
+if metal: config['d3d9metal_dylib'] = metal
+else: config.pop('d3d9metal_dylib', None)
+if metal_ios: config['d3d9metal_ios'] = {'device': metal_ios}
+elif team: config.pop('d3d9metal_ios', None)
 config.setdefault('steam_appid', 620)
 config.setdefault('depot_id', 661)
 if fresh:
@@ -219,9 +274,12 @@ fi
 
 SAVES_DIR="$(config_get user_dir)"
 SAVES_DIR="${SAVES_DIR:-$HOME/Library/Application Support/Portal 2 Natif/userdata}"
+if [ -n "$D3D9METAL" ]; then RENDERER="Metal (libd3d9metal); P2_RENDERER=opengl forces OpenGL"
+else RENDERER="OpenGL (install Rust from https://rustup.rs and re-run for Metal)"; fi
 cat <<EOF
 
 Done: ~/Applications/Portal 2 Natif.app
+- Renderer: ${RENDERER}
 - Start Steam and sign in with the account that owns Portal 2, then open the app
   (it starts Steam itself if needed). Log: ~/Library/Logs/Portal2Natif.log
 - The app carries its own copy of the game binary and libraries: Homebrew is only
