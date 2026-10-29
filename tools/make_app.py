@@ -50,6 +50,9 @@ if ! /usr/bin/pgrep -qx steam_osx; then
     sleep 5
 fi
 export SteamAppId=620 SteamGameId=620
+# libsteam_api.dylib de Valve, copiée dans l'app : le runtime la cherche sinon
+# à côté du dépôt, absent ici.
+export P2_STEAM_API_DYLIB="$HERE/../Frameworks/libsteam_api.dylib"
 # Configuration Fontconfig embarquée (sinon cherchée dans /opt/homebrew/etc/fonts).
 [ -d "$HERE/../Resources/fonts" ] && export FONTCONFIG_PATH="$HERE/../Resources/fonts"
 mkdir -p "$(dirname "$LOG")" {user_dir}
@@ -155,6 +158,17 @@ def bundle_libraries(app, binary):
                         ignore=shutil.ignore_patterns('*.default'))
 
 
+def bundle_steam_api(app, config):
+    """Copie la libsteam_api.dylib configurée (chargée par dlopen, donc absente
+    d'otool -L) dans Frameworks, où le lanceur la désigne."""
+    source = Path(config.get('steam_api_dylib') or '').expanduser()
+    if not source.is_file():
+        sys.exit(f'libsteam_api.dylib not found ({source}): re-run ./setup.sh')
+    frameworks = app / 'Contents/Frameworks'
+    frameworks.mkdir(parents=True, exist_ok=True)
+    shutil.copy(source, frameworks / 'libsteam_api.dylib')
+
+
 def bundle_d3d9metal(app, config):
     """Copie la libd3d9metal.dylib configurée (rendu Direct3D 9 natif, chargée
     par dlopen depuis Frameworks/ avec P2_RENDERER=d3d9) ; rien sans clé."""
@@ -196,23 +210,7 @@ def copy_tree(source, dest):
         shutil.copytree(source, dest)
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--dest', type=Path, default=Path.home() / 'Applications')
-    parser.add_argument('game_args', nargs=argparse.REMAINDER)
-    args = parser.parse_args()
-    game_args = args.game_args[1:] if args.game_args[:1] == ['--'] else args.game_args
-    config = json.loads((ROOT / 'config/local.json').read_text())
-    binary = ROOT / 'build/portal2-native'
-    prep = ROOT / 'build/game/prep'
-    if not (prep / 'layout.json').exists(): raise SystemExit(f'{prep} absent : lancer tools/gameprep.py')
-    paths = {
-        'binary': binary, 'game_dir': Path(config['game_root']),
-        'linux_root': Path(config['linux_root']), 'user_dir': user_dir(config),
-    }
-
-    app = args.dest / f'{NAME}.app'
-    if app.exists(): shutil.rmtree(app)
+def build_app(app, binary, prep, config, paths, game_args):
     macos = app / 'Contents/MacOS'
     resources = app / 'Contents/Resources'
     macos.mkdir(parents=True)
@@ -233,6 +231,7 @@ def main():
         **{key: shlex.quote(str(value)) for key, value in paths.items()}))
     launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     bundle_libraries(app, binary)
+    bundle_steam_api(app, config)
     bundle_d3d9metal(app, config)
 
     icon = paths['game_dir'] / 'portal2/resource/game.icns'
@@ -245,7 +244,39 @@ def main():
     }
     with (app / 'Contents/Info.plist').open('wb') as f: plistlib.dump(plist, f)
     sign_app(app)
-    print(app)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--dest', type=Path, default=Path.home() / 'Applications')
+    parser.add_argument('game_args', nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+    game_args = args.game_args[1:] if args.game_args[:1] == ['--'] else args.game_args
+    config = json.loads((ROOT / 'config/local.json').read_text())
+    binary = ROOT / 'build/portal2-native'
+    prep = ROOT / 'build/game/prep'
+    if not (prep / 'layout.json').exists(): raise SystemExit(f'{prep} absent : lancer tools/gameprep.py')
+    paths = {
+        'binary': binary, 'game_dir': Path(config['game_root']),
+        'linux_root': Path(config['linux_root']), 'user_dir': user_dir(config),
+    }
+
+    # Construite à côté puis échangée : un échec en cours de route laisse
+    # l'app existante intacte.
+    final = args.dest / f'{NAME}.app'
+    app = args.dest / f'.{NAME}.app.partial'
+    if app.exists(): shutil.rmtree(app)
+    try:
+        build_app(app, binary, prep, config, paths, game_args)
+    except BaseException:
+        shutil.rmtree(app, ignore_errors=True)
+        raise
+    old = args.dest / f'.{NAME}.app.old'
+    if old.exists(): shutil.rmtree(old)
+    if final.exists(): final.rename(old)
+    app.rename(final)
+    shutil.rmtree(old, ignore_errors=True)
+    print(final)
 
 
 if __name__ == '__main__':

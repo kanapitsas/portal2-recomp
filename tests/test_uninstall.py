@@ -61,6 +61,22 @@ class UninstallTests(unittest.TestCase):
         self.assertTrue((self.home / '.Trash/Portal2Recomp').is_dir())
         self.assertTrue(self.game.exists())
 
+    def set_user_dir(self, path):
+        config = json.loads(self.config.read_text())
+        config['user_dir'] = str(path)
+        self.config.write_text(json.dumps(config))
+
+    def test_user_dir_overlapping_shared_folders_is_never_trashed(self):
+        # A user_dir equal to, inside or around the game folder, or the home itself, must survive two yeses.
+        link = self.home / 'game-link'
+        link.symlink_to(self.game)
+        for path in (self.game, self.game / 'portal2', self.game.parent, self.home, link):
+            path.mkdir(parents=True, exist_ok=True)
+            self.set_user_dir(path)
+            self.run_script('n\ny\n')
+            self.assertTrue(self.game.is_dir(), path)
+            self.assertTrue(path.exists(), path)
+
     def test_nothing_installed(self):
         self.run_script('y\ny\n')
         out = self.run_script('y\ny\n')
