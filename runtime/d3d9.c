@@ -112,10 +112,13 @@ void rt_d3d9_set_library(d3d9metal_init_fn init, d3d9metal_create_fn create) {
 }
 
 // ---------------------------------------------------------------- services rendus à l'hôte
+static void *(*test_layer)(void *hwnd, uint32_t *width, uint32_t *height);
+void rt_d3d9_set_test_layer(void *(*layer)(void *hwnd, uint32_t *width, uint32_t *height)) { test_layer = layer; }
+
 static void *host_metal_layer(void *user, void *hwnd, uint32_t *width, uint32_t *height) {
     (void)user;
     uint32_t w = 0, h = 0;
-    void *layer = hwnd ? rt_sdl_metal_layer(hwnd, &w, &h) : NULL;
+    void *layer = !hwnd ? NULL : test_layer ? test_layer(hwnd, &w, &h) : rt_sdl_metal_layer(hwnd, &w, &h);
     if (width) *width = w;
     if (height) *height = h;
     return layer;

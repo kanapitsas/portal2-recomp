@@ -598,3 +598,176 @@ RT_CHECK(d3d9_memory_caps_precede_user_config) {
     if (saved) setenv("MTLD3D_CONFIG", saved, 1); else unsetenv("MTLD3D_CONFIG");
     free(saved);
 }
+
+// ---------------------------------------------------------------- vraie bibliothèque
+// Avec P2_D3D9METAL=/chemin/libd3d9metal.dylib (sinon ignoré) : le parcours
+// du jeu par les thunks invités, contre la vraie implémentation, sans
+// fenêtre (CAMetalLayer hors écran) et verrou invité tenu comme par un thread
+// du jeu. Formats FOURCC que shaderapivk.so connaît : tableau sur stderr.
+#include <dlfcn.h>
+#include <objc/message.h>
+#include <objc/runtime.h>
+
+enum { NATIVE_SIZE = 64 };
+static void *native_layer;
+static int native_window;   // SDL_Window* factice, jamais déréférencé
+static void *native_metal_layer(void *hwnd, uint32_t *width, uint32_t *height) {
+    if (hwnd != &native_window) return NULL;
+    *width = NATIVE_SIZE; *height = NATIVE_SIZE;
+    return native_layer;
+}
+static void *make_offscreen_layer(void) {
+    if (!dlopen("/System/Library/Frameworks/QuartzCore.framework/QuartzCore", RTLD_NOW)) return NULL;
+    Class class = objc_getClass("CAMetalLayer");
+    if (!class) return NULL;
+    id layer = ((id (*)(Class, SEL))objc_msgSend)(class, sel_registerName("new"));
+    typedef struct { double x, y, w, h; } Rect;
+    ((void (*)(id, SEL, Rect))objc_msgSend)(layer, sel_registerName("setBounds:"), (Rect){0, 0, NATIVE_SIZE, NATIVE_SIZE});
+    ((void (*)(id, SEL, double))objc_msgSend)(layer, sel_registerName("setContentsScale:"), 1.0);
+    return layer;
+}
+static uint32_t fourcc(const char *code) { return (uint32_t)code[0] | (uint32_t)code[1] << 8 | (uint32_t)code[2] << 16 | (uint32_t)code[3] << 24; }
+static uint32_t guest_copy(const void *data, uint32_t size) {
+    uint32_t address = rt_alloc(size);
+    assert(address);
+    memcpy(GPTR(address), data, size);
+    return address;
+}
+
+RT_CHECK(d3d9_bridge_against_real_native_library) {
+    const char *path = getenv("P2_D3D9METAL");
+    if (!path || !*path) { fprintf(stderr, "d3d9: P2_D3D9METAL unset, real library check skipped\n"); return; }
+    native_layer = make_offscreen_layer();
+    assert(native_layer);
+    rt_d3d9_set_test_layer(native_metal_layer);
+    // Dessins synchrones (l'image est relue aussitôt), aucun cache écrit.
+    const char *given = getenv("MTLD3D_CONFIG");
+    char *saved = given ? strdup(given) : NULL;
+    setenv("MTLD3D_CONFIG", "shader.asyncCompile=false;shaderCache.enable=false", 1);
+    SDL_SetHint(SDL_HINT_VIDEODRIVER, "dummy");
+    rt_d3d9_set_library(NULL, NULL);
+    unsigned proxies_before = rt_d3d9_live_proxies();
+    uint32_t hwnd = rt_handle_new(&native_window, RT_SDL_WINDOW);
+    rt_guest_enter();   // comme un thread du jeu
+
+    CPU c; rt_cpu_reset(&c); c.esp = STACK;
+    PUSH(&c, 32); PUSH(&c, RT_RETURN_SENTINEL);
+    assert(rt_shim(&c, "Direct3DCreate9") == 1);
+    uint32_t d3d = c.eax;
+    assert(d3d && R32(d3d + 4) == tag(D3D9_IDirect3D9));
+    const D3D9MetalHost *host = rt_d3d9_host();
+
+    uint32_t id = rt_alloc(1104), out = rt_alloc(16);
+    assert(CALL(d3d, IDirect3D9, GetAdapterIdentifier, 0, 0, id).eax == 0);
+    fprintf(stderr, "d3d9 native: adapter \"%s\" vendor %04x device %04x\n", (const char *)GPTR(id + 512), R32(id + 1064), R32(id + 1068));
+    assert(R32(id + 1064) == host->vendor_id);
+    if (host->mode_count) {
+        uint32_t mode = rt_alloc(16);   // D3DDISPLAYMODE : Width, Height, RefreshRate, Format
+        assert(CALL(d3d, IDirect3D9, GetAdapterDisplayMode, 0, mode).eax == 0);
+        fprintf(stderr, "d3d9 native: display mode %ux%u@%u (host first mode %ux%u)\n", R32(mode), R32(mode + 4), R32(mode + 8),
+                host->modes[0].width, host->modes[0].height);
+    }
+
+    // CheckDeviceFormat(adapter, HAL, X8R8G8B8, usage, type, format).
+    static const struct { const char *code; uint32_t usage, type; const char *as; } formats[] = {
+        {"INTZ", 2, 3, "depth texture"}, {"DF24", 2, 3, "depth texture"}, {"DF16", 2, 3, "depth texture"},
+        {"RAWZ", 2, 3, "depth texture"}, {"NULL", 1, 1, "render target surface"}, {"ATI1", 0, 3, "texture"},
+        {"ATI2", 0, 3, "texture"}, {"ATOC", 0, 1, "surface"}};
+    fprintf(stderr, "d3d9 native: CheckDeviceFormat\n");
+    for (size_t i = 0; i < sizeof(formats) / sizeof(*formats); ++i) {
+        uint32_t hr = CALL(d3d, IDirect3D9, CheckDeviceFormat, 0, 1, 22, formats[i].usage, formats[i].type, fourcc(formats[i].code)).eax;
+        fprintf(stderr, "  %s as %-21s %s (%#x)\n", formats[i].code, formats[i].as, hr == 0 ? "supported" : "no", hr);
+    }
+
+    // CreateDevice : D3DPRESENT_PARAMETERS i386, fenêtre factice → couche hors écran.
+    uint32_t pp = rt_alloc(64);
+    memset(GPTR(pp), 0, 56);
+    W32(pp, NATIVE_SIZE); W32(pp + 4, NATIVE_SIZE); W32(pp + 8, 22); W32(pp + 0xc, 1); W32(pp + 0x18, 1);
+    W32(pp + 0x1c, hwnd); W32(pp + 0x20, 1); W32(pp + 0x34, 0x80000000u);
+    assert(CALL(d3d, IDirect3D9, CreateDevice, 0, 1, hwnd, 0x20 /* HARDWARE_VERTEXPROCESSING */, pp, out).eax == 0);
+    uint32_t dev = R32(out);
+    assert(dev && R32(dev + 4) == tag(D3D9_IDirect3DDevice9));
+    // Requête d'événement (« D3DQUERYTYPE_EVENT not available on this driver » sinon).
+    uint32_t query_hr = CALL(dev, IDirect3DDevice9, CreateQuery, 8, 0).eax;
+    fprintf(stderr, "  D3DQUERYTYPE_EVENT       %s (%#x)\n", query_hr == 0 ? "supported" : "no", query_hr);
+
+    // Tampon de sommets écrit par l'invité via Lock.
+    static const float positions[3][3] = {{-0.5f, -0.5f, 0.5f}, {0.0f, 0.5f, 0.5f}, {0.5f, -0.5f, 0.5f}};
+    assert(CALL(dev, IDirect3DDevice9, CreateVertexBuffer, 48, 8 /* WRITEONLY */, 0x42 /* XYZ|DIFFUSE */, 0, out, 0).eax == 0);
+    uint32_t vb = R32(out);
+    assert(CALL(vb, IDirect3DVertexBuffer9, Lock, 0, 0, out, 0).eax == 0);
+    uint32_t data = R32(out);
+    assert(data >= RT_VM_BEGIN && data < RT_VM_END);
+    for (unsigned v = 0; v < 3; ++v) {
+        memcpy(GPTR(data + 16 * v), positions[v], 12);
+        W32(data + 16 * v + 12, 0xff00ff00u);
+    }
+    assert(CALL0(vb, IDirect3DVertexBuffer9, Unlock).eax == 0);
+
+    static const uint32_t vs_tokens[] = {0xfffe0200, 0x0200001f, 0x80000000, 0x900f0000, 0x0200001f, 0x8000000a, 0x900f0001,
+                                         0x02000001, 0xc00f0000, 0x90e40000, 0x02000001, 0xd00f0000, 0x90e40001, 0x0000ffff};
+    static const uint32_t ps_tokens[] = {0xffff0200, 0x0200001f, 0x80000000, 0x900f0000,
+                                         0x02000001, 0x800f0800, 0x90e40000, 0x0000ffff};
+    assert(CALL(dev, IDirect3DDevice9, CreateVertexShader, guest_copy(vs_tokens, sizeof(vs_tokens)), out).eax == 0);
+    uint32_t vs = R32(out);
+    assert(CALL(dev, IDirect3DDevice9, CreatePixelShader, guest_copy(ps_tokens, sizeof(ps_tokens)), out).eax == 0);
+    uint32_t ps = R32(out);
+
+    assert(CALL(dev, IDirect3DDevice9, Clear, 0, 0, 1 /* TARGET */, 0xffff0000u, bits_of(1.0f), 0).eax == 0);
+    assert(CALL0(dev, IDirect3DDevice9, BeginScene).eax == 0);
+    assert(CALL(dev, IDirect3DDevice9, SetRenderState, 137 /* LIGHTING */, 0).eax == 0);
+    assert(CALL(dev, IDirect3DDevice9, SetRenderState, 22 /* CULLMODE */, 1 /* NONE */).eax == 0);
+    assert(CALL(dev, IDirect3DDevice9, SetVertexShader, vs).eax == 0);
+    assert(CALL(dev, IDirect3DDevice9, SetPixelShader, ps).eax == 0);
+    assert(CALL(dev, IDirect3DDevice9, SetFVF, 0x42).eax == 0);
+    assert(CALL(dev, IDirect3DDevice9, SetStreamSource, 0, vb, 0, 16).eax == 0);
+    assert(CALL(dev, IDirect3DDevice9, DrawPrimitive, 4 /* TRIANGLELIST */, 0, 1).eax == 0);
+    assert(CALL0(dev, IDirect3DDevice9, EndScene).eax == 0);
+
+    // Relecture : GetRenderTargetData vers une surface système, LockRect adressable par l'invité.
+    assert(CALL(dev, IDirect3DDevice9, GetBackBuffer, 0, 0, 0, out).eax == 0);
+    uint32_t back = R32(out);
+    assert(CALL(dev, IDirect3DDevice9, CreateOffscreenPlainSurface, NATIVE_SIZE, NATIVE_SIZE, 21, 2 /* SYSTEMMEM */, out, 0).eax == 0);
+    uint32_t readback = R32(out);
+    assert(CALL(dev, IDirect3DDevice9, GetRenderTargetData, back, readback).eax == 0);
+    uint32_t locked = rt_alloc(8);
+    assert(CALL(readback, IDirect3DSurface9, LockRect, locked, 0, 0x10 /* READONLY */).eax == 0);
+    uint32_t pitch = R32(locked), bits = R32(locked + 4);
+    assert(pitch >= 4 * NATIVE_SIZE && bits >= RT_VM_BEGIN && bits + pitch * NATIVE_SIZE <= RT_VM_END);
+    uint32_t center = R32(bits + (NATIVE_SIZE / 2 + 4) * pitch + 4 * (NATIVE_SIZE / 2)), corner = R32(bits + pitch + 4);
+    fprintf(stderr, "d3d9 native: read back centre %#010x corner %#010x\n", center, corner);
+    assert((center & 0xffffff) == 0x00ff00 && (corner & 0xffffff) == 0xff0000);
+    assert(CALL(readback, IDirect3DSurface9, UnlockRect).eax == 0);
+
+    assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0);
+
+    // Conteneur du tampon arrière demandé comme IUnknown : typé par
+    // QueryInterface (chaîne d'échange), identité stable.
+    uint32_t unknown = guest_copy(iid_unknown, 16);
+    assert(CALL(back, IDirect3DSurface9, GetContainer, unknown, out).eax == 0);
+    uint32_t container = R32(out);
+    fprintf(stderr, "d3d9 native: back buffer container is a %s\n", rt_d3d9_interfaces[R32(container + 4) & 0xff].name);
+    assert(CALL(container, IUnknown, QueryInterface, unknown, out).eax == 0 && R32(out) == container);
+    assert(CALL(back, IUnknown, QueryInterface, unknown, out).eax == 0);
+    uint32_t back_identity = R32(out);
+    assert(CALL(back, IUnknown, QueryInterface, unknown, out).eax == 0 && R32(out) == back_identity);
+    CALL0(back_identity, IUnknown, Release); CALL0(back_identity, IUnknown, Release);
+    CALL0(container, IUnknown, Release); CALL0(container, IUnknown, Release);
+
+    // Tout rendu à 0 ; le tampon arrière est retiré avec le périphérique.
+    assert(CALL0(readback, IUnknown, Release).eax == 0);
+    CALL0(back, IUnknown, Release);
+    assert(CALL0(vb, IUnknown, Release).eax == 0);
+    assert(CALL0(vs, IUnknown, Release).eax == 0 && CALL0(ps, IUnknown, Release).eax == 0);
+    assert(CALL0(dev, IUnknown, Release).eax == 0);
+    assert(CALL0(d3d, IUnknown, Release).eax == 0);
+    assert(rt_d3d9_live_proxies() == proxies_before);
+
+    rt_guest_leave();
+    rt_handle_free(hwnd, RT_SDL_WINDOW);
+    rt_d3d9_set_test_layer(NULL);
+    rt_d3d9_set_library(NULL, NULL);
+    SDL_ResetHint(SDL_HINT_VIDEODRIVER);
+    if (saved) setenv("MTLD3D_CONFIG", saved, 1); else unsetenv("MTLD3D_CONFIG");
+    free(saved);
+}
