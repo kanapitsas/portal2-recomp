@@ -293,6 +293,40 @@ static uint32_t intern_name(CPU *c, const char *text) {
     return n->guest;
 }
 
+// Diagnostic (P2_INPUT_LOG=1) : boutons de souris, touchers, manettes et mode
+// relatif tels que le jeu les reçoit, horodatés ; rien quand il est éteint.
+static int input_log = -1;
+static int input_logging(void) {
+    if (input_log < 0) input_log = getenv("P2_INPUT_LOG") != NULL;
+    return input_log;
+}
+static void log_input_event(const SDL_Event *e) {
+    if (!input_logging()) return;
+    unsigned t = SDL_GetTicks();
+    switch (e->type) {
+    case SDL_MOUSEBUTTONDOWN: case SDL_MOUSEBUTTONUP:
+        fprintf(stderr, "[input] %u mouse %s button %d at %d,%d (which %u, relative %d)\n", t,
+                e->type == SDL_MOUSEBUTTONDOWN ? "down" : "up", e->button.button, e->button.x, e->button.y,
+                e->button.which, SDL_GetRelativeMouseMode());
+        break;
+    case SDL_FINGERDOWN: case SDL_FINGERUP:
+        fprintf(stderr, "[input] %u finger %s at %.3f,%.3f\n", t, e->type == SDL_FINGERDOWN ? "down" : "up",
+                e->tfinger.x, e->tfinger.y);
+        break;
+    case SDL_CONTROLLERBUTTONDOWN: case SDL_CONTROLLERBUTTONUP:
+        fprintf(stderr, "[input] %u controller %d button %d %s\n", t, e->cbutton.which, e->cbutton.button,
+                e->type == SDL_CONTROLLERBUTTONDOWN ? "down" : "up");
+        break;
+    case SDL_CONTROLLERAXISMOTION:
+        if (e->caxis.value > 16000 || e->caxis.value < -16000)
+            fprintf(stderr, "[input] %u controller %d axis %d %d\n", t, e->caxis.which, e->caxis.axis, e->caxis.value);
+        break;
+    case SDL_KEYDOWN:
+        fprintf(stderr, "[input] %u key %s\n", t, SDL_GetScancodeName(e->key.keysym.scancode));
+        break;
+    }
+}
+
 static void poll_into(CPU *c, uint32_t guest, int *got) {
     SDL_Event event;
     if (!guest) {
@@ -329,7 +363,7 @@ static void poll_into(CPU *c, uint32_t guest, int *got) {
     // jeu, qui ne l'associe à rien par défaut.
     if (*got && event.type == SDL_KEYDOWN && !event.key.repeat && event.key.keysym.scancode == SDL_SCANCODE_F3)
         fps_overlay_toggle();
-    if (*got) event_to_guest(c, &event, guest, 1);
+    if (*got) { log_input_event(&event); event_to_guest(c, &event, guest, 1); }
 }
 
 static int sdl_input_shim(CPU *c, const char *name) {
@@ -392,6 +426,7 @@ static int sdl_input_shim(CPU *c, const char *name) {
         if (py) W32(py, (uint32_t)(y * rt_sdl_window_scale()));
     } else if (!strcmp(n, "SetRelativeMouseMode")) {
         c->eax = (uint32_t)SDL_SetRelativeMouseMode(argument(c, 0) ? SDL_TRUE : SDL_FALSE);
+        if (input_logging()) fprintf(stderr, "[input] %u relative mouse mode %u\n", SDL_GetTicks(), argument(c, 0));
     } else if (!strcmp(n, "SetModState")) {
         SDL_SetModState((SDL_Keymod)argument(c, 0));
     } else if (!strcmp(n, "NumJoysticks")) {
