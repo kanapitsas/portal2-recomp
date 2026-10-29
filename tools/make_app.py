@@ -199,23 +199,7 @@ def copy_tree(source, dest):
         shutil.copytree(source, dest)
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--dest', type=Path, default=Path.home() / 'Applications')
-    parser.add_argument('game_args', nargs=argparse.REMAINDER)
-    args = parser.parse_args()
-    game_args = args.game_args[1:] if args.game_args[:1] == ['--'] else args.game_args
-    config = json.loads((ROOT / 'config/local.json').read_text())
-    binary = ROOT / 'build/portal2-native'
-    prep = ROOT / 'build/game/prep'
-    if not (prep / 'layout.json').exists(): raise SystemExit(f'{prep} absent : lancer tools/gameprep.py')
-    paths = {
-        'binary': binary, 'game_dir': Path(config['game_root']),
-        'linux_root': Path(config['linux_root']), 'user_dir': user_dir(config),
-    }
-
-    app = args.dest / f'{NAME}.app'
-    if app.exists(): shutil.rmtree(app)
+def build_app(app, binary, prep, config, paths, game_args):
     macos = app / 'Contents/MacOS'
     resources = app / 'Contents/Resources'
     macos.mkdir(parents=True)
@@ -248,7 +232,39 @@ def main():
     }
     with (app / 'Contents/Info.plist').open('wb') as f: plistlib.dump(plist, f)
     sign_app(app)
-    print(app)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--dest', type=Path, default=Path.home() / 'Applications')
+    parser.add_argument('game_args', nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+    game_args = args.game_args[1:] if args.game_args[:1] == ['--'] else args.game_args
+    config = json.loads((ROOT / 'config/local.json').read_text())
+    binary = ROOT / 'build/portal2-native'
+    prep = ROOT / 'build/game/prep'
+    if not (prep / 'layout.json').exists(): raise SystemExit(f'{prep} absent : lancer tools/gameprep.py')
+    paths = {
+        'binary': binary, 'game_dir': Path(config['game_root']),
+        'linux_root': Path(config['linux_root']), 'user_dir': user_dir(config),
+    }
+
+    # Construite à côté puis échangée : un échec en cours de route laisse
+    # l'app existante intacte.
+    final = args.dest / f'{NAME}.app'
+    app = args.dest / f'.{NAME}.app.partial'
+    if app.exists(): shutil.rmtree(app)
+    try:
+        build_app(app, binary, prep, config, paths, game_args)
+    except BaseException:
+        shutil.rmtree(app, ignore_errors=True)
+        raise
+    old = args.dest / f'.{NAME}.app.old'
+    if old.exists(): shutil.rmtree(old)
+    if final.exists(): final.rename(old)
+    app.rename(final)
+    shutil.rmtree(old, ignore_errors=True)
+    print(final)
 
 
 if __name__ == '__main__':

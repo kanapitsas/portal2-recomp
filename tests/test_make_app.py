@@ -62,6 +62,14 @@ class MakeAppTests(unittest.TestCase):
         self.assertIn('P2_STEAM_API_DYLIB="$HERE/../Frameworks/libsteam_api.dylib"',
                       (app / 'Contents/MacOS/launcher').read_text())
 
+    def test_failed_rebuild_keeps_existing_app(self):
+        app = self.run_main()
+        Path(self.config['steam_api_dylib']).unlink()   # fails late, after the bundle was started
+        with self.assertRaises(SystemExit):
+            self.run_main()
+        self.assertTrue((app / 'Contents/Info.plist').is_file())   # the previous, complete app
+        self.assertFalse(any(p.name.startswith('.') for p in app.parent.iterdir()))
+
     def test_prep_copied_into_bundle(self):
         app = self.run_main()
         self.assertEqual((app / 'Contents/Resources/prep/engine.so').read_bytes(), b'\x7fELF')
