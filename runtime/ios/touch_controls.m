@@ -49,6 +49,7 @@
 
 int rt_ios_game_ui_visible(void);   // game_state.c
 extern _Atomic unsigned long rt_ios_frames;  // gl_ios.m : images présentées
+extern volatile int rt_ios_metal_active;      // metal_ios.m : rendu Direct3D 9 en cours
 void rt_ios_move_response_linear(int on);
 int rt_ios_move_response(void);
 void rt_ios_console_command(const char *name);   // game_state.c
@@ -735,7 +736,7 @@ static Sint16 axis_value(CGFloat speed, int response) {
 }
 // Police pixel 5×7 du compteur : chiffres et « FPS », une ligne par octet
 // (bit 4 : colonne de gauche), dessinée carré par carré sans lissage.
-static const char kPixelChars[] = "0123456789FPS";
+static const char kPixelChars[] = "0123456789FPSMETALOGN";
 static const uint8_t kPixelGlyphs[][7] = {
     {0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E}, {0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E},
     {0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F}, {0x1F, 0x02, 0x04, 0x02, 0x01, 0x11, 0x0E},
@@ -744,6 +745,10 @@ static const uint8_t kPixelGlyphs[][7] = {
     {0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E}, {0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C},
     {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10}, {0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10},
     {0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E},
+    {0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11}, {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F},   // M E
+    {0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04}, {0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11},   // T A
+    {0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F}, {0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E},   // L O
+    {0x0E, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0F}, {0x11, 0x19, 0x15, 0x13, 0x11, 0x11, 0x11},   // G N
 };
 static const CGFloat kPixel = 2;   // points par pixel de la police (6 pixels d'écran sur un iPhone ×3)
 static void draw_pixel_text(CGContextRef c, const char *text, CGPoint at) {
@@ -756,23 +761,26 @@ static void draw_pixel_text(CGContextRef c, const char *text, CGPoint at) {
                 if (rows[y] & (0x10 >> x)) CGContextFillRect(c, CGRectMake(at.x + (i * 6 + x) * kPixel, at.y + y * kPixel, kPixel, kPixel));
     }
 }
-// En haut à gauche, dans la zone sûre (hors de l'arrondi et de l'encoche).
-- (CGRect)fpsBox:(NSString *)text {
+// En haut à gauche, dans la zone sûre (hors de l'arrondi et de l'encoche) :
+// rendu sur la première ligne, cadence sur la seconde.
+- (CGRect)fpsBox:(NSString *)renderer fps:(NSString *)text {
     CGRect a = self.area;
     CGFloat margin = 2 * kPixel;
+    NSUInteger chars = MAX(renderer.length, text.length);
     return CGRectMake(round(CGRectGetMinX(a) + 8), round(CGRectGetMinY(a) + 8),
-                      (text.length * 6 - 1) * kPixel + 2 * margin, 7 * kPixel + 2 * margin);
+                      (chars * 6 - 1) * kPixel + 2 * margin, 16 * kPixel + 2 * margin);
 }
 // Zone qui bascule le compteur : le coin jusqu'au compteur le plus large, et
 // un peu plus (le doigt couvre mal un si petit carré).
 - (CGRect)fpsCorner {
-    CGRect box = [self fpsBox:@"000 FPS"];
+    CGRect box = [self fpsBox:@"OPENGL" fps:@"000 FPS"];
     return CGRectMake(0, 0, CGRectGetMaxX(box) + 20, CGRectGetMaxY(box) + 20);
 }
 - (void)drawFPS {
     if (fps <= 0) return;
     NSString *text = [NSString stringWithFormat:@"%d FPS", fps];
-    CGRect box = [self fpsBox:text];
+    NSString *renderer = rt_ios_metal_active ? @"METAL" : @"OPENGL";   // runtime/ios/metal_ios.m
+    CGRect box = [self fpsBox:renderer fps:text];
     CGContextRef c = UIGraphicsGetCurrentContext();
     CGContextSaveGState(c);
     CGContextSetShouldAntialias(c, NO);
@@ -783,10 +791,14 @@ static void draw_pixel_text(CGContextRef c, const char *text, CGPoint at) {
                  : fps >= 30 ? [UIColor colorWithRed:1 green:.85 blue:.2 alpha:1]
                              : [UIColor colorWithRed:1 green:.35 blue:.3 alpha:1];
     CGPoint at = CGPointMake(box.origin.x + 2 * kPixel, box.origin.y + 2 * kPixel);
+    CGPoint below = CGPointMake(at.x, at.y + 9 * kPixel);
     CGContextSetFillColorWithColor(c, UIColor.blackColor.CGColor);   // ombre d'un pixel
-    draw_pixel_text(c, text.UTF8String, CGPointMake(at.x + kPixel / 3, at.y + kPixel / 3));
+    draw_pixel_text(c, renderer.UTF8String, CGPointMake(at.x + kPixel / 3, at.y + kPixel / 3));
+    draw_pixel_text(c, text.UTF8String, CGPointMake(below.x + kPixel / 3, below.y + kPixel / 3));
+    CGContextSetFillColorWithColor(c, UIColor.whiteColor.CGColor);
+    draw_pixel_text(c, renderer.UTF8String, at);
     CGContextSetFillColorWithColor(c, ink.CGColor);
-    draw_pixel_text(c, text.UTF8String, at);
+    draw_pixel_text(c, text.UTF8String, below);
     CGContextRestoreGState(c);
 }
 - (void)drawRect:(CGRect)rect {

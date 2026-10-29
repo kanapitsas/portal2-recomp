@@ -17,6 +17,7 @@
 //
 // SHIMS: Direct3DCreate9
 #include "d3d9_bridge.h"
+#include "fps_overlay.h"
 #include "frame_times.h"
 #include "sdl_common.h"
 #include <dlfcn.h>
@@ -842,7 +843,69 @@ static int d3d9_call(CPU *c, const char *name, void *data) {
 // une variante datée, choisie à la résolution de la route, qui ne coûte donc
 // rien quand le journal est éteint. Les autres méthodes ne voient ni l'une ni l'autre.
 void (*volatile rt_d3d9_on_present)(void);
+
+// Compteur F3 (fps_overlay.c) sur le chemin Direct3D 9 : ses rectangles sont
+// remplis par un seul Clear dans le tampon arrière, juste avant Present. Cible
+// de rendu, zone d'affichage, ciseau et masque de couleur sont sauvés puis
+// remis : l'image suivante du jeu n'en voit rien.
+typedef struct { int32_t x1, y1, x2, y2; } D3d9Rect;
+typedef struct { uint32_t X, Y, Width, Height; float MinZ, MaxZ; } D3d9Viewport;
+enum { RS_SCISSOR = 174, RS_COLORWRITE = 168, CLEAR_TARGET = 1 };
+static const D3d9Method *find_method(const char *name);
+static unsigned slot_of(const char *name) { return find_method(name)->slot; }
+#define DEV_CALL(type, dev, slot, ...) ((type)D3D9_VTBL(dev)[slot])(dev, __VA_ARGS__)
+void rt_d3d9_draw_overlay(void *dev) {   // aussi appelé par tests/checks_d3d9.c
+    if (!fps_overlay_tick()) return;      // masqué : aucun appel au device
+    static unsigned s_backbuffer, s_set_rt, s_get_rt, s_clear, s_set_vp, s_get_vp, s_set_rs, s_get_rs, s_release;
+    if (!s_clear) {
+        s_backbuffer = slot_of("IDirect3DDevice9::GetBackBuffer"); s_set_rt = slot_of("IDirect3DDevice9::SetRenderTarget");
+        s_get_rt = slot_of("IDirect3DDevice9::GetRenderTarget"); s_set_vp = slot_of("IDirect3DDevice9::SetViewport");
+        s_get_vp = slot_of("IDirect3DDevice9::GetViewport"); s_set_rs = slot_of("IDirect3DDevice9::SetRenderState");
+        s_get_rs = slot_of("IDirect3DDevice9::GetRenderState"); s_release = slot_of("IUnknown::Release");
+        s_clear = slot_of("IDirect3DDevice9::Clear");
+    }
+    typedef int32_t (*GetBB)(void *, uint32_t, uint32_t, uint32_t, void **);
+    typedef int32_t (*RT)(void *, uint32_t, void *);
+    typedef int32_t (*GetRT)(void *, uint32_t, void **);
+    typedef int32_t (*VP)(void *, D3d9Viewport *);
+    typedef int32_t (*SetRS)(void *, uint32_t, uint32_t);
+    typedef int32_t (*GetRS)(void *, uint32_t, uint32_t *);
+    typedef int32_t (*Clear)(void *, uint32_t, const D3d9Rect *, uint32_t, uint32_t, float, uint32_t);
+    typedef uint32_t (*Release)(void *);
+    void *back = NULL, *old = NULL;
+    if (DEV_CALL(GetBB, dev, s_backbuffer, 0, 0, 0, &back) < 0 || !back) return;
+    D3d9Viewport saved_vp, full;
+    uint32_t scissor = 0, mask = 0xf;
+    DEV_CALL(GetRT, dev, s_get_rt, 0, &old);
+    DEV_CALL(VP, dev, s_get_vp, &saved_vp);
+    DEV_CALL(GetRS, dev, s_get_rs, RS_SCISSOR, &scissor);
+    DEV_CALL(GetRS, dev, s_get_rs, RS_COLORWRITE, &mask);
+    DEV_CALL(RT, dev, s_set_rt, 0, back);                // remet la zone d'affichage au tampon entier
+    DEV_CALL(VP, dev, s_get_vp, &full);
+    static FpsRect rects[FPS_OVERLAY_MAX_RECTS];
+    static D3d9Rect boxes[FPS_OVERLAY_MAX_RECTS];
+    int n = fps_overlay_text_rects("Metal", (int)full.Height, rects, FPS_OVERLAY_MAX_RECTS);
+    if (n) {
+        DEV_CALL(SetRS, dev, s_set_rs, RS_SCISSOR, 0);
+        DEV_CALL(SetRS, dev, s_set_rs, RS_COLORWRITE, 0xf);
+        for (int pass = 0; pass < 2; ++pass) {           // ombre décalée, puis texte
+            int d = pass ? 0 : 2;
+            for (int i = 0; i < n; ++i)
+                boxes[i] = (D3d9Rect){rects[i].x + d, rects[i].y + d, rects[i].x + d + rects[i].w, rects[i].y + d + rects[i].h};
+            DEV_CALL(Clear, dev, s_clear, (uint32_t)n, boxes, CLEAR_TARGET, pass ? 0xffffd91au : 0xff000000u, 1.0f, 0);
+        }
+        DEV_CALL(SetRS, dev, s_set_rs, RS_SCISSOR, scissor);
+        DEV_CALL(SetRS, dev, s_set_rs, RS_COLORWRITE, mask);
+    }
+    DEV_CALL(RT, dev, s_set_rt, 0, old ? old : back);
+    DEV_CALL(VP, dev, s_set_vp, &saved_vp);
+    if (old) ((Release)D3D9_VTBL(old)[s_release])(old);
+    ((Release)D3D9_VTBL(back)[s_release])(back);
+}
+
 static int d3d9_present_call(CPU *c, const char *name, void *data) {
+    const D3d9Method *m = data;
+    if (m->name[9] == 'D') rt_d3d9_draw_overlay(self_of(c, m));   // IDirect3DDevice9::Present (pas la chaîne d'échange)
     d3d9_call(c, name, data);
     void (*hook)(void) = rt_d3d9_on_present;
     if (hook && (int32_t)c->eax >= 0) hook();

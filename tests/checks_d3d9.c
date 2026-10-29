@@ -6,6 +6,8 @@
 // de disposition différente et le chemin chaud SetRenderState/Draw*.
 #include "checks.h"
 #include "d3d9_bridge.h"
+#include "fps_overlay.h"
+void rt_d3d9_draw_overlay(void *dev);
 #include "frame_times.h"
 #include <limits.h>
 #include "sdl_common.h"
@@ -768,6 +770,19 @@ RT_CHECK(d3d9_bridge_against_real_native_library) {
     assert(CALL(dev, IDirect3DDevice9, DrawPrimitive, 4 /* TRIANGLELIST */, 0, 1).eax == 0);
     assert(CALL0(dev, IDirect3DDevice9, EndScene).eax == 0);
 
+    // Compteur F3 sur le chemin Direct3D 9 : un Clear dans le tampon arrière,
+    // état du jeu (zone d'affichage, ciseau) rendu tel quel.
+    uint32_t vp_before = rt_alloc(24), vp_after = rt_alloc(24), scissor = rt_alloc(4);
+    assert(CALL(dev, IDirect3DDevice9, SetRenderState, 174 /* SCISSORTESTENABLE */, 1).eax == 0);
+    assert(CALL(dev, IDirect3DDevice9, GetViewport, vp_before).eax == 0);
+    fps_overlay_toggle();
+    rt_d3d9_draw_overlay((void *)(uintptr_t)R64(dev + 8));
+    fps_overlay_toggle();
+    assert(CALL(dev, IDirect3DDevice9, GetViewport, vp_after).eax == 0);
+    assert(!memcmp(GPTR(vp_before), GPTR(vp_after), 24));
+    assert(CALL(dev, IDirect3DDevice9, GetRenderState, 174, scissor).eax == 0 && R32(scissor) == 1);
+    assert(CALL(dev, IDirect3DDevice9, SetRenderState, 174, 0).eax == 0);
+
     // Relecture : GetRenderTargetData vers une surface système, LockRect adressable par l'invité.
     assert(CALL(dev, IDirect3DDevice9, GetBackBuffer, 0, 0, 0, out).eax == 0);
     uint32_t back = R32(out);
@@ -781,6 +796,11 @@ RT_CHECK(d3d9_bridge_against_real_native_library) {
     uint32_t center = R32(bits + (NATIVE_SIZE / 2 + 4) * pitch + 4 * (NATIVE_SIZE / 2)), corner = R32(bits + pitch + 4);
     fprintf(stderr, "d3d9 native: read back centre %#010x corner %#010x\n", center, corner);
     assert((center & 0xffffff) == 0x00ff00 && (corner & 0xffffff) == 0xff0000);
+    FpsRect first;   // premier rectangle du « M » de « Metal »
+    assert(fps_overlay_layout("Metal", "", NATIVE_SIZE, &first, 1) == 1);
+    uint32_t text = R32(bits + (uint32_t)(first.y + 1) * pitch + 4u * (uint32_t)(first.x + 1));
+    fprintf(stderr, "d3d9 native: F3 overlay pixel %#010x\n", text);
+    assert((text & 0xffffff) == 0xffd91a);
     assert(CALL(readback, IDirect3DSurface9, UnlockRect).eax == 0);
 
     assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0);
@@ -838,4 +858,19 @@ RT_CHECK(d3d9_renderer_plan_forced_opengl_strips_vulkan) {
     assert(rt_renderer_plan(0, 1, lib_unexpected) == 0 && rt_renderer_plan(1, 1, lib_unexpected) == 0);
     assert(rt_renderer_plan(0, 0, lib_yes) == 1 && rt_renderer_plan(1, 0, lib_yes) == 1);
     assert(rt_renderer_plan(0, 0, lib_no) == 0);
+}
+
+// Compteur F3 : deux lignes (rendu, cadence), rectangles dans l'image et
+// différents selon le rendu affiché.
+RT_CHECK(fps_overlay_layout_two_lines) {
+    FpsRect a[FPS_OVERLAY_MAX_RECTS], b[FPS_OVERLAY_MAX_RECTS];
+    int na = fps_overlay_layout("OpenGL", "120 fps", 1440, a, FPS_OVERLAY_MAX_RECTS);
+    int nb = fps_overlay_layout("Metal", "120 fps", 1440, b, FPS_OVERLAY_MAX_RECTS);
+    assert(na > 0 && nb > 0 && na < FPS_OVERLAY_MAX_RECTS && nb < FPS_OVERLAY_MAX_RECTS);
+    int line2 = 0;
+    for (int i = 0; i < na; ++i) {
+        assert(a[i].x >= 0 && a[i].y >= 0 && a[i].w > 0 && a[i].h > 0 && a[i].x + a[i].w < 2560 && a[i].y + a[i].h < 1440);
+        if (a[i].y >= 12 + 9 * 4) line2 = 1;   // deuxième ligne sous la première
+    }
+    assert(line2 && (na != nb || memcmp(a, b, sizeof(FpsRect) * (size_t)na)));
 }

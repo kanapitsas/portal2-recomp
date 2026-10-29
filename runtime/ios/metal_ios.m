@@ -29,7 +29,8 @@ void rt_ios_request_frame_rate(void);  // gl_ios.m
 
 int rt_renderer_request(const char *value);   // runtime/d3d9.c
 uint64_t rt_frame_log_tick(void);   // runtime/sdl_video.c : cadence P2_FRAME_LOG
-static void presented(void) { ++rt_ios_frames; rt_frame_log_tick(); }
+volatile int rt_ios_metal_active;   // une image présentée par Direct3D 9 (compteur : « METAL »)
+static void presented(void) { ++rt_ios_frames; rt_ios_metal_active = 1; rt_frame_log_tick(); }
 
 int rt_ios_metal_usable(char *why, size_t size) {
     id<MTLDevice> device = MTLCreateSystemDefaultDevice();
