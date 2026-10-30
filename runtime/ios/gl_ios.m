@@ -508,10 +508,21 @@ static void bind_texture(GLenum target, GLuint name) {
     glBindTexture(TARGET_3D, name);
     with_unit_end(previous);
 }
+// Un PBO d'envoi lié : le pointeur de données est un décalage dans ce tampon,
+// pas une adresse (rt_gl_unpack le transmet tel quel). Les conversions sur le
+// processeur ne peuvent pas le lire : l'envoi passe sans conversion (couleurs
+// ou format faux, signalés une fois) plutôt que de déréférencer le décalage.
+static int unpack_pbo(const char *fn) {
+    GLint buffer = 0; gl4es_get_integerv(0x88EF /* PIXEL_UNPACK_BUFFER_BINDING */, &buffer);
+    static int warned;
+    if (buffer && !warned) { warned = 1; fprintf(stderr, "[gl-ios] %s : PBO d'envoi lié, conversion sautée\n", fn); }
+    return buffer != 0;
+}
 // BGRA (et 8_8_8_8_REV, le même ordre d'octets) n'existe pas pour les textures
 // 3D en ES : recopie en RGBA.
 static const void *rgba_copy(GLenum *format, GLenum *type, const void *data, size_t texels, void **owned) {
     *owned = NULL;
+    if (*format == BGRA && unpack_pbo("glTexImage3D")) return data;
     if (*format != BGRA || (*type != GL_UNSIGNED_BYTE && *type != UNSIGNED_INT_8_8_8_8_REV)) return data;
     *format = GL_RGBA; *type = GL_UNSIGNED_BYTE;
     if (!data) return NULL;
@@ -669,9 +680,9 @@ static void tex_image_2d(GLenum t, GLint l, GLint i, GLsizei w, GLsizei h, GLint
     // zéro, OpenGL ES/gl4es laissent son contenu indéfini, que les passes
     // plein écran (bloom, HDR) relisaient : voile de bruit. Remise à zéro.
     void *zeros = NULL;
-    GLint unpack_buffer = 0;
-    if (!d) gl4es_get_integerv(0x88EF /* PIXEL_UNPACK_BUFFER_BINDING */, &unpack_buffer);
-    if (!d && !unpack_buffer && w > 0 && h > 0 && ty != GL_UNSIGNED_SHORT) {
+    int pbo = unpack_pbo("glTexImage2D");
+    if (pbo && ty == GL_UNSIGNED_SHORT) n = 0;   // envoi tel quel (voir unpack_pbo)
+    if (!d && !pbo && w > 0 && h > 0 && ty != GL_UNSIGNED_SHORT) {
         size_t bytes = texel_bytes(f, ty);
         size_t row = ((size_t)w * bytes + 7) & ~(size_t)7;   // marge pour tout alignement de lignes
         if (bytes && (zeros = calloc(row, (size_t)h))) d = zeros;
@@ -698,6 +709,7 @@ static void tex_image_2d(GLenum t, GLint l, GLint i, GLsizei w, GLsizei h, GLint
 static void tex_sub_image_2d(GLenum t, GLint l, GLint x, GLint y, GLsizei w, GLsizei h, GLenum f, GLenum ty, const void *d) {
     narrow_init();
     int n = channels(f);
+    if (ty == GL_UNSIGNED_SHORT && unpack_pbo("glTexSubImage2D")) n = 0;   // voir unpack_pbo
     if (ty != GL_UNSIGNED_SHORT || !n) { g4_tex_sub_image_2d_plain(t, l, x, y, w, h, f, ty, d); return; }
     GLuint texture = t == GL_TEXTURE_2D ? bound_2d() : 0;
     if (texture && texture < half_size && half_textures[texture]) {
