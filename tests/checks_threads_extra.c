@@ -370,3 +370,27 @@ RT_CHECK(unknown_semaphore_function_is_not_handled) {
     assert(rt_shim(&c, "sem_getvalue") == 0);   // non pris en charge : le dispatcher piégera
     assert(rt_shim(&c, "sem_open") == 0);
 }
+
+// Un FUTEX_WAKE qui compte un attendeur dont le délai expire au même moment
+// doit le faire réussir : sinon ce réveil est perdu (Linux rend 0). Course
+// provoquée en boucle : réveils comptés = attentes réussies.
+#define FUTEX_RACE_WORD (DATA + 0x200)
+#define FUTEX_RACE_TIMEOUT (DATA + 0x208)
+static atomic_int futex_race_done;
+static void *futex_race_waiter(void *successes) {
+    CPU c; rt_cpu_reset(&c);
+    for (int i = 0; i < 20000; ++i)
+        if (rt_futex(&c, FUTEX_RACE_WORD, 128, 0, FUTEX_RACE_TIMEOUT) == 0) ++*(int *)successes;
+    atomic_store(&futex_race_done, 1);
+    return NULL;
+}
+RT_CHECK(futex_wake_racing_timeout_is_not_lost) {
+    CPU c; main_cpu(&c);
+    W32(FUTEX_RACE_WORD, 0); W32(FUTEX_RACE_TIMEOUT, 0); W32(FUTEX_RACE_TIMEOUT + 4, 20000);   // 20 µs
+    int successes = 0; long woken = 0;
+    atomic_store(&futex_race_done, 0);
+    pthread_t waiter; assert(!pthread_create(&waiter, NULL, futex_race_waiter, &successes));
+    while (!atomic_load(&futex_race_done)) woken += rt_futex(&c, FUTEX_RACE_WORD, 129, 1, 0);
+    assert(!pthread_join(waiter, NULL));
+    assert(woken == successes);
+}
