@@ -348,8 +348,10 @@ static Entry *find(const void *host) {
         if (!entries[i].host) return NULL;
     }
 }
+// Agrandit, ou réorganise à taille égale quand ce sont surtout des pierres
+// tombales qui remplissent la table (création et libération en boucle).
 static int grow(void) {
-    size_t next = capacity ? capacity * 2 : 1024;
+    size_t next = !capacity ? 1024 : filled * 2 > capacity ? capacity * 2 : capacity;
     Entry *fresh = calloc(next, sizeof(*fresh));
     if (!fresh) return -1;
     for (size_t i = 0; i < capacity; ++i) {
@@ -390,6 +392,7 @@ static void forget_identity(Entry *e) {
 
 uint32_t rt_d3d9_find_proxy(const void *host) { Entry *e = host ? find(host) : NULL; return e ? e->proxy : 0; }
 unsigned rt_d3d9_live_proxies(void) { return (unsigned)live; }
+size_t rt_d3d9_table_capacity(void) { return capacity; }
 
 static uint32_t tag_of(uint32_t proxy) { return R32(proxy + 4); }
 static int proxy_accepts(uint32_t tag, uint32_t accept) {
