@@ -45,7 +45,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include "back_tap.h"
+#include "backtap_dataset.h"
 
 int rt_ios_game_ui_visible(void);   // game_state.c
 extern _Atomic unsigned long rt_ios_frames;  // gl_ios.m : images présentées
@@ -168,6 +170,15 @@ static float backtap_hold;            // s : durée de l'appui
 // P2_BACKTAP_RAW=<fichier> (relatif à HOME) : échantillons et touchers bruts,
 // rejoués sur le Mac par tools/backtap_replay.c pour régler les seuils.
 static FILE *backtap_raw;
+// Jeu de données à étiquettes devinées (backtap_dataset.c), sur la file des
+// capteurs : détecteur large (quart des seuils), fichier
+// Documents/backtap/dataset.csv gardé d'une partie à l'autre ; P2_BACKTAP_DATASET=0
+// le coupe, =<fichier> (relatif à HOME) le déplace, P2_BACKTAP_TAG étiquette la session.
+static rt_backtap backtap_wide;
+static rt_btds backtap_dataset;
+static int backtap_dataset_on;
+static _Atomic long backtap_look;          // caméra : comptes de souris cumulés (|dx| + |dy|)
+static _Atomic long backtap_data_taps = -1, backtap_data_fixes;   // pour l'affichage (-1 : rien à afficher)
 // Journal, sur la file des capteurs seulement : origine des temps, bruit de fond.
 static struct { double origin, window, last_t, sq; float last_a[3], max_a, max_jerk, max_rot; long samples; } backtap_noise;
 
@@ -232,6 +243,36 @@ static void backtap_start(void) {
     }
     float hz = rt_backtap_env_float("P2_BACKTAP_HZ", 200, 10);
     rt_backtap_init(&backtap_detector, &p);
+    const char *dataset = getenv("P2_BACKTAP_DATASET");
+    if (!dataset || *dataset != '0' || dataset[1]) {
+        char path[1024];
+        if (dataset && *dataset)
+            snprintf(path, sizeof(path), "%s%s%s", dataset[0] == '/' ? "" : getenv("HOME"), dataset[0] == '/' ? "" : "/", dataset);
+        else {
+            snprintf(path, sizeof(path), "%s/Documents/backtap", getenv("HOME"));
+            mkdir(path, 0755);
+            snprintf(path, sizeof(path), "%s/Documents/backtap/dataset.csv", getenv("HOME"));
+        }
+        long taps = 0, fixes = 0;
+        if (rt_btds_repair_tail(path)) fprintf(stderr, "[ios] tapes au dos : fin du jeu de données illisible\n");
+        FILE *old = fopen(path, "r");
+        rt_btds_count_file(old, &taps, &fixes);
+        if (old) fclose(old);
+        FILE *out = fopen(path, "a");
+        if (out) {
+            setvbuf(out, NULL, _IOLBF, 0);
+            fseek(out, 0, SEEK_END);
+            if (!ftell(out)) fputs(rt_btds_header, out);
+            rt_backtap_params pw = p;
+            pw.onset_factor = env_float("P2_BACKTAP_WIDE", RT_BTDS_WIDE_ONSET, 0.01f);
+            rt_backtap_init(&backtap_wide, &pw);
+            rt_btds_init(&backtap_dataset, &p, out, getenv("P2_BACKTAP_TAG"), CACurrentMediaTime(), taps, fixes);
+            backtap_dataset_on = 1;
+            atomic_store(&backtap_data_taps, taps); atomic_store(&backtap_data_fixes, fixes);
+        }
+        fprintf(stderr, "[ios] tapes au dos : jeu de données %s%s (%ld tapes dont %ld corrections)\n", path,
+                out ? "" : " impossible", taps, fixes);
+    }
 
     backtap_queue = [NSOperationQueue new];
     backtap_queue.name = @"p2.backtap";
@@ -257,8 +298,23 @@ static void backtap_start(void) {
             fprintf(backtap_raw, "m %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %d %d\n", s.t, s.a[0], s.a[1], s.a[2],
                     s.w[0], s.w[1], s.w[2], s.g[0], s.g[1], s.g[2], atomic_load(&backtap_orient), atomic_load(&backtap_active));
         int judged = rt_backtap_feed(&backtap_detector, &s, atomic_load(&backtap_orient), atomic_load(&backtap_active), &r);
+        rt_backtap_report rw;
+        int wide = backtap_dataset_on &&
+                   rt_backtap_feed(&backtap_wide, &s, atomic_load(&backtap_orient), atomic_load(&backtap_active), &rw);
         os_unfair_lock_unlock(&backtap_lock);
         if (judged && !r.reject) atomic_store(&backtap_pending, r.side);
+        if (backtap_dataset_on) {   // file des capteurs seulement (pas de verrou)
+            double look = (double)atomic_load(&backtap_look);
+            if (wide) rt_btds_candidate_add(&backtap_dataset, &backtap_wide, &rw, look);
+            if (judged && !r.reject) rt_btds_fire_add(&backtap_dataset, r.t, r.side, look);
+            rt_btds_tick(&backtap_dataset, s.t);
+            if (backtap_dataset.write_error == 1) {   // une fois
+                backtap_dataset.write_error = 2;
+                fprintf(stderr, "[ios] tapes au dos : écriture du jeu de données en échec\n");
+            }
+            atomic_store(&backtap_data_taps, backtap_dataset.taps);
+            atomic_store(&backtap_data_fixes, backtap_dataset.corrections);
+        }
         if (backtap_log) backtap_log_sample(&s, judged ? &r : NULL);
     }];
     backtap_motion = motion;
@@ -268,6 +324,7 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
     os_unfair_lock_lock(&backtap_lock);
     for (UITouch *t in touches) {
         rt_backtap_touch(&backtap_detector, t.timestamp);
+        if (backtap_dataset_on) rt_backtap_touch(&backtap_wide, t.timestamp);
         if (backtap_raw) fprintf(backtap_raw, "t %.4f\n", t.timestamp);
     }
     os_unfair_lock_unlock(&backtap_lock);
@@ -300,6 +357,7 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
     int fpsHidden;            // masqué : P2_SHOW_FPS=0 (Réglages) ou toucher du coin haut gauche
     unsigned long fpsFrames;  // images au dernier relevé
     CFTimeInterval fpsAt;     // instant du dernier relevé
+    long dataTaps, dataFixes; // jeu de données des tapes au dos affiché (-1 : rien)
     SDL_Joystick *pad;        // manette virtuelle du stick gauche (NULL : W/A/S/D)
     BOOL padRefused;          // création refusée : ne pas réessayer à chaque image
     Sint16 padAxes[2];        // dernières valeurs envoyées
@@ -325,6 +383,7 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
             [center addObserver:self selector:@selector(devicesChanged) name:name object:nil];
         [self devicesChanged];
         backtapHeld = -1;
+        dataTaps = -1;
         const char *show = getenv("P2_SHOW_FPS");   // posée par les Réglages (runtime/ios/settings.c)
         fpsHidden = show && !strcmp(show, "0");
         backtap_start();
@@ -378,6 +437,7 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
     int dx = (int)lookCarry[0], dy = (int)lookCarry[1];
     lookCarry[0] -= (float)dx; lookCarry[1] -= (float)dy;
     if (!dx && !dy) return;
+    atomic_fetch_add(&backtap_look, labs((long)dx) + labs((long)dy));   // règle « mauvais côté » du jeu de données
     SDL_Event e = {0};
     e.type = SDL_MOUSEMOTION; e.motion.windowID = SDL_GetWindowID(window);
     e.motion.xrel = dx; e.motion.yrel = dy;
@@ -757,11 +817,14 @@ static Sint16 axis_value(CGFloat speed, int response) {
     if (now - fpsAt < .5) return;
     int value = (int)lround((double)(rt_ios_frames - fpsFrames) / (now - fpsAt));
     fpsAt = now; fpsFrames = rt_ios_frames;
-    if (value != fps) { fps = value; redraw(self); }
+    long taps = atomic_load(&backtap_data_taps), fixes = atomic_load(&backtap_data_fixes);
+    BOOL data = taps != dataTaps || fixes != dataFixes;
+    dataTaps = taps; dataFixes = fixes;
+    if (value != fps || data) { fps = value; redraw(self); }
 }
 // Police pixel 5×7 du compteur : chiffres et « FPS », une ligne par octet
 // (bit 4 : colonne de gauche), dessinée carré par carré sans lissage.
-static const char kPixelChars[] = "0123456789FPSMETALOGN";
+static const char kPixelChars[] = "0123456789FPSMETALOGND/";
 static const uint8_t kPixelGlyphs[][7] = {
     {0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E}, {0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E},
     {0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F}, {0x1F, 0x02, 0x04, 0x02, 0x01, 0x11, 0x0E},
@@ -774,6 +837,7 @@ static const uint8_t kPixelGlyphs[][7] = {
     {0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04}, {0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11},   // T A
     {0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F}, {0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E},   // L O
     {0x0E, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0F}, {0x11, 0x19, 0x15, 0x13, 0x11, 0x11, 0x11},   // G N
+    {0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E}, {0x01, 0x01, 0x02, 0x04, 0x08, 0x10, 0x10},   // D /
 };
 static const CGFloat kPixel = 2;   // points par pixel de la police (6 pixels d'écran sur un iPhone ×3)
 static void draw_pixel_text(CGContextRef c, const char *text, CGPoint at) {
@@ -787,25 +851,31 @@ static void draw_pixel_text(CGContextRef c, const char *text, CGPoint at) {
     }
 }
 // En haut à gauche, dans la zone sûre (hors de l'arrondi et de l'encoche) :
-// rendu sur la première ligne, cadence sur la seconde.
-- (CGRect)fpsBox:(NSString *)renderer fps:(NSString *)text {
+// rendu sur la première ligne, cadence sur la seconde, et sur la troisième le
+// jeu de données des tapes au dos : « DATA tapes/corrections » (tapes : exemples
+// étiquetés tapes ; corrections : tapes manquées ou du mauvais côté devinées).
+- (CGRect)fpsBox:(NSString *)renderer fps:(NSString *)text data:(NSString *)data {
     CGRect a = self.area;
     CGFloat margin = 2 * kPixel;
-    NSUInteger chars = MAX(renderer.length, text.length);
+    NSUInteger chars = MAX(MAX(renderer.length, text.length), data.length);
     return CGRectMake(round(CGRectGetMinX(a) + 8), round(CGRectGetMinY(a) + 8),
-                      (chars * 6 - 1) * kPixel + 2 * margin, 16 * kPixel + 2 * margin);
+                      (chars * 6 - 1) * kPixel + 2 * margin, (data.length ? 25 : 16) * kPixel + 2 * margin);
+}
+- (NSString *)dataText {
+    return dataTaps < 0 ? @"" : [NSString stringWithFormat:@"DATA %ld/%ld", dataTaps, dataFixes];
 }
 // Zone qui bascule le compteur : le coin jusqu'au compteur le plus large, et
 // un peu plus (le doigt couvre mal un si petit carré).
 - (CGRect)fpsCorner {
-    CGRect box = [self fpsBox:@"OPENGL" fps:@"000 FPS"];
+    CGRect box = [self fpsBox:@"OPENGL" fps:@"000 FPS" data:dataTaps < 0 ? @"" : @"DATA 0000/000"];
     return CGRectMake(0, 0, CGRectGetMaxX(box) + 20, CGRectGetMaxY(box) + 20);
 }
 - (void)drawFPS {
     if (fps <= 0) return;
     NSString *text = [NSString stringWithFormat:@"%d FPS", fps];
     NSString *renderer = rt_ios_metal_active ? @"METAL" : @"OPENGL";   // runtime/ios/metal_ios.m
-    CGRect box = [self fpsBox:renderer fps:text];
+    NSString *data = [self dataText];
+    CGRect box = [self fpsBox:renderer fps:text data:data];
     CGContextRef c = UIGraphicsGetCurrentContext();
     CGContextSaveGState(c);
     CGContextSetShouldAntialias(c, NO);
@@ -822,6 +892,13 @@ static void draw_pixel_text(CGContextRef c, const char *text, CGPoint at) {
     draw_pixel_text(c, text.UTF8String, CGPointMake(below.x + kPixel / 3, below.y + kPixel / 3));
     CGContextSetFillColorWithColor(c, UIColor.whiteColor.CGColor);
     draw_pixel_text(c, renderer.UTF8String, at);
+    CGPoint third = CGPointMake(at.x, below.y + 9 * kPixel);
+    if (data.length) {
+        CGContextSetFillColorWithColor(c, UIColor.blackColor.CGColor);
+        draw_pixel_text(c, data.UTF8String, CGPointMake(third.x + kPixel / 3, third.y + kPixel / 3));
+        CGContextSetFillColorWithColor(c, [UIColor colorWithRed:.55 green:.8 blue:1 alpha:1].CGColor);
+        draw_pixel_text(c, data.UTF8String, third);
+    }
     CGContextSetFillColorWithColor(c, ink.CGColor);
     draw_pixel_text(c, text.UTF8String, below);
     CGContextRestoreGState(c);

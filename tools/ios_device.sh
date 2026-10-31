@@ -8,6 +8,7 @@
 #   tools/ios_device.sh has-game                 exit 0 when Documents/game/portal2 exists (older copies)
 #   tools/ios_device.sh prep                     copy only Documents/prep again (after gameprep: ~80 MB)
 #   tools/ios_device.sh run [seconds] [VAR=value...]   launch (default 180 s), then fetch Documents/game.log
+#   tools/ios_device.sh backtap                  fetch the back-tap dataset (Documents/backtap/dataset.csv)
 # Device: P2_DEVICE (UDID or name), else the first connected iPhone/iPad.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -92,6 +93,12 @@ run)
   dc device copy from --domain-type appDataContainer --domain-identifier $APP_ID \
     --source Documents/game.log --destination build/ios/device/game.log
   echo "journal : build/ios/device/game.log ($(wc -l < build/ios/device/game.log) lignes)"
+  ;;
+backtap)
+  mkdir -p build/ios/device/backtap
+  dc device copy from --domain-type appDataContainer --domain-identifier $APP_ID \
+    --source Documents/backtap/dataset.csv --destination build/ios/device/backtap/dataset.csv
+  echo "dataset: build/ios/device/backtap/dataset.csv ($(($(wc -l < build/ios/device/backtap/dataset.csv) - 1)) examples)"
   ;;
 *) awk 'NR > 1 && !/^#/ {exit} NR > 1 {sub(/^# ?/, ""); print}' "$0"; exit 2 ;;
 esac

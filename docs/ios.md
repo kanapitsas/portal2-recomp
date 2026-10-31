@@ -222,6 +222,48 @@ Raw recording for tuning the thresholds on the Mac:
 `cc -O2 -o build/backtap-replay tools/backtap_replay.c -lm` and
 `build/backtap-replay backtap.raw` (same `P2_BACKTAP_*` variables). `P2_TOUCH_CONTROLS=0` also disables back taps.
 
+### Tap dataset (guessed labels)
+
+The game keeps a dataset of back-tap candidates, labeled from what the player
+does next, as groundwork for a detector that learns from each player
+(`runtime/ios/backtap_dataset.c`, tested by `tests/checks_backtap_dataset.c`).
+A second detector with a wider gate (a quarter of the thresholds instead of
+half; `P2_BACKTAP_WIDE`) runs next to the game's, which is unchanged, so taps
+too soft to reach the game's detector are recorded too. Each candidate becomes
+one CSV line in `Documents/backtap/dataset.csv`, kept across sessions: the
+detector's features, the raw sensor window (0.35 s before the peak to the
+verdict, 100 ms after), and a label set 1.5 s later:
+
+| Label | Rule |
+|---|---|
+| `fired` | the game fired within 60 ms of it |
+| `wrong_side` | fired, then the other portal 0.2 to 1.2 s later with the camera still (under 60 mouse counts, ~4°): probably the wrong side, the label side is the other one |
+| `missed` | not fired, at least half the game's thresholds (acceleration or x rotation), and a shot follows 0.2 to 1.0 s later: probably a missed tap tried again; one per shot, the strongest |
+| `after_fire` | not fired, less than 1.5 s after a shot (hand rebound) |
+| `quiet` | none of the above: probably not a tap |
+
+These labels are hints, not ground truth: the columns `prev_dt`, `next_dt`,
+`next_side` and `next_look` keep the timing and camera motion to the
+neighbouring shots, so labels can be recomputed with other rules offline.
+Replaying the 2026-10-26 recordings (25 minutes, mostly calibration) gives
+about 2.5 candidates per second, 13 shots a minute, 0.6 `wrong_side` and 5
+`missed` a minute; the file grows by about 30 MB per hour of play.
+
+The FPS counter shows a third line, `DATA taps/corrections`: examples labeled
+as taps (`fired`, `missed`, `wrong_side`) and, of those, corrections
+(`missed`, `wrong_side`), counted over the whole file.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `P2_BACKTAP_DATASET` | `Documents/backtap/dataset.csv` | `0` disables the dataset, a path (relative to HOME) moves it |
+| `P2_BACKTAP_TAG` | empty | written on every line, to mark a session with known intent (e.g. `left-only`, `no-taps`) |
+| `P2_BACKTAP_WIDE` | 0.25 | fraction of the thresholds that opens a candidate of the wide detector |
+
+`tools/ios_device.sh backtap` copies the file to
+`build/ios/device/backtap/dataset.csv`; `P2_BACKTAP_DATASET=<file.csv>
+build/backtap-replay <recording>` builds the same file from a raw recording
+(without camera motion, the `wrong_side` rule ignores the camera).
+
 | Variable | Default | Purpose |
 |---|---|---|
 | `P2_BACKTAP_ACCEL` | 0.10 g | minimum acceleration peak |
