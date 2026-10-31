@@ -27,6 +27,8 @@
     <key>CFBundleIcons~ipad</key>
     <dict><key>CFBundlePrimaryIcon</key><dict><key>CFBundleIconFiles</key>
         <array><string>AppIcon60x60</string><string>AppIcon76x76</string><string>AppIcon83.5x83.5</string></array></dict></dict>
+    <!-- LAN co-op: iOS asks before the game reaches another device on the network. -->
+    <key>NSLocalNetworkUsageDescription</key><string>Portal 2 uses the local network to play co-op with a game on another device.</string>
     <key>UIFileSharingEnabled</key><true/>
     <key>LSSupportsOpeningDocumentsInPlace</key><true/>
 </dict>

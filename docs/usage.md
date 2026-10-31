@@ -40,8 +40,12 @@ Enable the developer console in the game's keyboard options, then:
   Use the LAN address even when both copies run on the same Mac: `127.0.0.1`
   does not reach the other copy.
 
-Tested between two copies on one Mac. Co-op through Steam invites and with an
-iPhone is not tested yet.
+On iPhone, add two lines to `Documents/launch.args` in the app's files:
+`+connect` and the host's address. iOS asks once for local network access:
+allow it.
+
+Tested between two copies on one Mac, and with an iPhone joining a Mac. Co-op
+through Steam invites is not tested yet.
 
 ## Manual build
 
