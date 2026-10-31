@@ -144,4 +144,6 @@ his direction. The history and [STATUS.md](STATUS.md) show the whole process.
 
 ## License
 
+Copyright (C) 2026 Raphaël Kanapitsas and contributors.
+
 [GNU GPL v3.0](LICENSE). It does not cover Portal 2 or any Valve material.
