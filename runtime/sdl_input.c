@@ -401,7 +401,9 @@ static void poll_into(CPU *c, uint32_t guest, int *got) {
         const char *hidden = getenv("P2_HIDDEN_WINDOWS"), *wanted = getenv("P2_FAKE_FOCUS");
         fake_focus = hidden && *hidden && strcmp(hidden, "0") && wanted && *wanted && strcmp(wanted, "0");
     }
-    SDL_Window *window = fake_focus == 1 ? SDL_GL_GetCurrentWindow() : NULL;
+    // Fenêtre du rendu : contexte GL courant, ou vue Metal (Direct3D 9, sans contexte GL).
+    SDL_Window *window = fake_focus != 1 ? NULL : SDL_GL_GetCurrentWindow();
+    if (fake_focus == 1 && !window) window = rt_sdl_metal_window();
     if (window) {
         fake_focus = 2;
         memset(&event, 0, sizeof(event));
