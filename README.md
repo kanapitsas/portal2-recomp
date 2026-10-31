@@ -77,7 +77,11 @@ On Mac, open Steam with the account that owns Portal 2, then open
 On iPhone: left stick to move, right half of the screen to look, buttons to
 jump, crouch, use and pause, and a tap on the back of the phone (left or
 right) to fire a portal. Everything is tunable in Settings > Portal 2. The
-iPhone version is single player and offline.
+iPhone version has no Steam, but it can join a Mac in LAN co-op.
+
+**Co-op** works over the local network: a Mac hosts, and another Mac or an
+iPhone joins by IP address ([how](docs/usage.md#lan-co-op)). Co-op through
+Steam invites or over the internet is not tested.
 
 ## Renderer: Metal or OpenGL
 
@@ -110,7 +114,7 @@ the saves. It never touches the Steam game files or the Linux binaries.
 
 ## More
 
-- [Language and manual build](docs/usage.md)
+- [Language, LAN co-op and manual build](docs/usage.md)
 - [iOS port, controls and settings](docs/ios.md)
 - [Metal renderer](docs/d3d9-bridge.md)
 - [Steam bridge](docs/steam.md), [fast memory mode](docs/fast-path.md),
@@ -123,7 +127,8 @@ repository.
 
 **Limits**: built and tested against one release of the Linux binaries
 (depot 661, manifest 8940703274703023246); another release needs new
-indirect call roots. iOS has no co-op, achievements or Steam features. A free
+indirect call roots. iOS has no Steam features (achievements, invites, cloud
+saves); co-op there is LAN only. A free
 Apple account allows 3 sideloaded apps and 7-day profiles.
 
 ## Credits

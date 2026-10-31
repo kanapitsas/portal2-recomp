@@ -44,8 +44,18 @@ On iPhone, add two lines to `Documents/launch.args` in the app's files:
 `+connect` and the host's address. iOS asks once for local network access:
 allow it.
 
-Tested between two copies on one Mac, and with an iPhone joining a Mac. Co-op
-through Steam invites is not tested yet.
+| Case | Status |
+|---|---|
+| Two copies on one Mac | Tested: the partner loads the map and stays connected |
+| Mac hosts, iPhone joins | Tested, same result |
+| Two Macs | Should work the same way; not tested |
+| iPhone hosts | Not tested |
+| Steam invites and lobbies | Not tested; some Steam calls used by matchmaking are not bridged yet |
+| Over the internet | Not tested; the host needs `sv_lan 0` and UDP port 27015 open |
+| With a Windows or Linux PC | Not tested |
+
+Only the connection and the map load were checked. A full co-op map played
+by two people has not been tried yet.
 
 ## Manual build
 
