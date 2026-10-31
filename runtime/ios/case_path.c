@@ -33,7 +33,7 @@ static Directory *listing(const char *path) {
     if (!dir) return NULL;
     Directory *d = calloc(1, sizeof(*d));
     if (!d) { closedir(dir); return NULL; }
-    d->path = strdup(path);
+    if (!(d->path = strdup(path))) { free(d); closedir(dir); return NULL; }
     d->generation = rt_paths_generation();
     size_t capacity = 0;
     struct dirent *entry;
@@ -44,7 +44,8 @@ static Directory *listing(const char *path) {
             if (!grown) break;
             d->names = grown;
         }
-        d->names[d->count++] = strdup(entry->d_name);
+        if (!(d->names[d->count] = strdup(entry->d_name))) break;
+        d->count++;
     }
     closedir(dir);
     d->next = buckets[b]; buckets[b] = d;
@@ -73,7 +74,8 @@ static void refresh(Directory *d) {
         char **grown = realloc(d->names, (d->count + 1) * sizeof(*grown));
         if (!grown) break;
         d->names = grown;
-        d->names[d->count++] = strdup(entry->d_name);
+        if (!(d->names[d->count] = strdup(entry->d_name))) break;
+        d->count++;
     }
     closedir(dir);
 }

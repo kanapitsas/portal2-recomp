@@ -108,6 +108,7 @@ const D3D9MetalHost *rt_d3d9_host(void);
 uint32_t rt_d3d9_find_proxy(const void *host);   // 0 si aucun
 // Tests sans fenêtre : CAMetalLayer rendue pour un HWND à la place de la vue SDL (NULL : SDL).
 void rt_d3d9_set_test_layer(void *(*layer)(void *hwnd, uint32_t *width, uint32_t *height));
+size_t rt_d3d9_table_capacity(void);   // tests : cases de la table des mandataires
 unsigned rt_d3d9_live_proxies(void);
 // libd3d9metal.dylib chargée et initialisée (d3d9metal_init réussi), une
 // fois pour toutes : choix du rendu au lancement, avant que le jeu démarre.

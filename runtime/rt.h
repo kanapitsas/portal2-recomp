@@ -373,6 +373,7 @@ uint32_t rt_realloc(uint32_t ptr, uint32_t size);
 int rt_free(uint32_t ptr);
 uint32_t rt_heap_usable_size(uint32_t ptr);   // 0 si ptr ne vient pas du tas invité
 void rt_heap_reset(void);
+size_t rt_heap_table_capacity(void);       // tests : cases de la table adresse -> taille
 void rt_shims_destroy(void);
 size_t rt_atexit_count(void);
 int rt_atexit_get(size_t index, uint32_t *function, uint32_t *arg, uint32_t *dso);  // function 0: already run

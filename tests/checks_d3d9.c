@@ -620,6 +620,26 @@ RT_CHECK(d3d9_get_container_iunknown_keeps_one_reference) {
     assert(CALL0(level, IUnknown, Release).eax == 0 && rt_d3d9_live_proxies() == live);
 }
 
+// Création et libération en boucle d'objets distincts (requêtes, textures de
+// passage) : la table se réorganise à taille constante au lieu de doubler à
+// chaque fois que les pierres tombales la remplissent.
+RT_CHECK(d3d9_proxy_table_stays_bounded_under_churn) {
+    setup_vtables();
+    fill(orphan_level_vtbl, 17);
+    orphan_level_vtbl[1] = (void *)f_addref; orphan_level_vtbl[2] = (void *)f_release;
+    static Fake objects[20000];
+    CPU c; rt_cpu_reset(&c); c.esp = STACK;
+    unsigned live = rt_d3d9_live_proxies();
+    for (unsigned round = 0; round < 5; ++round)
+        for (unsigned i = 0; i < 20000; ++i) {
+            objects[i] = (Fake){.vtbl = orphan_level_vtbl, .refs = 1};
+            uint32_t proxy = d3d9_proxy(&c, &objects[i], D3D9_IDirect3DSurface9);
+            assert(CALL0(proxy, IUnknown, Release).eax == 0);
+        }
+    assert(rt_d3d9_live_proxies() == live);
+    assert(rt_d3d9_table_capacity() <= 4096);
+}
+
 // Plafonds mémoire de mtld3d adaptés à l'espace invité, posés avant
 // l'initialisation ; une clé donnée par l'utilisateur reste la dernière (gagne).
 RT_CHECK(d3d9_memory_caps_precede_user_config) {

@@ -275,11 +275,15 @@ if [ $IOS = 1 ]; then
     if [ -n "$DEVICE" ]; then
         step "Installing on the iPhone"
         P2_DEVICE="$DEVICE" tools/ios_device.sh install
-        COPIED="build/ios/device/data-copied-$DEVICE"
-        if [ ! -f "$COPIED" ]; then
+        # The marker lives on the iPhone: a reinstalled app has an empty container.
+        # Older setups only left a local marker; trust it if the game folder is there.
+        OLD_MARK="build/ios/device/data-copied-$DEVICE"
+        if P2_DEVICE="$DEVICE" tools/ios_device.sh has-data; then :
+        elif [ -f "$OLD_MARK" ] && ! P2_DEVICE="$DEVICE" tools/ios_device.sh has-mark &&
+             P2_DEVICE="$DEVICE" tools/ios_device.sh has-game; then :
+        else
             step "Copying the game data to the iPhone (about 11.5 GB; long, once)"
             P2_DEVICE="$DEVICE" tools/ios_device.sh data
-            mkdir -p "$(dirname "$COPIED")" && date > "$COPIED"
         fi
     fi
 fi

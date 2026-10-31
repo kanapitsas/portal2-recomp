@@ -52,8 +52,12 @@ static unsigned class_of(uint32_t size, uint32_t *rounded) {
 
 static size_t hash(uint32_t addr) { return (size_t)((addr >> 4) * 2654435761u); }
 
+// Agrandit, ou réorganise à taille égale si ce sont surtout des cases
+// supprimées qui remplissent la table.
 static int table_grow(void) {
-    size_t capacity = table_capacity ? table_capacity * 2 : 4096;
+    size_t live = 0;
+    for (size_t i = 0; i < table_capacity; ++i) live += table[i].addr && table[i].size;
+    size_t capacity = !table_capacity ? 4096 : live * 2 > table_capacity ? table_capacity * 2 : table_capacity;
     Slot *grown = calloc(capacity, sizeof(*grown));
     if (!grown) return -1;
     for (size_t i = 0; i < table_capacity; ++i) {
@@ -62,8 +66,6 @@ static int table_grow(void) {
         while (grown[j].addr) j = (j + 1) & (capacity - 1);
         grown[j] = table[i];
     }
-    size_t live = 0;
-    for (size_t i = 0; i < capacity; ++i) live += grown[i].addr != 0;
     free(table); table = grown; table_capacity = capacity; table_used = live;
     return 0;
 }
@@ -232,6 +234,13 @@ void rt_heap_info(uint32_t *arena, uint32_t *used, uint32_t *free_bytes, uint32_
     for (unsigned k = 0; k < CLASS_COUNT; ++k) blocks += free_small[k].count;
     *free_blocks = blocks > UINT32_MAX ? UINT32_MAX : (uint32_t)blocks;
     pthread_mutex_unlock(&lock);
+}
+
+size_t rt_heap_table_capacity(void) {
+    pthread_mutex_lock(&lock);
+    size_t capacity = table_capacity;
+    pthread_mutex_unlock(&lock);
+    return capacity;
 }
 
 void rt_heap_reset(void) {

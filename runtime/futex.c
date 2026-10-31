@@ -43,6 +43,9 @@ int rt_futex(CPU *c,uint32_t address,uint32_t operation,uint32_t value,uint32_t 
                 unsigned saved=rt_guest_suspend();
                 while(!waiter.awoken && !error)
                     error=timeout?pthread_cond_timedwait(&waiter.condition,&f->mutex,&deadline):pthread_cond_wait(&waiter.condition,&f->mutex);
+                // Réveil compté par FUTEX_WAKE pendant l'expiration : succès, sinon
+                // ce réveil serait perdu pour les autres attendeurs.
+                if(waiter.awoken)error=0;
                 Waiter **link=&f->waiters;while(*link && *link!=&waiter)link=&(*link)->next;
                 if(*link)*link=waiter.next;
                 pthread_mutex_unlock(&f->mutex);

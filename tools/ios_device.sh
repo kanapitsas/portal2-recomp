@@ -3,6 +3,7 @@
 #   tools/ios_device.sh probe [VAR=valeur...]   sonde (P2_PROBE_CLIP=1 : découpe au plan proche)
 #   tools/ios_device.sh install                  installe build/ios/device/Portal2.app
 #   tools/ios_device.sh data                     copie les données dans Documents (prep, game, linux)
+#   tools/ios_device.sh has-data                 code 0 si les données sont complètes sur l'appareil
 #   tools/ios_device.sh prep                     recopie seulement Documents/prep (après un gameprep : ~80 Mo)
 #   tools/ios_device.sh run [secondes] [VAR=valeur...]   lance, puis rapatrie Documents/game.log
 # Appareil : P2_DEVICE (UDID ou nom), sinon le premier iPhone/iPad connecté.
@@ -20,6 +21,16 @@ dc() {  # sous-commande de trois mots, --device, puis le reste (options et argum
 }
 env_json() {  # VAR=valeur... -> {"VAR":"valeur",...}
   python3 -c 'import json,sys; print(json.dumps(dict(a.split("=",1) for a in sys.argv[1:])))' "$@"
+}
+DATA_MARK=Documents/.p2-data-state  # « incomplete » pendant « data », « complete » à la fin
+mark_data() {  # état écrit sur l'appareil (devicectl ne sait pas supprimer un fichier)
+  local mark; mark=$(mktemp); echo "$1" > "$mark"
+  copy_to "$APP_ID" "$mark" "$DATA_MARK" >/dev/null; rm -f "$mark"
+}
+has_file() {  # chemin relatif au conteneur : code 0 s'il existe sur l'appareil
+  dc device info files --domain-type appDataContainer --domain-identifier "$APP_ID" \
+    --subdirectory "$(dirname "$1")" --no-recurse 2>/dev/null |
+    awk -v n="$(basename "$1")" '$1 == n {found = 1} END {exit !found}'
 }
 copy_to() {  # source destination (relative au conteneur de données)
   dc device copy to --domain-type appDataContainer --domain-identifier "$1" --source "$2" --destination "$3"
@@ -42,11 +53,25 @@ install)
   ;;
 data)
   # Sans la bande son ni sdk_content (inutiles au jeu) : ~11,5 Go.
+  mark_data incomplete
   copy_to $APP_ID build/game/prep Documents/prep
   copy_to $APP_ID "$LINUX_ROOT" Documents/linux
   for d in bin platform update portal2 portal2_dlc1 portal2_dlc2; do
     [ -e "$GAME_ROOT/$d" ] && copy_to $APP_ID "$GAME_ROOT/$d" "Documents/game/$d"
   done
+  mark_data complete
+  ;;
+has-data)
+  state=$(mktemp)
+  dc device copy from --domain-type appDataContainer --domain-identifier "$APP_ID" \
+    --source "$DATA_MARK" --destination "$state" >/dev/null 2>&1 && grep -qx complete "$state"
+  status=$?; rm -f "$state"; exit $status
+  ;;
+has-mark)  # un état existe (copie commencée par cette version du script)
+  has_file "$DATA_MARK"
+  ;;
+has-game)  # copies antérieures au marqueur : le dossier du jeu suffit
+  has_file Documents/game/portal2
   ;;
 prep)
   # Fichier par fichier : chacun remplace son homologue (les adresses des

@@ -585,6 +585,12 @@ static void destroy_metal_view(SDL_Window *window) {
 // CAMetalLayer* de la fenêtre et taille de rendu du jeu en pixels (celle du
 // tampon arrière qu'il choisit : points × échelle Retina de la fenêtre).
 // NULL si la fenêtre n'est pas une fenêtre Metal du pont.
+void *rt_sdl_metal_window(void) {
+    pthread_mutex_lock(&lock);
+    SDL_Window *w = metal_views ? metal_views->window : NULL;
+    pthread_mutex_unlock(&lock);
+    return w;
+}
 void *rt_sdl_metal_layer(void *window, uint32_t *width, uint32_t *height) {
     SDL_Window *w = window;
     MetalView *v = find_metal_view(w);

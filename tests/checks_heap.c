@@ -68,3 +68,18 @@ RT_CHECK(heap_scales_linearly) {
     double seconds = (double)(t1.tv_sec - t0.tv_sec) + (double)(t1.tv_nsec - t0.tv_nsec) / 1e9;
     assert(seconds < 1.0);
 }
+
+// Blocs libérés puis jamais réutilisés (adresses toujours nouvelles) : les
+// cases supprimées remplissent la table, qui doit se réorganiser à taille
+// égale au lieu de doubler à chaque fois.
+RT_CHECK(heap_table_stays_bounded_under_churn) {
+    enum { N = 3000 };
+    static uint32_t blocks[N];
+    size_t before = rt_heap_table_capacity();
+    for (uint32_t size = 16; size <= 1024; size += 16) {   // une classe par tour : adresses nouvelles
+        for (int i = 0; i < N; ++i) assert((blocks[i] = rt_alloc(size)));
+        for (int i = 0; i < N; ++i) assert(!rt_free(blocks[i]));
+    }
+    size_t after = rt_heap_table_capacity();
+    assert(after <= (before > 8192 ? before : 8192));
+}
