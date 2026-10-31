@@ -242,6 +242,20 @@ verdict, 100 ms after), and a label set 1.5 s later:
 | `after_fire` | not fired, less than 1.5 s after a shot (hand rebound) |
 | `quiet` | none of the above: probably not a tap |
 
+The ✗ button (top right, left of pause; only while the dataset is on) lets
+the player say "that was wrong". Its meaning comes from context, and it takes
+precedence over the guessed labels:
+
+| Label | Rule |
+|---|---|
+| `user_false` | a shot less than 2.5 s before the press, with no other shot in between, and the other portal does not follow within 2 s: false detection |
+| `user_wrong_side` | same, but the other portal follows within 2 s of the press: wrong side, the label side is the other one |
+| `user_missed` | no shot in the 2.5 s before the press: the strongest candidate of that window (not a rebound, not within 100 ms of a touch, since pressing the button shakes the phone) was a missed tap, on the side of the shot that follows within 2 s if any |
+
+Labels are therefore written 4.8 s after the candidate (2.5 s + 2 s, plus the
+game detector's verdict delay). With several presses, the first one that
+applies counts.
+
 These labels are hints, not ground truth: the columns `prev_dt`, `next_dt`,
 `next_side` and `next_look` keep the timing and camera motion to the
 neighbouring shots, so labels can be recomputed with other rules offline.
@@ -249,9 +263,14 @@ Replaying the 2026-10-26 recordings (25 minutes, mostly calibration) gives
 about 2.5 candidates per second, 13 shots a minute, 0.6 `wrong_side` and 5
 `missed` a minute; the file grows by about 30 MB per hour of play.
 
-The FPS counter shows a third line, `DATA taps/corrections`: examples labeled
-as taps (`fired`, `missed`, `wrong_side`) and, of those, corrections
-(`missed`, `wrong_side`), counted over the whole file.
+The FPS counter shows a third line, `DATA taps/corrections Xreported`:
+examples labeled as taps (`fired`, `missed`, `wrong_side`, `user_wrong_side`,
+`user_missed`), corrections (`missed`, `wrong_side` and every `user_*`), and
+those reported with the ✗ button, counted over the whole file. The line turns
+yellow for a second when ✗ is pressed; the X count goes up about 5 s later, and
+not at all if no candidate matched (a missed tap too soft even for the wide
+detector). Raw recordings (`P2_BACKTAP_RAW`) also log presses (`f` lines),
+which the replay tool reads.
 
 | Variable | Default | Purpose |
 |---|---|---|

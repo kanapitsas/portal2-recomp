@@ -12,7 +12,18 @@
 //   amplitude (accel_min ou gyro_rot_min) et qu'un tir le suit de 0,2 à 1,0 s,
 //   c'est une tape manquée que le joueur refait plus fort (MISSED, côté de ce
 //   tir) ; un tir n'explique qu'une tape manquée, la plus forte de cette
-//   fenêtre (la plus ancienne à égalité) ; sinon un tir moins de HORIZON avant (AFTER_FIRE), et à défaut QUIET.
+//   fenêtre (la plus ancienne à égalité) ; sinon un tir moins de 1,5 s avant
+//   (AFTER_FIRE), et à défaut QUIET.
+// Signalement du joueur (bouton ✗), prioritaire : un appui jusqu'à FLAG
+// (2,5 s) après un tir, sans autre tir entre les deux, dit que ce tir était
+// faux : mauvais côté si l'autre portail suit l'appui de moins de FOLLOW (2 s),
+// fausse détection sinon. Un appui sans tir dans les FLAG secondes d'avant dit
+// qu'une tape a été manquée : le candidat le plus fort de cette fenêtre (hors
+// rebond et hors des 100 ms autour d'un toucher, l'appui lui-même secouant le
+// téléphone), du côté du tir qui suit l'appui de moins de FOLLOW s'il y en a un.
+// D'où HORIZON = 4,8 s : FLAG + FOLLOW, plus MATCH et le délai de jugement du
+// détecteur du jeu (100 ms et plus), pour que le tir de fin de fenêtre soit connu.
+// Plusieurs appuis : le premier qui s'applique compte.
 //   Sans ce plancher, presque tout frémissement de la main (0,03-0,05 g) qui
 //   précède une tape passait pour une tape manquée (rejeu des enregistrements
 //   du 26/10 : 2,5 candidats par seconde au quart des seuils).
@@ -25,27 +36,29 @@
 #include <string.h>
 #include <unistd.h>
 
-static const double kRebound = 0.4, kMissedMin = 0.2, kMissedMax = 1.0, kMissedStrength = 0.5, kWrongMin = 0.2, kWrongMax = 1.2, kLookStill = 60,
+static const double kFlag = 2.5, kFollow = 2.0, kAfterFire = 1.5, kTouchNear = 0.1, kRebound = 0.4, kMissedMin = 0.2, kMissedMax = 1.0, kMissedStrength = 0.5, kWrongMin = 0.2, kWrongMax = 1.2, kLookStill = 60,
                     kWinBefore = 0.35;
 
-const char *const rt_btds_label_names[RT_BTDS_LABELS] = {"quiet", "after_fire", "missed", "fired", "wrong_side"};
+const char *const rt_btds_label_names[RT_BTDS_LABELS] = {"quiet", "after_fire", "missed", "fired", "wrong_side",
+                                                         "user_false", "user_wrong_side", "user_missed"};
+
+static int is_user(rt_btds_label l) { return l >= RT_BTDS_USER_FALSE; }
+static int is_correction(rt_btds_label l) { return l == RT_BTDS_MISSED || l == RT_BTDS_WRONG_SIDE || is_user(l); }
+static int is_tap(rt_btds_label l) { return l != RT_BTDS_QUIET && l != RT_BTDS_AFTER_FIRE && l != RT_BTDS_USER_FALSE; }
 
 // Amplitude rapportée aux seuils du jeu (1 : à la limite).
 static float strength_of(const rt_btds *ds, const rt_backtap_report *r) {
     return fmaxf(r->peak / ds->accel_min, fabsf(r->rot[0]) / ds->gyro_rot_min);
 }
 
-void rt_btds_init(rt_btds *ds, const rt_backtap_params *p, FILE *out, const char *tag, double session, long taps,
-                  long corrections) {
+void rt_btds_init(rt_btds *ds, const rt_backtap_params *p, FILE *out, const char *tag, double session, const long *counts) {
     memset(ds, 0, sizeof(*ds));
     ds->accel_min = p->accel_min; ds->gyro_rot_min = p->gyro_rot_min;
     ds->out = out; ds->session = session;
     snprintf(ds->tag, sizeof(ds->tag), "%s", tag ? tag : "");
     for (char *c = ds->tag; *c; ++c) if (*c == ',' || *c == '"' || *c == '\n' || *c == '\r') *c = '_';
-    ds->taps = taps; ds->corrections = corrections;
+    if (counts) { ds->taps = counts[0]; ds->corrections = counts[1]; ds->reported = counts[2]; }
 }
-
-static int label_is(const char *label, size_t n, const char *name) { return n == strlen(name) && !strncmp(label, name, n); }
 
 int rt_btds_repair_tail(const char *path) {
     FILE *f = fopen(path, "rb");
@@ -66,8 +79,8 @@ int rt_btds_repair_tail(const char *path) {
     return keep == size ? 0 : truncate(path, keep);
 }
 
-void rt_btds_count_file(FILE *f, long *taps, long *corrections) {
-    *taps = *corrections = 0;
+void rt_btds_count_file(FILE *f, long *counts) {
+    counts[0] = counts[1] = counts[2] = 0;
     if (!f) return;
     char buf[512];
     int start = 1;   // début de ligne (les lignes sont plus longues que buf)
@@ -80,9 +93,11 @@ void rt_btds_count_file(FILE *f, long *taps, long *corrections) {
             if (field == 3) {
                 const char *e = strchr(p, ',');
                 size_t n = e ? (size_t)(e - p) : 0;
-                int fix = label_is(p, n, "missed") || label_is(p, n, "wrong_side");
-                *taps += fix || label_is(p, n, "fired");
-                *corrections += fix;
+                for (int l = 0; l < RT_BTDS_LABELS; ++l) {
+                    const char *name = rt_btds_label_names[l];
+                    if (n != strlen(name) || strncmp(p, name, n)) continue;
+                    counts[0] += is_tap(l); counts[1] += is_correction(l); counts[2] += is_user(l);
+                }
             }
         }
         start = len > 0 && buf[len - 1] == '\n';
@@ -94,8 +109,8 @@ void rt_btds_candidate_add(rt_btds *ds, const rt_backtap *d, const rt_backtap_re
     if (ds->npending == RT_BTDS_PENDING) {                 // ne devrait pas arriver (32 en 1,5 s)
         rt_btds_tick(ds, 1e300);
     }
-    ds->recent[ds->nrecent % RT_BTDS_PENDING].t = r->t;
-    ds->recent[ds->nrecent++ % RT_BTDS_PENDING].strength = strength_of(ds, r);
+    unsigned slot = ds->nrecent++ % RT_BTDS_PENDING;
+    ds->recent[slot].t = r->t; ds->recent[slot].strength = strength_of(ds, r);
     rt_btds_candidate *c = &ds->pending[ds->npending++];
     c->r = *r; c->look = look; c->fired = 0; c->nwin = 0;
     unsigned long first = d->count > RT_BACKTAP_RING ? d->count - RT_BACKTAP_RING : 0;
@@ -105,6 +120,16 @@ void rt_btds_candidate_add(rt_btds *ds, const rt_backtap *d, const rt_backtap_re
         if (c->nwin == RT_BTDS_WINDOW) break;   // fréquence plus haute que prévue : l'avant du pic compte le plus
         c->win[c->nwin++] = *s;
     }
+}
+
+void rt_btds_flag_add(rt_btds *ds, double t) { ds->flags[ds->nflags++ % RT_BTDS_FLAGS] = t; }
+void rt_btds_touch_add(rt_btds *ds, double t) { ds->touches[ds->ntouches++ % RT_BTDS_FLAGS] = t; }
+
+// Un toucher connu (du bilan ou arrivé depuis) à moins de kTouchNear de t ?
+static int near_touch(const rt_btds *ds, double t) {
+    unsigned n = ds->ntouches < RT_BTDS_FLAGS ? ds->ntouches : RT_BTDS_FLAGS;
+    for (unsigned i = 0; i < n; ++i) if (fabs(ds->touches[i] - t) <= kTouchNear) return 1;
+    return 0;
 }
 
 void rt_btds_fire_add(rt_btds *ds, double t, int side, double look) {
@@ -128,13 +153,14 @@ static const rt_btds_fire *fire_near(const rt_btds *ds, double t, int dir) {
 
 static const rt_btds_fire *fire_near(const rt_btds *ds, double t, int dir);
 
-// Un autre candidat qui pourrait lui aussi être la tape manquée avant ce tir
-// (pas tiré, pas un rebond, assez fort) l'emporte-t-il sur celui-ci ?
-static int outranked(const rt_btds *ds, double t, float strength, double fire_t) {
+// Un autre candidat de [lo, hi] qui pourrait lui aussi être la tape manquée
+// (pas tiré, pas un rebond, au moins floor, loin d'un toucher si far_touch)
+// l'emporte-t-il sur celui-ci ?
+static int outranked(const rt_btds *ds, double t, float strength, double lo, double hi, double floor, int far_touch) {
     unsigned n = ds->nrecent < RT_BTDS_PENDING ? ds->nrecent : RT_BTDS_PENDING;
     for (unsigned i = 0; i < n; ++i) {
         double u = ds->recent[i].t; float k = ds->recent[i].strength;
-        if (u == t || fire_t - u < kMissedMin || fire_t - u > kMissedMax || k < kMissedStrength) continue;
+        if (u == t || u < lo || u > hi || k < floor || (far_touch && near_touch(ds, u))) continue;
         const rt_btds_fire *prev = fire_near(ds, u, -1);
         if (fire_near(ds, u, 0) || (prev && u - prev->t < kRebound)) continue;
         if (k > strength || (k == strength && u < t)) return 1;
@@ -142,11 +168,58 @@ static int outranked(const rt_btds *ds, double t, float strength, double fire_t)
     return 0;
 }
 
+// Appuis sur ✗ dans [from, from + kFlag], dans l'ordre : *flag à 0 pour le
+// premier, rend 0 quand il n'y en a plus.
+static int next_flag(const rt_btds *ds, double from, double *flag) {
+    double best = 0, after = *flag;
+    unsigned n = ds->nflags < RT_BTDS_FLAGS ? ds->nflags : RT_BTDS_FLAGS;
+    for (unsigned i = 0; i < n; ++i) {
+        double f = ds->flags[i];
+        if (f >= from && f <= from + kFlag && (!after || f > after) && (!best || f < best)) best = f;
+    }
+    *flag = best;
+    return best != 0;
+}
+// Dernier tir à t ou avant, premier tir après t (à moins de kFollow).
+static const rt_btds_fire *fire_before(const rt_btds *ds, double t) {
+    const rt_btds_fire *best = NULL;
+    unsigned n = ds->nfires < RT_BTDS_FIRES ? ds->nfires : RT_BTDS_FIRES;
+    for (unsigned i = 0; i < n; ++i)
+        if (ds->fires[i].t <= t && (!best || ds->fires[i].t > best->t)) best = &ds->fires[i];
+    return best;
+}
+static const rt_btds_fire *fire_following(const rt_btds *ds, double t) {
+    const rt_btds_fire *best = NULL;
+    unsigned n = ds->nfires < RT_BTDS_FIRES ? ds->nfires : RT_BTDS_FIRES;
+    for (unsigned i = 0; i < n; ++i)
+        if (ds->fires[i].t > t && ds->fires[i].t <= t + kFollow && (!best || ds->fires[i].t < best->t)) best = &ds->fires[i];
+    return best;
+}
+
 static double look_between(double a, double b) { return isnan(a) || isnan(b) ? NAN : fabs(b - a); }
 
 rt_btds_label rt_btds_label_of(const rt_btds *ds, const rt_btds_candidate *c, int *side) {
     double t = c->r.t;
     const rt_btds_fire *own = fire_near(ds, t, 0), *prev = fire_near(ds, t, -1), *next = fire_near(ds, t, 1);
+    float strength = strength_of(ds, &c->r);
+    // Signalement du joueur.
+    double flag = 0;
+    if (own) {
+        while (next_flag(ds, own->t, &flag)) {
+            if (fire_before(ds, flag) != own) continue;   // un autre tir entre les deux : l'appui le vise
+            const rt_btds_fire *re = fire_following(ds, flag);
+            if (re && re->side == -own->side) { *side = re->side; return RT_BTDS_USER_WRONG_SIDE; }
+            *side = 0; return RT_BTDS_USER_FALSE;
+        }
+    } else if (fabs(c->r.touch_dt) > kTouchNear && !near_touch(ds, t) && !(prev && t - prev->t < kRebound)) {
+        // Appui après le candidat, sans tir dans les kFlag secondes d'avant.
+        while (next_flag(ds, t, &flag)) {
+            const rt_btds_fire *last = fire_before(ds, flag);
+            if ((last && flag - last->t <= kFlag) || outranked(ds, t, strength, flag - kFlag, flag, 0, 1)) continue;
+            const rt_btds_fire *re = fire_following(ds, flag);
+            *side = re ? re->side : 0; return RT_BTDS_USER_MISSED;
+        }
+    }
     if (own) {
         const rt_btds_fire *after = fire_near(ds, own->t, 1);
         double dt = after ? after->t - own->t : 0, look = after ? look_between(own->look, after->look) : NAN;
@@ -157,12 +230,11 @@ rt_btds_label rt_btds_label_of(const rt_btds *ds, const rt_btds_candidate *c, in
     }
     *side = 0;
     if (prev && t - prev->t < kRebound) return RT_BTDS_AFTER_FIRE;
-    float strength = strength_of(ds, &c->r);
     if (next && next->t - t >= kMissedMin && next->t - t <= kMissedMax && strength >= kMissedStrength &&
-        !outranked(ds, t, strength, next->t)) {
+        !outranked(ds, t, strength, next->t - kMissedMax, next->t - kMissedMin, kMissedStrength, 0)) {
         *side = next->side; return RT_BTDS_MISSED;
     }
-    if (prev && t - prev->t < RT_BTDS_HORIZON) return RT_BTDS_AFTER_FIRE;
+    if (prev && t - prev->t < kAfterFire) return RT_BTDS_AFTER_FIRE;
     return RT_BTDS_QUIET;
 }
 
@@ -170,8 +242,7 @@ static void write_candidate(rt_btds *ds, const rt_btds_candidate *c) {
     int side; rt_btds_label label = rt_btds_label_of(ds, c, &side);
     const rt_btds_fire *own = fire_near(ds, c->r.t, 0), *prev = fire_near(ds, c->r.t, -1), *next = fire_near(ds, c->r.t, 1);
     ++ds->by_label[label];
-    if (label == RT_BTDS_MISSED || label == RT_BTDS_WRONG_SIDE) ++ds->corrections;
-    if (label >= RT_BTDS_MISSED) ++ds->taps;
+    ds->taps += is_tap(label); ds->corrections += is_correction(label); ds->reported += is_user(label);
     FILE *o = ds->out;
     if (!o) return;
     const rt_backtap_report *r = &c->r;

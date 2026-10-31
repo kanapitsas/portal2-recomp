@@ -19,10 +19,14 @@ typedef enum {
     RT_BTDS_MISSED,      // pas tiré, un tir suit de peu : probablement une tape manquée (côté du tir suivant)
     RT_BTDS_FIRED,       // tiré, rien ne le contredit : tape probable, côté retenu
     RT_BTDS_WRONG_SIDE,  // tiré, puis l'autre portail sans bouger la caméra : probablement le mauvais côté
+    // Signalées par le joueur (bouton ✗ « incorrect ») : plus sûres que les précédentes.
+    RT_BTDS_USER_FALSE,      // tiré, signalé, pas suivi de l'autre portail : fausse détection
+    RT_BTDS_USER_WRONG_SIDE, // tiré, signalé, puis l'autre portail : mauvais côté (vrai côté = l'autre)
+    RT_BTDS_USER_MISSED,     // pas tiré, signalé sans tir récent, le plus fort de la fenêtre : tape manquée
     RT_BTDS_LABELS
 } rt_btds_label;
 
-enum { RT_BTDS_PENDING = 32, RT_BTDS_FIRES = 16, RT_BTDS_WINDOW = 96 };
+enum { RT_BTDS_PENDING = 64, RT_BTDS_FIRES = 16, RT_BTDS_FLAGS = 16, RT_BTDS_WINDOW = 96 };
 
 typedef struct {
     rt_backtap_report r;
@@ -44,29 +48,40 @@ typedef struct {
     rt_btds_fire fires[RT_BTDS_FIRES];
     unsigned nfires;
     float accel_min, gyro_rot_min;     // seuils du détecteur du jeu (règle MISSED)
-    struct { double t; float strength; } recent[RT_BTDS_PENDING];   // derniers candidats (règle MISSED)
+    struct { double t; float strength; } recent[RT_BTDS_PENDING];   // derniers candidats (règles MISSED)
+    double touches[RT_BTDS_FLAGS];     // derniers débuts et fins de toucher (horloge des capteurs)
+    unsigned ntouches;
+    double flags[RT_BTDS_FLAGS];       // appuis sur ✗ (horloge des capteurs)
+    unsigned nflags;
     unsigned nrecent;
-    long taps, corrections;            // exemples étiquetés tapes (avec ceux du fichier) : MISSED + FIRED + WRONG_SIDE, et corrections : MISSED + WRONG_SIDE
+    // Comptes avec ceux du fichier : exemples étiquetés tapes (FIRED, MISSED,
+    // WRONG_SIDE, USER_WRONG_SIDE, USER_MISSED) ; corrections (MISSED,
+    // WRONG_SIDE et toutes les USER_*) ; signalées par le joueur (USER_*).
+    long taps, corrections, reported;
     long by_label[RT_BTDS_LABELS];     // exemples de cette session par étiquette
 } rt_btds;
 
 extern const char *const rt_btds_label_names[RT_BTDS_LABELS];
 
 // Délais (s) des règles d'étiquetage, expliqués dans backtap_dataset.c.
-#define RT_BTDS_HORIZON 1.5
+#define RT_BTDS_HORIZON 4.8
 #define RT_BTDS_MATCH 0.06
 
-// p : seuils du détecteur du jeu ; out : fichier ouvert en ajout ; taps/corrections : comptes du fichier déjà là.
-void rt_btds_init(rt_btds *ds, const rt_backtap_params *p, FILE *out, const char *tag, double session, long taps,
-                  long corrections);
+// p : seuils du détecteur du jeu ; out : fichier ouvert en ajout ; counts : comptes du fichier déjà là
+// (taps, corrections, reported), NULL : 0.
+void rt_btds_init(rt_btds *ds, const rt_backtap_params *p, FILE *out, const char *tag, double session, const long *counts);
 // Retire une dernière ligne incomplète (jeu tué pendant une écriture) ; rend 0 si tout va bien.
 int rt_btds_repair_tail(const char *path);
-// Compte les tapes et corrections étiquetées d'un fichier existant (NULL : 0).
-void rt_btds_count_file(FILE *f, long *taps, long *corrections);
+// Compte tapes, corrections et signalements d'un fichier existant (NULL : 0) : counts[3].
+void rt_btds_count_file(FILE *f, long *counts);
 // Candidat jugé par le détecteur large d ; sa fenêtre est copiée de d->ring.
 void rt_btds_candidate_add(rt_btds *ds, const rt_backtap *d, const rt_backtap_report *r, double look);
 // Tir du détecteur du jeu (bilan accepté : r->t, r->side).
 void rt_btds_fire_add(rt_btds *ds, double t, int side, double look);
+// Le joueur signale une erreur (bouton ✗) à l'instant t.
+void rt_btds_flag_add(rt_btds *ds, double t);
+// Début ou fin d'un toucher (même horloge) ; peut arriver après le candidat.
+void rt_btds_touch_add(rt_btds *ds, double t);
 // Étiquette et écrit les candidats plus vieux que HORIZON (now : horloge des capteurs).
 void rt_btds_tick(rt_btds *ds, double now);
 // Tout écrire (fin de session) : étiquettes avec ce qui est connu.

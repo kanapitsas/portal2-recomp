@@ -37,13 +37,14 @@ int main(int argc, char **argv) {
     FILE *out = dataset && *dataset ? fopen(dataset, "w") : NULL;
     if (dataset && *dataset && !out) { perror(dataset); return 1; }
     if (out) fputs(rt_btds_header, out);
-    rt_btds_init(&ds, &p, out, getenv("P2_BACKTAP_TAG"), 0, 0, 0);
+    rt_btds_init(&ds, &p, out, getenv("P2_BACKTAP_TAG"), 0, NULL);
     char line[512];
     double origin = 0, played = 0, last_t = 0;
     int taps[2] = {0, 0}, rejects = 0;
     while (fgets(line, sizeof(line), f)) {
         rt_backtap_sample s; int orient, active; double t;
-        if (line[0] == 't' && sscanf(line, "t %lf", &t) == 1) { rt_backtap_touch(&d, t); rt_backtap_touch(&wide, t); continue; }
+        if (line[0] == 'f' && sscanf(line, "f %lf", &t) == 1) { rt_btds_flag_add(&ds, t); continue; }   // bouton ✗
+        if (line[0] == 't' && sscanf(line, "t %lf", &t) == 1) { rt_backtap_touch(&d, t); rt_backtap_touch(&wide, t); rt_btds_touch_add(&ds, t); continue; }
         if (line[0] != 'm' || sscanf(line, "m %lf %f %f %f %f %f %f %f %f %f %d %d", &s.t, &s.a[0], &s.a[1], &s.a[2], &s.w[0],
                                      &s.w[1], &s.w[2], &s.g[0], &s.g[1], &s.g[2], &orient, &active) != 12) continue;
         if (!origin) { origin = s.t; ds.session = s.t; }
