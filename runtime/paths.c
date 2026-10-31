@@ -296,8 +296,14 @@ static int translated_plugin(const char *relative) {
 // sautait dans son code non traduit). Exception : les greffons de bin/linux32
 // traduits d'avance, que Miles charge comme sous Linux. `relative` est relatif
 // à la racine du jeu.
+//
+// Exception : bin/client.dll. Avant d'accepter un serveur distant, le moteur
+// Linux calcule la somme de contrôle de « bin\client.dll » (CL_CheckCRCs) et se
+// déconnecte s'il ne peut pas la lire (« Couldn't CRC client side dll ») ; il
+// ne le charge jamais. Sans lui, la coop en réseau échouait.
 int rt_path_windows_binary(const char *relative) {
     const char *base=strrchr(relative,'/'); base=base?base+1:relative;
+    if(!strcasecmp(base,"client.dll") && base-relative>=4 && !strncasecmp(base-4,"bin/",4))return 0;
     const char *dot=strrchr(base,'.');
     if(!dot)return 0;
     static const char *const ext[]={".dll",".exe",".asi",".flt",".pdb",".sys"};
