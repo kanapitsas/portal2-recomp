@@ -30,6 +30,23 @@ Steam (Properties > Language) and let it update the game first.
 from. On the iPhone, the language is written into the app at build time
 (same rules, rebuild after changing `config/local.json`).
 
+## LAN co-op
+
+Two copies of the game on the same network can play co-op without a Steam lobby.
+Enable the developer console in the game's keyboard options, then:
+
+- **Host**: `sv_lan 1`, then `map mp_coop_lobby_3`.
+- **Partner**: `connect <host LAN address>`, for example `connect 192.168.1.21`.
+  Use the LAN address even when both copies run on the same Mac: `127.0.0.1`
+  does not reach the other copy.
+
+On iPhone, add two lines to `Documents/launch.args` in the app's files:
+`+connect` and the host's address. iOS asks once for local network access:
+allow it.
+
+Tested between two copies on one Mac, and with an iPhone joining a Mac. Co-op
+through Steam invites is not tested yet.
+
 ## Manual build
 
 `config/local.json` (ignored by git; `setup.sh` writes it):

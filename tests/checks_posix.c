@@ -499,6 +499,11 @@ RT_CHECK(posix_windows_binaries_of_game_copy_are_invisible) {
     put(game, "dir/mssmp3.asi", "PE");
     put(game, "dir/Engine.DLL", "PE");
     put(depot, "dir/tool.exe", "linux-depot-file");   // une copie fournie par le dépôt Linux reste visible
+    { char bin[PATH_MAX]; snprintf(bin, sizeof(bin), "%s/dir/bin", game); mkdir(bin, 0755); }
+    put(game, "dir/bin/client.dll", "PE");               // lu pour CL_CheckCRCs (coop en réseau)
+    put(game, "dir/client.dll", "PE");                   // hors de bin/ : caché
+    assert(rt_read_path(game_path("dir/bin/client.dll")));
+    assert(!rt_read_path(game_path("dir/client.dll")));
     errno = 0;
     assert(!rt_read_path(game_path("dir/mssmp3.asi")) && errno == ENOENT);
     assert(!rt_read_path(game_path("dir/Engine.DLL")));
