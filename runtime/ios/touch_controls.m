@@ -42,6 +42,8 @@
 #include <math.h>
 #include <os/lock.h>
 #include <stdatomic.h>
+#include <sys/stat.h>
+#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -167,7 +169,8 @@ static _Atomic int backtap_active;    // en partie, surcouche affichée
 static _Atomic int backtap_pending;   // tape à cliquer : -1 gauche, +1 droite
 static int backtap_log;               // P2_BACKTAP_LOG=1 : chaque candidat, et le bruit toutes les 5 s
 static float backtap_hold;            // s : durée de l'appui
-// P2_BACKTAP_RAW=<fichier> (relatif à HOME) : échantillons et touchers bruts,
+// P2_BACKTAP_RAW=<fichier> (relatif à HOME ; finissant par « / » : un fichier daté
+// par lancement dans ce dossier) : échantillons et touchers bruts,
 // rejoués sur le Mac par tools/backtap_replay.c pour régler les seuils.
 static FILE *backtap_raw;
 // Jeu de données à étiquettes devinées (backtap_dataset.c), sur la file des
@@ -237,6 +240,12 @@ static void backtap_start(void) {
     if (raw && *raw) {
         char path[1024];
         snprintf(path, sizeof(path), "%s%s%s", raw[0] == '/' ? "" : getenv("HOME"), raw[0] == '/' ? "" : "/", raw);
+        size_t len = strlen(path);
+        if (len && path[len - 1] == '/') {   // dossier (réglage « Enregistrer les tapes ») : un fichier daté par lancement
+            mkdir(path, 0755);
+            time_t now = time(NULL);
+            strftime(path + len, sizeof(path) - len, "backtap-%Y%m%d-%H%M%S.txt", localtime(&now));
+        }
         backtap_raw = fopen(path, "w");
         fprintf(stderr, "[ios] tapes au dos : enregistrement brut %s%s\n", path, backtap_raw ? "" : " impossible");
         if (backtap_raw) setvbuf(backtap_raw, NULL, _IOLBF, 0);   // tout est écrit si le jeu est tué

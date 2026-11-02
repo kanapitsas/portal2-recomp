@@ -218,7 +218,8 @@ phone vibrate for more than 150 ms: rise-time criterion dropped, vibration exclu
 looks like a tap (filtering it out would delay every shot).
 
 Raw recording for tuning the thresholds on the Mac:
-`P2_BACKTAP_RAW=Documents/backtap.raw` (samples and touches), then
+Settings > Portal 2 > Record taps (one dated file per launch in `Documents/backtap/`,
+visible in the Files app), or `P2_BACKTAP_RAW=Documents/backtap.raw` (samples and touches), then
 `cc -O2 -o build/backtap-replay tools/backtap_replay.c -lm` and
 `build/backtap-replay backtap.raw` (same `P2_BACKTAP_*` variables). `P2_TOUCH_CONTROLS=0` also disables back taps.
 

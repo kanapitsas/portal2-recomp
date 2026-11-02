@@ -188,7 +188,7 @@
 		</dict>
 		<dict>
 			<key>FooterText</key>
-			<string>Tap the back of the phone near the left edge for the blue portal, near the right edge for the orange one. Without back taps, portal buttons appear at the top of the screen.</string>
+			<string>Tap the back of the phone near the left edge for the blue portal, near the right edge for the orange one. Without back taps, portal buttons appear at the top of the screen. “Record taps” writes the sensor readings of each game to Portal 2’s backtap folder (Files app).</string>
 			<key>Title</key>
 			<string>Portals</string>
 			<key>Type</key>
@@ -233,6 +233,16 @@
 			<string>P2BackTapInvert</string>
 			<key>Title</key>
 			<string>Swap left and right</string>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<false/>
+			<key>Key</key>
+			<string>P2BackTapRecord</string>
+			<key>Title</key>
+			<string>Record taps</string>
 			<key>Type</key>
 			<string>PSToggleSwitchSpecifier</string>
 		</dict>
