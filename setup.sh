@@ -307,6 +307,14 @@ Done: ~/Applications/Portal 2 Natif.app
   To remove the app (and, if you confirm, the saves): ./uninstall.sh
 EOF
 if [ $IOS = 1 ]; then
+    # Same lookup as tools/build_ios.py: the library it linked, if any.
+    METAL_IOS_LIB=$(python3 -c 'import json,sys; e=json.load(open(sys.argv[1])).get("d3d9metal_ios"); print(e.get("device") or "" if isinstance(e, dict) else "")' "$CONFIG")
+    if [ -n "$METAL_IOS_LIB" ]; then IOS_RENDERER="Metal (libd3d9metal)"
+    elif [ $METAL_OFF = 1 ]; then IOS_RENDERER="OpenGL (P2_NO_METAL set)"
+    elif ! command -v cargo >/dev/null 2>&1; then IOS_RENDERER="OpenGL (install Rust from https://rustup.rs and re-run for Metal)"
+    elif ! command -v rustup >/dev/null 2>&1; then IOS_RENDERER="OpenGL (Metal needs Rust from https://rustup.rs: Homebrew's rust has no iOS target)"
+    else IOS_RENDERER="OpenGL (libd3d9metal for iOS did not build: see the warning above)"; fi
+    echo "- iPhone renderer: ${IOS_RENDERER}"
     if [ -n "$DEVICE" ]; then
         cat <<EOF
 - iPhone: on the phone, Settings > General > VPN & Device Management, trust your
