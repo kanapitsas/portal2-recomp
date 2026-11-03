@@ -112,6 +112,47 @@ Details: [docs/d3d9-bridge.md](docs/d3d9-bridge.md).
 It asks before moving the app and its log to the Trash, and asks again for
 the saves. It never touches the Steam game files or the Linux binaries.
 
+## Roadmap
+
+**Done**
+
+- [x] Static recompilation of the Linux x86 binaries into native ARM64 C, no
+      emulator
+- [x] Mac: single player fully playable, 235–280 fps on an M3 Pro
+- [x] Steam bridge through Valve's official macOS `libsteam_api` (no Steam
+      emulator)
+- [x] Metal renderer through mtld3d (about +50 % fps on Mac), OpenGL fallback
+- [x] iPhone: single player at a steady 60 fps, touch controls, portals fired
+      by tapping the back of the phone, Settings page
+- [x] One-command install (`setup.sh`) and a standalone Mac app
+- [x] LAN co-op: a Mac hosts, a Mac or an iPhone joins by IP address
+
+**Next**
+
+- [ ] **Co-op**
+  - [ ] Find the host automatically on the local network (Bonjour), with
+        host/join in the iPhone settings (in progress)
+  - [ ] Play a full co-op course with two people (only the connection and
+        the map load are checked so far)
+  - [ ] Co-op through Steam invites, over the internet and with Windows or
+        Linux players
+- [ ] **Community content**
+  - [ ] Community maps copied by hand, loaded with `+map`
+  - [ ] Steam Workshop on Mac (needs the UGC part of the Steam bridge)
+- [ ] **Controllers**
+  - [ ] Test physical controllers (Xbox, DualSense) on Mac and iPhone: the
+        SDL controller bridge exists, but only the iPhone's virtual
+        controller has been tried
+  - [ ] Button prompts and default bindings that match the controller
+- [ ] **iPhone back taps**
+  - [ ] Record raw taps from the Settings page (in progress)
+  - [ ] Learn each player's taps automatically from those recordings, instead
+        of fixed thresholds, so fewer taps are missed or misread
+- [ ] **Ray tracing** (research, no promise)
+  - [ ] Study ray-traced lighting with Metal on M3 and A17 Pro GPUs, in the
+        spirit of Portal with RTX. NVIDIA's RTX Remix only runs on Windows
+        with an NVIDIA GPU, so it cannot be reused here.
+
 ## More
 
 - [Language, LAN co-op and manual build](docs/usage.md)
