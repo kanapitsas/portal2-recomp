@@ -44,9 +44,13 @@ nothing works. Tested with an 8BitDo SN30 Pro over Bluetooth in Switch mode
 second, accelerometer included: if those values stay at zero, Steam still has
 the controller.
 
-**iPhone**: there is no Steam client, so nothing to set. Not yet tried with a
-physical controller: when one connects, the on-screen controls hide
-themselves and the game reads it through SDL.
+**iPhone**: there is no Steam client, so nothing to set. When a controller
+connects, the on-screen controls hide themselves and remove the virtual
+controller they give the game. The game keeps one controller slot per
+split-screen player and player 1 reads only the first; a controller that
+connected while the virtual one held that slot would drive the menus but not
+the game, so the app unplugs and replugs it for the game, which then puts it
+in the first slot (`runtime/ios/touch_controls.m`).
 
 ## LAN co-op
 
