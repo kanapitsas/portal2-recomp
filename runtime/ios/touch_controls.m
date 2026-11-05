@@ -74,12 +74,38 @@ static SDL_Joystick *virtual_pad(void) {
     fprintf(stderr, "[ios] manette virtuelle : %s\n", pad ? "créée" : SDL_GetError());
     return pad;
 }
+// Le jeu range les manettes dans quatre places fixes, une par joueur d'écran
+// partagé (inputsystem.so, 0x125a0), et le joueur 1 ne lit que la première.
+// Une vraie manette connectée pendant que la virtuelle tient cette place
+// prend la deuxième et y reste après le retrait de la virtuelle : elle pilote
+// alors les menus (qui écoutent toutes les manettes) mais pas le jeu. On la
+// débranche puis rebranche pour le jeu : un SDL_CONTROLLERDEVICEADDED seul ne
+// suffit pas, car pour une manette déjà connue le jeu la remet dans la même
+// place ; seule une manette inconnue va dans la première place libre. SDL
+// notifie le retrait de la virtuelle à l'observateur du jeu avant le retour
+// de SDL_JoystickDetachVirtual, donc cette place est déjà libre ici, et les
+// deux événements poussés ci-dessous lui parviennent tout de suite, dans cet
+// ordre (observateurs appelés par SDL_PushEvent).
+static void replug_controllers(void) {
+    for (int i = 0; i < SDL_NumJoysticks(); ++i) {
+        if (!SDL_IsGameController(i)) continue;   // accéléromètre de l'iPhone, entre autres
+        SDL_Event event = {0};
+        event.type = SDL_CONTROLLERDEVICEREMOVED;
+        event.cdevice.which = SDL_JoystickGetDeviceInstanceID(i);
+        SDL_PushEvent(&event);
+        event.type = SDL_CONTROLLERDEVICEADDED;
+        event.cdevice.which = i;
+        SDL_PushEvent(&event);
+        fprintf(stderr, "[ios] manette %d (%s) rebranchée pour le joueur 1\n", i, SDL_JoystickNameForIndex(i));
+    }
+}
 static void remove_virtual_pad(SDL_Joystick *pad) {
     SDL_JoystickID id = SDL_JoystickInstanceID(pad);
     SDL_JoystickClose(pad);
     for (int i = 0; i < SDL_NumJoysticks(); ++i)
         if (SDL_JoystickGetDeviceInstanceID(i) == id) { SDL_JoystickDetachVirtual(i); break; }
     fprintf(stderr, "[ios] manette virtuelle retirée\n");
+    replug_controllers();
 }
 
 static const CGFloat kButtonSize = 54, kPortalSize = 60;
