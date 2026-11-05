@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Construit Portal 2 recompilé en application iOS (simulateur arm64 par défaut).
+"""Build the recompiled Portal 2 as an iOS app (arm64 simulator by default).
 
-Même C généré que le build macOS (tools/build_game.py, génération et cache
-d'objets réutilisés sans modification), compilé pour iOS et lié avec les
-dépendances de work/ios-deps (SDL2, FreeType, gl4es ; voir son build.sh), le
-stub Steam et fontconfig minimal du build iOS (runtime/ios). Produit
-build/ios/<cible>/Portal2.app, signée ad hoc pour le simulateur, avec le profil
-obtenu par Xcode pour un appareil (ios/signing).
+Same generated C as the macOS build (tools/build_game.py; generation and object
+cache reused unchanged), compiled for iOS and linked with the work/ios-deps
+dependencies (SDL2, FreeType, gl4es; see its build.sh), the Steam stub and the
+minimal fontconfig of the iOS build (runtime/ios). Produces
+build/ios/<target>/Portal2.app, ad hoc signed for the simulator, or signed with
+the profile Xcode obtained for a device (ios/signing).
 
-    python3 tools/build_ios.py                       # simulateur
+    python3 tools/build_ios.py                       # simulator
     xcrun simctl install booted build/ios/sim/Portal2.app
 
-Rendu Metal (Direct3D 9 natif, docs/d3d9-bridge.md) : --d3d9metal lie
-libd3d9metal.a (mtld3d, make native-ios) dans l'exécutable, sans dlopen ; le
-rendu par défaut ; le joueur peut repasser en OpenGL dans Réglages > Portal 2 > Rendu.
+Metal renderer (native Direct3D 9, docs/d3d9-bridge.md): --d3d9metal links
+libd3d9metal.a (mtld3d, make native-ios) into the executable, no dlopen; it is
+the default renderer, the player can go back to OpenGL in Settings > Portal 2 > Renderer.
 """
 import argparse
 import json
@@ -46,13 +46,13 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--target', choices=sorted(TARGETS), default='sim')
     ap.add_argument('--opt', default='1', choices=['0', '1', '2', '3'])
-    ap.add_argument('--fast-memory', action='store_true', help='-DRT_FAST_MEMORY (voir docs/fast-path.md)')
+    ap.add_argument('--fast-memory', action='store_true', help='-DRT_FAST_MEMORY (see docs/fast-path.md)')
     ap.add_argument('--release', action='store_true',
-                    help='version pour jouer : --opt 2 --fast-memory, comme build_game.py --release')
-    ap.add_argument('--deps', type=Path, help='préfixe des dépendances (défaut ../work/ios-deps/<cible>)')
+                    help='build to play: --opt 2 --fast-memory, like build_game.py --release')
+    ap.add_argument('--deps', type=Path, help='dependency prefix (default ../work/ios-deps/<target>)')
     ap.add_argument('--d3d9metal', type=Path,
-                    help='libd3d9metal.a pour cette cible (défaut : "d3d9metal_ios" de config/local.json, '
-                         'un chemin par cible : {"device": ..., "sim": ...}) ; sans elle, OpenGL seulement')
+                    help='libd3d9metal.a for this target (default: "d3d9metal_ios" of config/local.json, '
+                         'one path per target: {"device": ..., "sim": ...}); without it, OpenGL only')
     ap.add_argument('--layout', type=Path, default=Path('build/game/prep/layout.json'))
     ap.add_argument('--jobs', type=int, default=os.cpu_count() or 1)
     args = ap.parse_args()
@@ -76,11 +76,12 @@ def main():
                      '-DOPENAL_DEPRECATED=', '-DAL_SILENCE_DEPRECATION']
     generated_flags = [*base, f'-O{args.opt}', '-gline-tables-only', *build_game.WARNINGS, *memory, '-Iruntime']
     sources = Path('build/game/gen/src')
-    # runtime/d3d9.c : symboles de libd3d9metal.a liés, pas de dlopen.
+    # runtime/d3d9.c : symboles de libd3d9metal.a liés, pas de dlopen ;
+    # runtime/ios/metal_ios.m s'en sert pour savoir si Metal est disponible.
     static = ['-DRT_D3D9METAL_STATIC'] if d3d9metal else []
     units = [(str(p), runtime_flags + (static if p.name == 'd3d9.c' else [])) for p in sorted(Path('runtime').glob('*.c'))]
     units += [(str(p), runtime_flags) for p in sorted(Path('runtime/ios').glob('*.c'))]
-    units += [(str(p), runtime_flags + ['-fobjc-arc']) for p in sorted(Path('runtime/ios').glob('*.m'))]
+    units += [(str(p), runtime_flags + static + ['-fobjc-arc']) for p in sorted(Path('runtime/ios').glob('*.m'))]
     units.append(('src/main.c', runtime_flags + ['-Dmain=p2_main']))
     units.append(('ios/main_ios.c', runtime_flags))
     units += [(str(sources / name), generated_flags) for name in sorted(manifest['shards'])]
@@ -130,7 +131,7 @@ def main():
 
 
 def d3d9metal_library(given, target):
-    """libd3d9metal.a à lier pour cette cible (argument, sinon config/local.json), ou None."""
+    """libd3d9metal.a to link for this target (argument, else config/local.json), or None."""
     if given is None:
         config = json.loads(Path('config/local.json').read_text()) if Path('config/local.json').exists() else {}
         entry = config.get('d3d9metal_ios')
@@ -144,10 +145,10 @@ def d3d9metal_library(given, target):
 
 
 def app_icon(app):
-    """Icône de l'app tirée de l'icône macOS du jeu (portal2/resource/game.icns) :
-    une image de Valve, prise dans la copie du joueur au lieu d'être versionnée.
-    Fichiers à l'ancienne (CFBundleIconFiles d'ios/Info.plist.in), sans
-    catalogue d'images. Sans le fichier : icône par défaut d'iOS."""
+    """App icon taken from the game's macOS icon (portal2/resource/game.icns):
+    a Valve image, read from the player's copy instead of being versioned.
+    Old-style files (CFBundleIconFiles of ios/Info.plist.in), no asset
+    catalog. Without the file: iOS default icon."""
     config = json.loads(Path('config/local.json').read_text()) if Path('config/local.json').exists() else {}
     icns = Path(config.get('game_root', '')) / 'portal2/resource/game.icns'
     if not icns.is_file():

@@ -23,14 +23,16 @@ import time
 import lift
 import peprep
 
-# Identique à HOST_CFLAGS/HOST_LIBS du Makefile.
+# Identique à HOST_CFLAGS/HOST_LIBS du Makefile (tools/bench.py les importe d'ici).
 HOST_CFLAGS = ['-I/opt/homebrew/include', '-I/opt/homebrew/include/freetype2', '-DGL_SILENCE_DEPRECATION',
                '-DOPENAL_DEPRECATED=', '-DAL_SILENCE_DEPRECATION']
 HOST_LIBS = ['-L/opt/homebrew/lib', '-lSDL2', '-lfreetype', '-lfontconfig', '-liconv',
              '-framework', 'OpenGL', '-framework', 'OpenAL', '-lobjc']
 WARNINGS = ['-Wall', '-Wextra', '-Werror']
 DEBUG = {'full': '-g', 'lines': '-gline-tables-only', 'none': '-g0'}
-TOOLS = ['tools/lift.py', 'tools/float_lift.py', 'tools/registry.py', 'tools/build_game.py', 'tools/peprep.py']
+# Scripts whose content enters the generation keys (a change regenerates the C).
+GEN_TOOLS = ['tools/lift.py', 'tools/float_lift.py', 'tools/registry.py']
+PE_TOOLS = GEN_TOOLS + ['tools/peprep.py']
 # Greffons Windows que libMiles charge lui-même depuis bin/linux32 de la copie
 # du jeu (runtime/pe.c) : mssmp3 décode les voix MP3, mssvoice le chat vocal,
 # binkawin l'audio des vidéos Bink.
@@ -61,7 +63,7 @@ def generation_key(layout_path, layout, specs, whole_game):
     images = [(m['image'], Path(m['image']).stat().st_size, Path(m['image']).stat().st_mtime_ns)
               for m in layout['modules']]
     objdump = shutil.which('objdump') or 'objdump'
-    return digest(*(Path(t).read_bytes() for t in TOOLS[:3]), layout_path.read_bytes(), images, specs,
+    return digest(*(Path(t).read_bytes() for t in GEN_TOOLS), layout_path.read_bytes(), images, specs,
                   whole_game, objdump, Path(objdump).stat().st_mtime_ns if Path(objdump).exists() else 0,
                   lift.SHARD_BITS, 'v1')
 
@@ -70,24 +72,32 @@ def generate(args, layout, specs):
     out = Path('build/game/gen')
     manifest_path = out / 'manifest.json'
     key = generation_key(args.layout, layout, specs, args.all)
-    if manifest_path.exists():
-        manifest = json.loads(manifest_path.read_text())
-        sources = out / 'src'
-        if manifest.get('key') == key and all((sources / n).exists() for n in manifest['shards']) \
-                and (sources / 'dispatch.c').exists():
-            print(f'generated C up to date: {manifest["functions"]} functions, '
-                  f'{manifest["instructions"]} instructions, {len(manifest["shards"])} files')
-            return manifest, 0.0
+    manifest = read_manifest(manifest_path)
+    sources = out / 'src'
+    if manifest.get('key') == key and all((sources / n).exists() for n in manifest['shards']) \
+            and (sources / 'dispatch.c').exists():
+        print(f'generated C up to date: {manifest["functions"]} functions, '
+              f'{manifest["instructions"]} instructions, {len(manifest["shards"])} files')
+        return manifest, 0.0
     started = time.time()
     manifest = lift.generate_sharded(layout, specs, args.all, 'objdump', Path('build/disasm-cache'), out, args.jobs)
     manifest['key'] = key
-    manifest_path.write_text(json.dumps(manifest))
+    lift._write_atomic(manifest_path, json.dumps(manifest).encode())   # never a truncated manifest
     return manifest, time.time() - started
 
 
+def read_manifest(path):
+    """The previous generation's manifest; {} when absent or unreadable (interrupted write)."""
+    try:
+        manifest = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+    return manifest if isinstance(manifest, dict) and isinstance(manifest.get('shards'), dict) else {}
+
+
 def generate_plugins(config_path, log=print):
-    """C relogeable des greffons PE de bin/linux32 (lift.generate_pe), dans
-    build/game/gen/pe : un fichier par greffon, réécrit seulement s'il change."""
+    """Relocatable C of the PE plugins in bin/linux32 (lift.generate_pe), in
+    build/game/gen/pe: one file per plugin, rewritten only when it changes."""
     out = Path('build/game/gen/pe')
     out.mkdir(parents=True, exist_ok=True)
     config = json.loads(Path(config_path).read_text()) if Path(config_path).exists() else {}
@@ -100,7 +110,7 @@ def generate_plugins(config_path, log=print):
             continue
         tag = name.split('.')[0].lower()
         target = out / f'pe_{tag}.c'
-        key = digest(*(Path(t).read_bytes() for t in TOOLS[:3] + ['tools/peprep.py']), path.read_bytes(), 'pe-v1')
+        key = digest(*(Path(t).read_bytes() for t in PE_TOOLS), path.read_bytes(), 'pe-v1')
         stamp = out / f'pe_{tag}.key'
         if not (target.exists() and stamp.exists() and stamp.read_text() == key):
             source, info = lift.generate_pe(peprep.PeImage(path), tag, log=log)
@@ -234,27 +244,27 @@ def main():
     scope.add_argument('--roots-only', dest='all', action='store_false',
                        help='only main, foundation constructors and config/game-roots.json')
     parser.add_argument('--fast-memory', action='store_true',
-                        help='sans contrôle logiciel des accès invités (RT_FAST_MEMORY) : plus rapide, mais '
-                             'seules les pages hôtes de 16 Kio protègent, voir rt.h ; par défaut, contrôle '
-                             'au grain des pages Linux de 4 Kio')
+                        help='no software check of guest memory accesses (RT_FAST_MEMORY): faster, but only '
+                             'the 16 KiB host pages protect, see rt.h; by default, checks at the 4 KiB '
+                             'Linux page grain')
     parser.add_argument('--traced-calls', '--debug-traces', dest='traced_calls', action='store_true',
-                        help='tous les appels invités par rt_call : pile invitée complète dans les '
-                             'diagnostics et P2_WATCH_CALL (par défaut, appels directs, voir rt.h)')
+                        help='every guest call through rt_call: full guest stack in diagnostics and '
+                             'P2_WATCH_CALL (default: direct calls, see rt.h)')
     parser.add_argument('--release', action='store_true',
-                        help='version pour jouer : --opt 2 --fast-memory (mesuré ~200 fps en jeu contre '
-                             '~117 en -O1 contrôlé) ; garder la version contrôlée pour diagnostiquer')
+                        help='build to play: --opt 2 --fast-memory (measured ~200 fps in game against '
+                             '~117 checked at -O1); keep the checked build for diagnosis')
     pgo = parser.add_mutually_exclusive_group()
     pgo.add_argument('--pgo-generate', action='store_true',
-                     help='version instrumentée (profil LLVM écrit toutes les 20 s dans LLVM_PROFILE_FILE), '
-                          'sans informations de débogage pour limiter la place des objets')
+                     help='instrumented build (LLVM profile written every 20 s to LLVM_PROFILE_FILE), '
+                          'without debug info to keep the objects small')
     pgo.add_argument('--pgo-use', type=Path, metavar='PROFDATA',
-                     help='compilation guidée par un profil fusionné (llvm-profdata merge)')
+                     help='profile-guided build from a merged profile (llvm-profdata merge)')
     parser.add_argument('--order-file', type=Path,
-                        help="fichier d'ordre de l'éditeur de liens (tools/hot_order.py) : code chaud regroupé")
+                        help='linker order file (tools/hot_order.py): hot code grouped together')
     parser.add_argument('--jobs', type=int, default=os.cpu_count() or 1)
     parser.add_argument('--stats', type=Path, default=Path('build/game/build-stats.json'))
     parser.add_argument('--config', type=Path, default=Path('config/local.json'),
-                        help='game_root : copie du jeu contenant bin/linux32/*.asi (greffons PE)')
+                        help='game_root: game copy holding bin/linux32/*.asi (PE plugins)')
     args = parser.parse_args()
     if args.release:
         args.opt, args.fast_memory = '2', True
@@ -266,7 +276,7 @@ def main():
     except lift.Unsupported as exc:
         parser.exit(1, f'game lift: {exc}\n')
     plugin_sources, plugin_stats = generate_plugins(args.config)
-    imports = {item['addr']: item['name'] for item in layout['imports']}
+    imports = lift.import_map(layout)
     unimplemented = sorted({imports[a] for a in manifest['used_imports']} - lift.SHIMS)
     if unimplemented:
         print('Runtime traps for unimplemented imports: ' + ', '.join(unimplemented))

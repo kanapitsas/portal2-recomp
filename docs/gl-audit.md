@@ -1,4 +1,8 @@
-# OpenGL audit of `libtogl.so` (Linux i386) against Apple's OpenGL
+# OpenGL audit of `libtogl.so` (Linux i386) against Apple's OpenGL (25 October 2026)
+
+This audit predates rendering. Its conclusions held: togl runs on the legacy
+2.1 context and is the OpenGL path of the project. The default renderer is
+now the Direct3D 9 bridge of [d3d9-bridge.md](d3d9-bridge.md).
 
 Sources: disassembly of `bin/linux32/libtogl.so` (the `COpenGLEntryPoints`
 constructor at 0x3b050–0x3d820, called by `GetOpenGLEntryPoints`) and of
@@ -116,6 +120,8 @@ buffers), and the specific GLSL/ARB paths togl generates.
   and only translates in that case. Same for indices/PBOs.
 - `GLhandleARB` is `void *` on macOS and `unsigned int` on Linux; the
   measured values are small integers (1, 3).
-- Alternative not pursued: `libdxvk_d3d9.so` + `shaderapivk.so`
-  (`-vulkan`) exist in this repository, but would require Vulkan (MoltenVK,
-  a new dependency).
+- Alternative, not pursued on 25 October: `libdxvk_d3d9.so` +
+  `shaderapivk.so` (`-vulkan`) exist in the Linux depot, but DXVK would
+  require Vulkan (MoltenVK, a new dependency). Since then `shaderapivk.so`
+  is used without Vulkan: its Direct3D 9 calls go to the native mtld3d
+  library ([d3d9-bridge.md](d3d9-bridge.md)), which is the default path.

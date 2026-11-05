@@ -23,14 +23,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <OpenGLES/ES3/gl.h>
+#include "env_ios.h"
 
 void *gl4es_GetProcAddress(const char *name);
 
-int rt_ios_srgb_enabled(void) {
-    static int enabled = -1;
-    if (enabled < 0) { const char *e = getenv("P2_IOS_SRGB"); enabled = !(e && *e == '0'); }
-    return enabled;
-}
+int rt_ios_srgb_enabled(void) { return RT_IOS_ENV_FLAG("P2_IOS_SRGB", 1); }
 
 #define FRAMEBUFFER_SRGB 0x8DB9
 #define TEXTURE_SRGB_DECODE 0x8A48
@@ -283,9 +280,7 @@ static void compressed_tex_image_2d(GLenum t, GLint l, GLenum i, GLsizei w, GLsi
 
 // P2_IOS_SRGB_TRACE=1 : statistiques toutes les 2 000 tracés.
 static void trace(const GLint *value, const ProgramState *s) {
-    static int enabled = -1;
-    if (enabled < 0) { const char *e = getenv("P2_IOS_SRGB_TRACE"); enabled = e && *e == '1'; }
-    if (!enabled) return;
+    if (!RT_IOS_ENV_FLAG("P2_IOS_SRGB_TRACE", 0)) return;
     static unsigned long draws, srgb_on, fbo_srgb, writes, reads, no_loc, borders, border_loc;
     ++draws; srgb_on += framebuffer_srgb != 0; reads += (value[0] | value[1] | value[2]) != 0;
     fbo_srgb += srgb_outputs(draw_fbo) != 0;

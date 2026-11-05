@@ -8,6 +8,10 @@
 // Erreurs : errno Darwin -> errno Linux i386 et inverse (strerror).
 int rt_linux_errno(int darwin);
 int rt_darwin_errno(int linux_value);
+// Message strerror d'un errno Linux : chaîne invitée mémorisée par errno,
+// tampon statique pour « Unknown error N » (strings_extra.c). 0 si sans mémoire.
+uint32_t rt_strerror_message(int linux_value);
+void rt_strings_extra_destroy(void);   // oublie ces adresses invitées (rt_shims_destroy)
 // Signaux : numéros Linux i386 <-> Darwin. 0 si pas d'équivalent.
 int rt_linux_signal(int darwin);
 int rt_darwin_signal(int linux_value);
@@ -16,6 +20,9 @@ uint32_t rt_linux_wait_status(int status);
 
 // Flux invités (libc.c) : enveloppe un FILE hôte dans un handle invité.
 uint32_t rt_stream_new(FILE *file);
+// Chemin hôte d'un fopen/freopen invité selon le mode : vue fusionnée en
+// lecture, copie utilisateur en écriture (préservée sauf mode "w").
+const char *rt_stream_path(const char *path, const char *mode);
 // Retire un flux sans le fermer (pclose/freopen échoué) ; renvoie le FILE.
 FILE *rt_stream_take(CPU *c, uint32_t handle);
 // Recopie l'environnement hôte dans les objets invités `environ`.
@@ -26,6 +33,12 @@ int rt_environ_sync(void);
 typedef struct { char *name; uint64_t ino; uint8_t type; } RtDirEntry;
 int rt_dir_entries(const char *guest_path, RtDirEntry **entries, size_t *count);
 void rt_dir_entries_free(RtDirEntry *entries, size_t count);
+// dirent glibc i386 : {ino32, off32, reclen16, type8, name} (en-tête 11 octets),
+// dirent64 : {ino64, off64, reclen16, type8, name} (en-tête 19 octets).
+// rt_dirent_size donne reclen (nom + NUL alignés sur 4 ou 8) ; rt_write_dirent
+// remplit reclen octets à l'adresse donnée (le nom fait au plus 255 octets).
+uint32_t rt_dirent_size(int wide, size_t name_length);
+void rt_write_dirent(uint32_t address, int wide, const RtDirEntry *entry, uint64_t offset);
 
 // Couches de fichiers (paths.c). Un chemin invité sous la racine du jeu a
 // jusqu'à trois sources : données utilisateur, dépôt Linux, copie du jeu.

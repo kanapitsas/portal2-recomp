@@ -238,8 +238,9 @@ static const char *gl_attribute_name(uint32_t attribute) {
 // nombre d'images et leur cadence ; P2_FRAME_DUMP=/chemin.ppm y écrit le
 // tampon arrière toutes les 120 images, avant l'échange (fenêtre cachée).
 static void drawable_size(SDL_Window *window, int *w, int *h);
-// Compteur et cadence (P2_FRAME_LOG), communs à OpenGL (échange de tampons) et
-// à Direct3D 9 (Present, voir runtime/ios/metal_ios.m) ; renvoie le numéro d'image.
+// Compteur et cadence (P2_FRAME_LOG), communs à OpenGL (échange de tampons,
+// ci-dessous) et à Direct3D 9 (Present réussi, d3d9.c, Mac comme iOS) ;
+// renvoie le numéro d'image.
 uint64_t rt_frame_log_tick(void) {
     static uint64_t frames, last_ticks;
     static int log = -1;
@@ -843,7 +844,8 @@ static int sdl_video(CPU *c, const char *name) {
     else return 0;
     c->eax = r;
     static int trace = -1;
-    if (trace < 0) trace = getenv("RT_SDL_TRACE") != NULL;
+    // P2_SDL_TRACE=1 (ancien nom RT_SDL_TRACE, toujours accepté) : chaque appel vidéo traité ici.
+    if (trace < 0) trace = getenv("P2_SDL_TRACE") != NULL || getenv("RT_SDL_TRACE") != NULL;
     if (trace) fprintf(stderr, "[sdl] %s(%#x, %#x, %#x) = %#x\n", name, arg(c, 0), arg(c, 1), arg(c, 2), r);
     return 1;
 }

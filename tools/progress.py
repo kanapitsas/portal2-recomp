@@ -14,7 +14,7 @@ import lift
 def audit(layout, objdump):
     insns = {}
     entries = {entry for mod in layout['modules'] for entry in mod['entries']}
-    imports = {item['addr']: item['name'] for item in layout['imports']}
+    imports = lift.import_map(layout)
     entries.update(imports)
     for mod in layout['modules']:
         insns.update(lift.disassemble(mod['image'], mod['base'], objdump))
@@ -179,7 +179,7 @@ def compile_forms(forms, out):
 
 
 def audit_all(layout, objdump, cache, jobs, names=None, want_forms=False):
-    imports = {item['addr']: item['name'] for item in layout['imports']}
+    imports = lift.import_map(layout)
     modules = [m for m in layout['modules'] if not names or m['name'] in names]
     # Largest modules first so the pool stays busy.
     modules.sort(key=lambda m: -Path(m['image']).stat().st_size)
@@ -231,7 +231,8 @@ def print_summary(result, top):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('--layout', default='build/prep/layout.json', type=Path)
+    ap.add_argument('--layout', type=Path,
+                    help='prepared layout (default: build/game/prep/layout.json with --all, else build/prep/layout.json)')
     ap.add_argument('--out', default='build/progress.json', type=Path)
     ap.add_argument('--objdump', default='objdump')
     ap.add_argument('--all', action='store_true', help='audit every function of every prepared module')
@@ -242,6 +243,8 @@ def main():
     ap.add_argument('--compile-forms', action='store_true',
                     help='compile one lifted example of every distinct instruction form (clang -fsyntax-only)')
     args = ap.parse_args()
+    if args.layout is None:
+        args.layout = Path('build/game/prep/layout.json' if args.all else 'build/prep/layout.json')
     if args.all:
         result, forms = audit_all(json.loads(args.layout.read_text()), args.objdump, args.cache, args.jobs,
                                   args.modules, args.compile_forms)

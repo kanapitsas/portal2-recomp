@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""Fichier d'ordre de l'éditeur de liens à partir de profils P2_PROFILE_ORDER.
+"""Linker order file from P2_PROFILE_ORDER profiles.
 
-Chaque profil liste les adresses de l'exécutable vues dans les échantillons
-(« décalage propre inclusif », voir runtime/profile.c). Les adresses sont
-résolues en symboles avec nm sur l'exécutable profilé ; les fonctions sont
-classées par échantillons propres puis inclusifs, et l'éditeur de liens les
-range dans cet ordre en tête de __text (code chaud regroupé : moins de défauts
-de cache d'instructions et de TLB dans un binaire de ~380 Mo).
+Each profile lists the executable addresses seen in the samples ("self and
+inclusive offsets", see runtime/profile.c). Addresses are resolved to symbols
+with nm on the profiled executable; functions are ranked by self then inclusive
+samples, and the linker lays them out in that order at the head of __text (hot
+code grouped: fewer instruction cache and TLB misses in a ~380 MB binary).
 
-    python3 tools/hot_order.py --binary build/portal2-native profil1.txt profil2.txt -o config/hot.order
+    python3 tools/hot_order.py --binary build/portal2-native profile1.txt profile2.txt -o config/hot.order
 """
 import argparse
 import bisect

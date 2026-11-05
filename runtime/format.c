@@ -105,11 +105,7 @@ static uint64_t integer_value(Arguments *args, const Spec *s) {
 static void store_count(CPU *c, uint32_t address, const Spec *s, uint64_t used) {
     unsigned size = !strcmp(s->length, "hh") ? 1 : !strcmp(s->length, "h") ? 2 :
                     (!strcmp(s->length, "ll") || !strcmp(s->length, "j")) ? 8 : 4;
-    rt_span(c, address, size);
-    if (size == 1) W8(address, (uint32_t)used);
-    else if (size == 2) W16(address, (uint32_t)used);
-    else if (size == 4) W32(address, (uint32_t)used);
-    else W64(address, used);
+    rt_store_integer(c, address, size, used);
 }
 
 // `fortify` > 0 : appel __*printf_chk avec flag > 0 (_FORTIFY_SOURCE=2).
@@ -150,10 +146,7 @@ static int guest_format(CPU *c, uint32_t destination, uint32_t capacity,
                 count = OUTPUT_VALUE(text);
             } else {
             if (s.precision < 0) rt_string_length(c, address);
-            else for (int i = 0; i < s.precision; ++i) {
-                rt_span(c, address, (uint64_t)i + 1);
-                if (!R8(address + (uint32_t)i)) break;
-            }
+            else rt_bounded_strnlen(c, address, (uint32_t)s.precision);
             count = OUTPUT_VALUE((char *)GPTR(address));
             }
         } else if (s.conversion == 'c' && !s.length[0]) {

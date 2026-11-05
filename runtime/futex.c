@@ -29,11 +29,10 @@ int rt_futex(CPU *c,uint32_t address,uint32_t operation,uint32_t value,uint32_t 
             if(!waiter->awoken){waiter->awoken=1;pthread_cond_signal(&waiter->condition);++result;}
     } else if(R32(address)!=value)error=EAGAIN;
     else {
-        struct timespec deadline={0};
+        struct timespec deadline={0},relative;
         if(timeout){
-            int32_t seconds=(int32_t)R32(timeout),nanoseconds=(int32_t)R32(timeout+4);
-            if(seconds<0 || nanoseconds<0 || nanoseconds>=1000000000)error=EINVAL;
-            else {clock_gettime(CLOCK_REALTIME,&deadline);deadline.tv_sec+=seconds;deadline.tv_nsec+=nanoseconds;
+            if(rt_read_timespec(c,timeout,&relative) || relative.tv_sec<0)error=EINVAL;
+            else {clock_gettime(CLOCK_REALTIME,&deadline);deadline.tv_sec+=relative.tv_sec;deadline.tv_nsec+=relative.tv_nsec;
                 if(deadline.tv_nsec>=1000000000){++deadline.tv_sec;deadline.tv_nsec-=1000000000;}}
         }
         if(!error){

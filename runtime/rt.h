@@ -245,7 +245,8 @@ static inline void set_eflags(CPU *c, FL *f, uint32_t v) {
     c->df = (v >> 10) & 1; f->of = (v >> 11) & 1; c->eflags_sys = v & 0x00240000u;  // ID (21) et AC (18)
 }
 
-// Pile x87, modélisée en double (pas de 80 bits : aucun accès tbyte dans ces modules).
+// Pile x87, modélisée en double : les accès tbyte (fld/fstp m80) passent par
+// rt_load_extended/rt_store_extended (cpu.c), qui convertissent vers/depuis double.
 #define ST(i) (c->st[(c->ftop + (i)) & 7])
 static inline void fpush(CPU *c, double v) { c->ftop = (c->ftop - 1) & 7; c->st[c->ftop] = v; c->ftags |= 1u << c->ftop; }
 static inline double fpop(CPU *c) { double v = c->st[c->ftop]; c->ftags &= ~(1u << c->ftop); c->ftop = (c->ftop + 1) & 7; return v; }
@@ -353,6 +354,22 @@ CPU *rt_shim_cpu(void);   // CPU du shim en cours sur ce thread, NULL hors shim
 void *rt_span(CPU *c, uint32_t address, uint64_t length);
 void *rt_write_span(CPU *c, uint32_t address, uint64_t length);
 uint32_t rt_string_length(CPU *c, uint32_t address);
+// strnlen invité : longueur sans le NUL, au plus `limit` ; faute à la première
+// page illisible rencontrée avant le NUL (vérification page par page).
+uint32_t rt_bounded_strnlen(CPU *c, uint32_t address, uint32_t limit);
+// Entier de 1, 2, 4 ou 8 octets écrit à une adresse invitée (%n, scanf).
+void rt_store_integer(CPU *c, uint32_t address, unsigned size, uint64_t value);
+// struct timespec i386 (tv_sec, tv_nsec en int32) lue en mémoire invitée ;
+// -1 si tv_nsec est hors de [0, 1e9) (EINVAL glibc), sans valider tv_sec.
+struct timespec;
+int rt_read_timespec(CPU *c, uint32_t pointer, struct timespec *out);
+// Taille de page hôte (sysconf), mémorisée (vm.c).
+uint64_t rt_host_page_size(void);
+// Diagnostic de faute : CPU invité de l'appel en cours sur ce thread (rt.c).
+extern _Thread_local CPU *rt_fault_cpu;
+// Noms anglais de la locale C (asctime, strftime, nl_langinfo) : time.c.
+extern const char *const rt_day_names[7];
+extern const char *const rt_month_names[12];
 int rt_register_tls(const char *directory, const char *name, uint32_t id, uint32_t offset, uint32_t filesz, uint32_t memsz, uint32_t alignment);
 uint32_t rt_thread_pointer(RT_NOESCAPE CPU *c);
 uint32_t rt_tls_address(RT_NOESCAPE CPU *c, uint32_t module, uint32_t offset);

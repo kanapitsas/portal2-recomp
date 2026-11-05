@@ -26,7 +26,7 @@ ARGS=()
 for a in "$@"; do
     case "$a" in
         --ios) IOS=1 ;;
-        -h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) awk 'NR > 1 && !/^#/ {exit} NR > 1 {sub(/^# ?/, ""); print}' "$0"; exit 0 ;;  # leading comment block
         -*) echo "unknown option $a" >&2; exit 2 ;;
         *) ARGS+=("$a") ;;
     esac
@@ -220,17 +220,22 @@ config = json.loads(p.read_text()) if p.exists() else {}
 fresh = not config
 config.update(game_root=os.path.normpath(game), linux_root=os.path.normpath(linux), steam_api_dylib=os.path.normpath(dylib))
 # Metal renderer: recorded when built here; P2_NO_METAL=1 removes it; a path
-# that still exists (set by hand, or by an earlier run) is otherwise kept.
+# that still exists (set by hand, or by an earlier run) is otherwise kept, and
+# a stale one is dropped (tools/build_ios.py refuses a missing library instead
+# of falling back to OpenGL).
+def existing(value):
+    return bool(value) and Path(str(value)).expanduser().is_file()
 if metal_off == '1':
     config.pop('d3d9metal_dylib', None); config.pop('d3d9metal_ios', None)
 else:
     if metal: config['d3d9metal_dylib'] = metal
-    elif config.get('d3d9metal_dylib') and not Path(config['d3d9metal_dylib']).expanduser().is_file():
+    elif config.get('d3d9metal_dylib') and not existing(config['d3d9metal_dylib']):
         config.pop('d3d9metal_dylib')
-    if metal_ios:
-        ios = config.get('d3d9metal_ios') if isinstance(config.get('d3d9metal_ios'), dict) else {}
-        ios['device'] = metal_ios
-        config['d3d9metal_ios'] = ios
+    ios = config.get('d3d9metal_ios') if isinstance(config.get('d3d9metal_ios'), dict) else {}
+    ios = {target: path for target, path in ios.items() if existing(path)}
+    if metal_ios: ios['device'] = metal_ios
+    if ios: config['d3d9metal_ios'] = ios
+    else: config.pop('d3d9metal_ios', None)
 config.setdefault('steam_appid', 620)
 config.setdefault('depot_id', 661)
 if fresh:

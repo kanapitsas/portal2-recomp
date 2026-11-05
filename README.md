@@ -14,10 +14,6 @@ macOS and iPhone. The game's x86 machine code is translated into C and
 compiled: no emulator, no Wine, no Rosetta. A small runtime provides what the
 Linux binaries expect (libc, threads, SDL2, graphics, Steam).
 
-- **Mac**: fully playable, 235–280 fps on an M3 Pro (1280×720 to 1512×982).
-- **iPhone**: fully playable on an iPhone 15 Pro Max at a steady 60 fps, with
-  touch controls and portals fired by **tapping the back of the phone**.
-
 **You must own Portal 2.** This repository has no game files and no Valve
 code: everything is generated on your machine from your own copy. The app and
 the generated code contain Valve's game, so keep them for yourself and don't
@@ -27,52 +23,101 @@ share them.
 > Portal 2, Steam and Source are trademarks of Valve Corporation. Provided as
 > is, without warranty.
 
+## Status at a glance (5 November 2026)
+
+- **Mac**: fully playable. 235–280 fps with OpenGL (M3 Pro, 720p to
+  1512×982, 26 Oct.); Metal, now the default, adds about 50 % (122 vs 81 fps
+  at 2560×1440, MSAA 4×).
+- **iPhone**: fully playable on an iPhone 15 Pro Max at a steady 60 fps, with
+  touch controls and portals fired by **tapping the back of the phone**.
+- **Co-op** over the local network: a Mac hosts, another Mac or an iPhone joins.
+- **Install**: one command, `setup.sh`.
+
+## How it works
+
+1. `tools/elfprep.py` and `tools/gameprep.py` lay out the Linux ELF modules
+   (`engine.so`, `client.so`, ...) at fixed guest addresses, apply their
+   relocations offline and record imports, exports and entry points.
+2. `tools/lift.py` translates every x86 function into a C function; `clang`
+   compiles the result together with the runtime into one ARM64 executable
+   (`build/portal2-native`). Indirect call targets that the static pass
+   misses are collected at run time into `config/game-roots.json`.
+3. The runtime (`runtime/`) implements what the binaries import: libc,
+   pthreads and futexes, SDL2, OpenGL, Direct3D 9 and Steam. Guest threads
+   are real threads serialized by one lock, the guest gate
+   ([docs/fast-path.md](docs/fast-path.md)).
+4. Steam calls are forwarded to Valve's own arm64 `libsteam_api.dylib`
+   (from Steamworks.NET) through generated i386 → arm64 proxies; there is no
+   Steam emulator ([docs/steam.md](docs/steam.md)).
+5. Rendering has two paths: Valve's `togl` translating Direct3D 9 to legacy
+   OpenGL 2.1 ([docs/gl-audit.md](docs/gl-audit.md)), or Valve's
+   `shaderapivk.so` talking to **mtld3d**, a native Direct3D 9 on Metal
+   ([docs/d3d9-bridge.md](docs/d3d9-bridge.md)). mtld3d is the project; the
+   library it builds is `libd3d9metal`.
+6. On iPhone the OpenGL path goes through gl4es, with every shader rewritten
+   to GLSL ES 3.00 ([docs/ios.md](docs/ios.md)); the Metal path is linked
+   statically.
+
 ## What you need
 
-- An Apple silicon Mac with Python 3, [Homebrew](https://brew.sh) and the
-  Xcode command line tools (`xcode-select --install`), then
+- An Apple silicon Mac with Python 3.9 or newer, [Homebrew](https://brew.sh)
+  and the Xcode command line tools (`xcode-select --install`), then
   `brew install sdl2 freetype fontconfig`.
 - Portal 2 on Steam:
   - the game folder (the one with `portal2/`, `platform/` and `bin/`); the
     Windows version works;
   - the Linux binaries: open the Steam console (`open steam://open/console`)
     and type `download_depot 620 661` (about 90 MB).
-- Optional but recommended: [Rust](https://rustup.rs), for the faster Metal
-  renderer.
+- Optional but recommended: Rust 1.99 or newer from [rustup](https://rustup.rs),
+  for the faster Metal renderer (Homebrew's `rust` has no iOS target).
 - For iPhone: Xcode with your Apple ID (a free account works),
-  `brew install xcodegen cmake ninja`, the iPhone connected by cable with
-  Developer Mode on, and about 12 GB free on it. Tested on an iPhone 15 Pro
-  Max only.
+  `brew install xcodegen cmake ninja`, an iPhone on iOS 17 or newer
+  connected by cable with Developer Mode on, and about 12 GB free on it.
+  Tested on an iPhone 15 Pro Max only.
 
-## Install
+## Install on Mac
 
 ```sh
 git clone https://github.com/kanapitsas/portal2-recomp.git
 cd portal2-recomp
-./setup.sh "/path/to/Portal 2" "/path/to/depot_661"          # Mac
-./setup.sh --ios "/path/to/Portal 2" "/path/to/depot_661"    # Mac and iPhone
+./setup.sh "/path/to/Portal 2" "/path/to/depot_661"
 ```
 
-Without paths, `setup.sh` looks where Steam usually puts them. It builds the
-game (about 10 minutes the first time) and creates
+Without paths, `setup.sh` looks where Steam usually puts them. It downloads
+Valve's `libsteam_api.dylib` (Steamworks.NET 20.1.0, SHA-256 checked),
+builds the game (about 10 minutes the first time) and creates
 `~/Applications/Portal 2 Natif.app`. Re-running it is safe and quick.
+"Natif" is French for native; the name is kept so existing installs are
+updated in place.
 
 The app contains its own executable and libraries; the game files stay where
 Steam put them. After a rebuild or a change to `config/local.json`, run
-`python3 tools/make_app.py` to update the app.
+`python3 tools/make_app.py` to update the app (`--dest` for another folder).
+Downloads and iOS libraries go to `deps/` (`P2_DEPS` overrides it).
 
-**iPhone**: first create an Apple Development certificate (Xcode > Settings >
-Accounts > Manage Certificates > + > Apple Development). `setup.sh --ios`
-then builds, signs and installs the app and copies the game data (about
+## Install on iPhone
+
+First create an Apple Development certificate (Xcode > Settings > Accounts >
+Manage Certificates > + > Apple Development), then:
+
+```sh
+./setup.sh --ios "/path/to/Portal 2" "/path/to/depot_661"
+```
+
+It builds, signs and installs the app and copies the game data (about
 11.5 GB, once; `tools/ios_device.sh data` copies it again after a reinstall).
 On the phone, trust your account in Settings > General > VPN & Device
 Management. With a free account, re-run `./setup.sh --ios` every 7 days.
+`P2_TEAM_ID` sets the team when it cannot be read from the certificate;
+`P2_DEVICE` picks the iPhone when several are connected.
 More in [docs/ios.md](docs/ios.md).
 
 ## Play
 
 On Mac, open Steam with the account that owns Portal 2, then open
-**Portal 2 Natif** (it starts Steam if needed).
+**Portal 2 Natif** (it starts Steam if needed). The game language follows
+your `-language` argument, `P2_LANGUAGE`, `config/local.json`, then Steam
+and macOS ([details](docs/usage.md#game-language)).
 
 On iPhone: left stick to move, right half of the screen to look, buttons to
 jump, crouch, use and pause, and a tap on the back of the phone (left or
@@ -92,12 +137,14 @@ an iPhone, and fixes the too-dark image of OpenGL on iPhone.
 - If Rust is installed, `setup.sh` fetches and builds `libd3d9metal` (about a
   minute) from a pinned commit of
   [mtld3d's native host branch](https://github.com/kanapitsas/mtld3d/tree/feat/native-host).
-  Without Rust, or if that build fails, it says so and the game uses OpenGL.
-  `P2_NO_METAL=1 ./setup.sh` skips it.
-- The end of `setup.sh` tells which renderer the Mac app uses. The iPhone
-  library is built separately and can still fall back to OpenGL.
+  Without Rust it says so and the game uses OpenGL. If the build fails,
+  a library built by an earlier run is kept as long as its file still
+  exists; otherwise OpenGL. `P2_NO_METAL=1 ./setup.sh` skips it.
+- The end of `setup.sh` tells which renderer the Mac app and the iPhone app
+  use. The iPhone library is built separately and can still fall back to
+  OpenGL.
 - `P2_RENDERER=opengl` forces OpenGL; on iPhone, use Settings > Portal 2 >
-  Rendu.
+  Rendu > Moteur de rendu (the settings page is still in French).
 - **F3** on Mac shows the renderer and the frame rate; on iPhone, the counter
   in the top-left corner does.
 
@@ -112,14 +159,38 @@ Details: [docs/d3d9-bridge.md](docs/d3d9-bridge.md).
 It asks before moving the app and its log to the Trash, and asks again for
 the saves. It never touches the Steam game files or the Linux binaries.
 
-## Roadmap
+## Troubleshooting
+
+- **"Steam is not running"**: the engine exits without a logged-in Steam
+  client. Open Steam first (the app tries to start it).
+- **"Failed to create D3D9!"**: `-vulkan` was passed but `libd3d9metal` is
+  missing or failed to initialize. Drop `-vulkan` or set `P2_RENDERER=opengl`.
+- **No music or voices**: `setup.sh` warns when `bin/linux32/mssmp3.asi`,
+  `mssvoice.asi` or `binkawin.asi` is missing from the game folder (Miles
+  decodes the MP3 voice lines with them). They come with the Linux game data
+  (`download_depot 620 621`); a Windows copy may lack them.
+- **iPhone app stops launching after a week**: free Apple accounts give
+  7-day profiles and allow 3 sideloaded apps; re-run `./setup.sh --ios`.
+- **Logs**: Mac, `~/Library/Logs/Portal2Natif.log`; iPhone,
+  `Documents/game.log` in the app's files once the Journal setting is on
+  (`tools/ios_device.sh run` pulls it back).
+- Diagnostics variables: [docs/usage.md](docs/usage.md#diagnostics) (Mac) and
+  [docs/ios.md](docs/ios.md#diagnostics) (iPhone).
+
+## Roadmap and limits
+
+Built and tested against one release of the Linux binaries (depot 661,
+manifest 8940703274703023246); another release needs new indirect call
+roots. iOS has no Steam features (achievements, invites, cloud saves); co-op
+there is LAN only. A free Apple account allows 3 sideloaded apps and 7-day
+profiles.
 
 ✅ Done · 🚧 In progress · 📅 Planned · 💡 Idea
 
 | Area | Item | Status |
 |---|---|:---:|
 | Core | Static recompilation of the Linux x86 binaries into native ARM64 C, no emulator | ✅ |
-| Mac | Single player fully playable, 235–280 fps on an M3 Pro | ✅ |
+| Mac | Single player fully playable, 235–280 fps on an M3 Pro (OpenGL) | ✅ |
 | Mac | Steam bridge through Valve's official macOS `libsteam_api` (no Steam emulator) | ✅ |
 | Rendering | Metal renderer through mtld3d (about +50 % fps on Mac), OpenGL fallback | ✅ |
 | iPhone | Single player at a steady 60 fps, touch controls, Settings page | ✅ |
@@ -138,24 +209,44 @@ the saves. It never touches the Steam game files or the Linux binaries.
 | Community | Steam Workshop on Mac (needs the UGC part of the Steam bridge) | 💡 |
 | Rendering | Ray-traced lighting with Metal on M3 and A17 Pro GPUs, in the spirit of Portal with RTX (NVIDIA's RTX Remix is Windows and NVIDIA only, so it cannot be reused) | 💡 |
 
-## More
+## Repository layout
 
-- [Language, controllers, LAN co-op and manual build](docs/usage.md)
-- [iOS port, controls and settings](docs/ios.md)
-- [Metal renderer](docs/d3d9-bridge.md)
-- [Steam bridge](docs/steam.md), [fast memory mode](docs/fast-path.md),
-  [OpenGL audit](docs/gl-audit.md), [lifter coverage](docs/lifter-coverage.md)
+- `src/`: `main.c`, the host entry point (`--images`, `--game-dir`,
+  `--linux-root`, `--user-dir`, then the game's arguments).
+- `runtime/`: the native runtime (libc, threads, SDL, GL, D3D9, Steam shims);
+  `runtime/ios/` for the iPhone.
+- `tools/`: ELF preparation, the lifter, build and run scripts, benchmarks.
+- `tests/`: Python tests (`test_*.py`) and C checks (`checks_*.c`) linked
+  into `abi-smoke`.
+- `ios/`: app shell, Settings bundle, dependency build, signing project.
+- `config/`: `game-roots.json` (indirect call roots); `local.json` is
+  yours and ignored by git.
+- `docs/`: the documents listed below. `experiments/`: the Steam probe.
+- `build/` and `deps/`: generated, ignored by git.
+
+## Development and tests
+
+- `make check`: Python tests and `build/abi-smoke`, no game files needed.
+- `make test INPUT_DIR=/path/to/depot_661/bin/linux32`: the full run; the
+  path defaults to `linux_root` in `config/local.json`. `make sanitize` is
+  the UBSan variant.
+- `P2_STEAM_TESTS=1 make test`: live Steam tests, with the client running.
+- CI (`.github/workflows/ci.yml`, macos-15): the Python tests, `abi-smoke`
+  and `abi-smoke-ubsan`. It cannot build the full game, whose files are not
+  in the repository.
+- Manual build, run and diagnostics: [docs/usage.md](docs/usage.md).
+  Project rules and bridge conventions: [CLAUDE.md](CLAUDE.md).
+
+## Documentation
+
+- [docs/usage.md](docs/usage.md): language, controllers, LAN co-op, manual build, diagnostics
+- [docs/ios.md](docs/ios.md): iOS port, controls, settings, back taps
+- [docs/d3d9-bridge.md](docs/d3d9-bridge.md): Metal renderer (Direct3D 9 bridge)
+- [docs/steam.md](docs/steam.md): Steam bridge
+- [docs/fast-path.md](docs/fast-path.md): fast memory mode and direct calls
+- [docs/gl-audit.md](docs/gl-audit.md): OpenGL audit of togl (25 Oct. 2026)
+- [docs/lifter-coverage.md](docs/lifter-coverage.md): lifter coverage
 - [STATUS.md](STATUS.md): the development log, with every measurement
-
-**Tests**: GitHub Actions runs the Python tests and the runtime checks (also
-under UBSan). It cannot build the full game, whose files are not in the
-repository.
-
-**Limits**: built and tested against one release of the Linux binaries
-(depot 661, manifest 8940703274703023246); another release needs new
-indirect call roots. iOS has no Steam features (achievements, invites, cloud
-saves); co-op there is LAN only. A free
-Apple account allows 3 sideloaded apps and 7-day profiles.
 
 ## Credits
 

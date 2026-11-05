@@ -9,11 +9,16 @@
 #include <string.h>
 #include "settings.h"
 
-// Échelle points -> pixels : celle de l'écran sur appareil. Sur simulateur
-// (rendu OpenGL ES logiciel, 0,5 image/s en 2622×1206), 1 par défaut.
-// Sur appareil, 2 par défaut (voir plus bas). P2_IOS_RENDER_SCALE=1, =native
+// Échelle points -> pixels. Sur simulateur (rendu OpenGL ES logiciel,
+// 0,5 image/s en 2622×1206), 1 par défaut. Sur appareil, 2 par défaut (voir
+// plus bas), l'échelle native de l'écran étant 3. P2_IOS_RENDER_SCALE=1, =native
 // ou une valeur entre les deux (1,5…) : moins de pixels, agrandis par l'écran
 // (la vue GL prend cette échelle : rt_ios_gl_create_context, gl_ios.m).
+// Sur le thread principal, directement ; sinon en attendant qu'il ait fini.
+static void on_main(dispatch_block_t block) {
+    if ([NSThread isMainThread]) block();
+    else dispatch_sync(dispatch_get_main_queue(), block);
+}
 float rt_ios_render_scale(void) {
     static float scale;
     if (scale > 0) return scale;
@@ -25,8 +30,7 @@ float rt_ios_render_scale(void) {
     if (!native_requested && requested <= 1.0f) return scale = 1.0f;
 #endif
     __block CGFloat native = 1;
-    if ([NSThread isMainThread]) native = UIScreen.mainScreen.nativeScale;
-    else dispatch_sync(dispatch_get_main_queue(), ^{ native = UIScreen.mainScreen.nativeScale; });
+    on_main(^{ native = UIScreen.mainScreen.nativeScale; });
     if (native <= 1) return scale = 1.0f;
     // Par défaut 2 (iPhone 15 Pro Max : 1864×860 au lieu de 2796×1290) : sans
     // plafond d'écran, 154 i/s contre 90 en natif dans sp_a2_laser_stairs ; le
@@ -38,12 +42,18 @@ static int up(int v) { return (int)lroundf((float)v * rt_ios_render_scale()); }
 // Taille de rendu en paysage : écran en points × échelle (résolution du jeu, ios/main_ios.c).
 void rt_ios_render_size(int *w, int *h) {
     __block CGSize size = CGSizeZero;
-    if ([NSThread isMainThread]) size = UIScreen.mainScreen.bounds.size;
-    else dispatch_sync(dispatch_get_main_queue(), ^{ size = UIScreen.mainScreen.bounds.size; });
+    on_main(^{ size = UIScreen.mainScreen.bounds.size; });
     *w = up((int)fmax(size.width, size.height));
     *h = up((int)fmin(size.width, size.height));
 }
 static int down(int v) { return (int)lroundf((float)v / rt_ios_render_scale()); }
+void rt_ios_view_set_scale(void *uiview, float wanted) {
+    UIView *view = (__bridge UIView *)uiview;
+    if (!view || fabs(view.contentScaleFactor - wanted) <= 0.01) return;
+    view.contentScaleFactor = wanted;   // contentsScale de la couche (et drawableSize par SDL)
+    [view setNeedsLayout];
+    [view layoutIfNeeded];
+}
 
 void rt_ios_touch_controls_attach(SDL_Window *window);
 void rt_ios_game_state_poll(void);

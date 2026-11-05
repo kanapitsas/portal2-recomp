@@ -27,11 +27,13 @@ static const char *output;
 static void tick(int signal, siginfo_t *info, void *context) {
     (void)signal; (void)info;
     Key key = {0};
+    uintptr_t frame = 0;
 #if defined(__aarch64__)
     ucontext_t *uc = context;
     key.pc = (uintptr_t)uc->uc_mcontext->__ss.__pc;
     key.caller = (uintptr_t)uc->uc_mcontext->__ss.__lr;
     uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
+    frame = fp;
     // Deuxième appelant : cadre courant [fp] = fp parent, [fp+8] = retour.
     if (fp && !(fp & 7)) {
         uintptr_t parent = ((uintptr_t *)fp)[0];
@@ -43,7 +45,6 @@ static void tick(int signal, siginfo_t *info, void *context) {
 #endif
     // Chaîne de cadres (pointeur de cadre) pour retrouver le premier cadre de
     // l'exécutable (pont GL/libc, fonction générée) sous une bibliothèque.
-    uintptr_t frame = (uintptr_t)uc->uc_mcontext->__ss.__fp;
     for (int d = 0; d < DEPTH && frame && !(frame & 7); ++d) {
         uintptr_t next = ((uintptr_t *)frame)[0];
         key.chain[d] = ((uintptr_t *)frame)[1];
@@ -243,7 +244,6 @@ static void dump(void) {
 
 // P2_PROFILE_DELAY=<s> : l'échantillonnage ne commence qu'après s secondes
 // (régime établi, sans le chargement de la carte).
-static int wall_mode;
 static pthread_t main_thread;
 static void *wall_sampler(void *unused);
 static void start_sampling(void) {

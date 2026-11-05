@@ -277,7 +277,6 @@ int rt_path_overlay(const char *relative,char out[PATH_MAX]) {
     return 0;
 }
 int rt_path_absolute(const char *path,char out[PATH_MAX]) { return absolute_path(path,out); }
-static int join(char out[PATH_MAX],const char *root,const char *relative);
 // Greffon Miles de bin/linux32 traduit d'avance (pe.c) : visible seulement si
 // le fichier de la copie du jeu est exactement celui qui a été traduit.
 static int translated_plugin(const char *relative) {

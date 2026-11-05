@@ -1,7 +1,7 @@
 // Stub Steam hôte pour le build iOS seulement (pas de client Steam sur iOS).
 // Décision de l'utilisateur du 25 octobre 2026 : stub maison minimal, pour sa
 // propre copie du jeu et un usage personnel ; jamais compilé dans le build Mac
-// (qui parle au vrai client Steam), jamais fusionné dans feat/tier0-spike.
+// (qui parle au vrai client Steam).
 //
 // Il remplace libsteam_api.dylib derrière le pont runtime/steam.c, qui le
 // trouve par dlsym (P2_STEAM_API_DYLIB désigne l'exécutable lui-même). Mode

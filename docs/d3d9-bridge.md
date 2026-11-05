@@ -25,15 +25,18 @@ The steps below are the manual equivalent.
 ```sh
 python3 tools/gameprep.py                 # shaderapivk.so is now prepared (module bases shift)
 python3 tools/build_game.py --release     # full rebuild after gameprep
-P2_D3D9METAL=/path/to/libd3d9metal.dylib \
-    SteamAppId=620 python3 tools/run_game.py --show --timeout 3600
+P2_D3D9METAL=/path/to/libd3d9metal.dylib python3 tools/run_game.py --show --timeout 3600
 ```
+
+(`SteamAppId` comes from `steam_appid` in `config/local.json` when it is not
+in the environment.)
 
 - By default the runtime loads and initializes the library
   (`d3d9metal_init`) before the game starts and adds `-vulkan` only if that
   succeeds; otherwise the game stays on OpenGL and the log says why.
   `P2_RENDERER=opengl` forces OpenGL; `P2_RENDERER=d3d9` (or `metal`) makes a
-  missing library an explicit message. Passing
+  missing library an explicit message. A library that fails to load prints
+  `d3d9: dlopen <path>: <dlerror reason>`. Passing
   `-vulkan` yourself forces the path (and `Direct3DCreate9` returns NULL if
   the library is missing or refuses to initialize: the game reports "Failed
   to create D3D9!").
@@ -176,19 +179,18 @@ P2_D3D9METAL=/path/to/libd3d9metal.dylib \
 
 ## Open questions
 
-- The game was not launched with the library; only the headless check above
-  ran against it. `shaderapivk.so` lifted and compiled (see
-  STATUS.md) but its runtime behaviour (other imports such as `SDL_GL_*`,
-  extra indirect roots) is untested.
 - Vendor id: Apple (`106b`) avoids NVIDIA/AMD/Intel-specific branches in
   Source; whether `dxsupport.cfg` then picks sensible defaults is unknown.
 - Retina: `metal_layer` reports the game's back buffer size (window points ×
   window scale), the same rule as the OpenGL path; mtld3d resamples to the
-  layer's bounds × contentsScale if they differ.
-- iOS: libd3d9metal is linked statically into the app
-  (`tools/build_ios.py --d3d9metal`, `RT_D3D9METAL_STATIC`), selected in the
-  Settings page; see "Metal renderer" in [ios.md](ios.md). Not run on a
-  device yet.
+  layer's bounds × contentsScale if they differ. Fullscreen in Retina is not
+  verified.
 - Threading: Source may call Direct3D from its material system thread
   (`mat_queue_mode`); the bridge relies on the guest gate, so calls are
   serialized, but the library sees them from different host threads.
+
+Resolved since the 29 October design: the game runs on this path on macOS
+(122 vs 81 fps above, now the default renderer) and on an iPhone 15 Pro Max
+(71–77 vs 60 fps, linked statically with `tools/build_ios.py --d3d9metal`,
+`RT_D3D9METAL_STATIC`, chosen in the Settings page; see "Metal renderer" in
+[ios.md](ios.md#metal-renderer-default)).

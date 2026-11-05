@@ -9,15 +9,26 @@ HOST_CFLAGS = -I/opt/homebrew/include -I/opt/homebrew/include/freetype2 -DGL_SIL
 HOST_LIBS = -L/opt/homebrew/lib -lSDL2 -lfreetype -lfontconfig -liconv -framework OpenGL -framework OpenAL -lobjc
 CFLAGS += $(HOST_CFLAGS)
 LIFT_FLAGS ?= --allow-unimplemented-imports
-INPUT_DIR ?= ../work/portal2-linux/bin
+# Linux binaries of the game (libtier0.so, libvstdlib.so): linux_root of
+# config/local.json when it exists, else the historical private path.
+# INPUT_DIR_DEP is the same path with spaces escaped for prerequisites.
+LOCAL_LINUX_ROOT := $(if $(wildcard config/local.json),$(shell $(PYTHON) -c 'import json; print(json.load(open("config/local.json")).get("linux_root") or "")' 2>/dev/null),)
+INPUT_DIR ?= $(if $(LOCAL_LINUX_ROOT),$(LOCAL_LINUX_ROOT)/bin/linux32,../work/portal2-linux/bin)
+space := $(subst ,, )
+INPUT_DIR_DEP := $(subst $(space),\ ,$(INPUT_DIR))
 PREP = build/prep
 EXPORTS = Plat_IsInBenchmarkMode Plat_SetBenchmarkMode AreAllAssertsDisabled SetAllAssertsDisabled UnitTestCount GetUnitTest EncodeBinaryToString DecodeBinaryFromString Plat_GetMemPageSize ZeroMemory Plat_Alloc Plat_Realloc Plat_Free Plat_DefaultAllocErrorFn UnitTestInstallTestCase LoggingSystem_GetChannelCount LoggingSystem_FindChannel libtier0.so:code:0x157a0 libtier0.so:code:0x15a50 libtier0.so:code:0x15620 libtier0.so:code:0x13dd0 libtier0.so:code:0x13e00 libtier0.so:code:0x13e30 libtier0.so:code:0x13e60 libtier0.so:init:dt libtier0.so:init:0 libtier0.so:init:1 libtier0.so:init:2 libtier0.so:init:3 libtier0.so:init:4 libtier0.so:init:5 libtier0.so:init:6 libtier0.so:init:7 libtier0.so:init:8 libtier0.so:init:9 libtier0.so:init:10 libtier0.so:init:11 libtier0.so:init:12 libtier0.so:init:13 GetCPUInformation
 
-.PHONY: all test clean
+.PHONY: all test check clean
 all: build/tier0-smoke
 
-$(PREP)/layout.json: tools/elfprep.py $(INPUT_DIR)/libtier0.so $(INPUT_DIR)/libvstdlib.so
-	$(PYTHON) tools/elfprep.py --out $(PREP) $(INPUT_DIR)/libtier0.so@0x10000000 $(INPUT_DIR)/libvstdlib.so@0x11000000
+# $(PREP)/input-dir records the INPUT_DIR in use, so a changed depot regenerates the images.
+.PHONY: .FORCE
+.FORCE:
+$(PREP)/input-dir: .FORCE
+	@mkdir -p $(PREP); [ "$$(cat $@ 2>/dev/null)" = "$(INPUT_DIR)" ] || echo "$(INPUT_DIR)" > $@
+$(PREP)/layout.json: tools/elfprep.py $(INPUT_DIR_DEP)/libtier0.so $(INPUT_DIR_DEP)/libvstdlib.so $(PREP)/input-dir
+	$(PYTHON) tools/elfprep.py --out $(PREP) "$(INPUT_DIR)/libtier0.so@0x10000000" "$(INPUT_DIR)/libvstdlib.so@0x11000000"
 
 build/tier0.c: Makefile tools/lift.py tools/float_lift.py tools/registry.py $(PREP)/layout.json
 	$(PYTHON) tools/lift.py $(LIFT_FLAGS) --layout $(PREP)/layout.json --out $@ $(EXPORTS)
@@ -37,9 +48,15 @@ build/pe-fixture.c: tests/generate_pe_fixture.py tests/pe_fixture.py tests/pe_pl
 build/abi-smoke: build/abi-fixture.c build/pe-fixture.c tests/abi_smoke.c $(wildcard tests/*.h) $(CHECKS) $(RUNTIME) $(HEADERS)
 	$(CC) $(CFLAGS) -Iruntime -Itests $(RUNTIME) build/abi-fixture.c build/pe-fixture.c tests/abi_smoke.c $(CHECKS) $(HOST_LIBS) -o $@
 
+# Full run: needs the game's Linux binaries (INPUT_DIR) for tier0-smoke.
 test: build/tier0-smoke build/abi-smoke
 	$(PYTHON) -m unittest discover -s tests -p 'test_*.py' -v
 	./build/tier0-smoke $(PREP)
+	./build/abi-smoke
+
+# What CI runs: Python tests and the runtime against generated fixtures, no game files needed.
+check: build/abi-smoke
+	$(PYTHON) -m unittest discover -s tests -p 'test_*.py'
 	./build/abi-smoke
 
 clean:

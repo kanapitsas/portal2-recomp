@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
-"""Choisit la langue du jeu et imprime l'argument `-language <nom>` à lui passer.
+"""Pick the game language and print the `-language <name>` argument to pass it.
 
-Le moteur Source lit `-language` (localize.so, filesystem_stdio.so) : il charge
-resource/*_<langue>.txt, closecaption_<langue> et ajoute le dossier
-portal2_<langue> aux chemins de recherche. Le client Steam du Mac ne connaît
-pas la langue choisie dans les propriétés d'un jeu installé par un autre
-client (Whisky, CrossOver) : sans argument, le jeu démarre donc en anglais.
+The Source engine reads `-language` (localize.so, filesystem_stdio.so): it loads
+resource/*_<language>.txt, closecaption_<language> and adds the portal2_<language>
+folder to the search paths. The Mac Steam client does not know the language
+chosen in the properties of a game installed by another client (Whisky,
+CrossOver): without the argument the game starts in English.
 
-Ordre de choix (le premier qui donne une langue présente dans les données) :
-  1. `-language` déjà passé au lanceur : rien n'est ajouté ;
-  2. variable d'environnement P2_LANGUAGE ;
-  3. clé "language" de config/local.json ;
-  4. langue du jeu dans steamapps/appmanifest_620.acf (UserConfig) ;
-  5. langue du système (macOS) ;
+Order of choice (the first that gives a language present in the data):
+  1. `-language` already passed to the launcher: nothing is added;
+  2. P2_LANGUAGE environment variable;
+  3. "language" key of config/local.json;
+  4. game language in steamapps/appmanifest_620.acf (UserConfig);
+  5. system language (macOS);
   6. english.
-Une langue dont les fichiers (gameui_<langue>.txt) manquent retombe sur english.
-Les voix ne sont téléchargées par Steam que pour la langue choisie là-bas : sans
-elles, le texte est traduit et les voix restent en anglais.
+A language whose files (gameui_<language>.txt) are missing falls back to english.
+Steam only downloads the voices of the language chosen there: without them the
+text is translated and the voices stay in English.
 
-    python3 tools/language.py [--config config/local.json] [--explain] [-- arguments du lanceur…]
+    python3 tools/language.py [--config config/local.json] [--explain] [-- launcher arguments...]
 """
 import argparse
 import json
@@ -45,7 +45,7 @@ ISO = {
 
 
 def normalize(value):
-    """Nom Steam pour `value` (nom, code ISO ou locale `fr_CA`), None si inconnu."""
+    """Steam name for `value` (name, ISO code or `fr_CA` locale), None if unknown."""
     if not value: return None
     text = value.strip().lower().replace('_', '-')
     if text in LANGUAGES: return text
@@ -56,7 +56,7 @@ def normalize(value):
 
 
 def acf_language(text):
-    """Langue du bloc UserConfig (sinon MountedConfig) d'un appmanifest_*.acf."""
+    """Language of the UserConfig block (else MountedConfig) of an appmanifest_*.acf."""
     found = {}
     for block in ('UserConfig', 'MountedConfig'):
         match = re.search(r'"%s"\s*\{([^}]*)\}' % block, text)
@@ -67,7 +67,7 @@ def acf_language(text):
 
 
 def system_language():
-    """Première langue reconnue des réglages macOS (AppleLanguages), None ailleurs."""
+    """First recognised language of the macOS settings (AppleLanguages), None elsewhere."""
     try:
         output = subprocess.run(['/usr/bin/defaults', 'read', '-g', 'AppleLanguages'], capture_output=True,
                                 text=True, timeout=5).stdout
@@ -80,7 +80,7 @@ def system_language():
 
 
 def acf_candidates(game_root):
-    """Où Steam range appmanifest_620.acf : à côté du jeu (steamapps/common/<jeu>), puis Steam natif."""
+    """Where Steam keeps appmanifest_620.acf: next to the game (steamapps/common/<game>), then native Steam."""
     candidates = []
     if game_root: candidates.append(Path(game_root).parent.parent / 'appmanifest_620.acf')
     candidates.append(Path.home() / 'Library/Application Support/Steam/steamapps/appmanifest_620.acf')
@@ -88,20 +88,20 @@ def acf_candidates(game_root):
 
 
 def installed(language, game_root):
-    """Vrai si le jeu contient le texte de cette langue (l'anglais est toujours là)."""
+    """True when the game holds this language's text (English is always there)."""
     if language == 'english': return True
     return bool(game_root) and (Path(game_root) / 'portal2/resource' / f'gameui_{language}.txt').is_file()
 
 
 def explicit_language(arguments):
-    """Valeur de `-language` dans une liste d'arguments, None s'il n'y est pas."""
+    """Value of `-language` in an argument list, None when absent."""
     for index, argument in enumerate(arguments):
         if argument == '-language': return arguments[index + 1] if index + 1 < len(arguments) else ''
     return None
 
 
 def choose(env=None, config=None, game_root=None, acf_texts=(), system=None):
-    """Retourne (langue, origine). `acf_texts` : contenus des appmanifest, dans l'ordre de préférence."""
+    """Return (language, origin). `acf_texts`: appmanifest contents, in order of preference."""
     env = os.environ if env is None else env
     config = config or {}
     game_root = game_root or config.get('game_root')
@@ -122,7 +122,7 @@ def choose(env=None, config=None, game_root=None, acf_texts=(), system=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--config', type=Path, default=Path(__file__).resolve().parent.parent / 'config/local.json')
-    parser.add_argument('--explain', action='store_true', help="dire sur stderr d'où vient le choix")
+    parser.add_argument('--explain', action='store_true', help='say on stderr where the choice comes from')
     parser.add_argument('arguments', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     launcher_args = args.arguments[1:] if args.arguments[:1] == ['--'] else args.arguments

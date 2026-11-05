@@ -60,8 +60,13 @@ RT_CHECK(pthread_tryjoin_timedjoin_detach) {
     kill_args[1] = 65; assert(call(&c, "pthread_kill", kill_args, 2) == 22);
     wake_futex(&c, 0x2000b100);
     deadline_in(DATA + 16, 5000); W32(DATA + 8, 0xdead);
+    assert(rt_heap_usable_size(worker - 0x10000));                    // TCB invité encore alloué
     assert(call(&c, "pthread_timedjoin_np", args, 3) == 0 && R32(DATA + 8) == 0); // syscall 0
-    assert(call(&c, "pthread_tryjoin_np", args, 2) == 22);            // déjà joint
+    // La jonction libère la fiche, le TCB et les blocs TLS (fuite corrigée) :
+    // le handle est inconnu ensuite (ESRCH), comme après la fin d'un thread détaché.
+    assert(!rt_heap_usable_size(worker - 0x10000));
+    assert(call(&c, "pthread_tryjoin_np", args, 2) == 3);
+    assert(call(&c, "pthread_detach", args, 1) == 3);
     kill_args[1] = 0; assert(call(&c, "pthread_kill", kill_args, 2) == 3);
 
     // Thread terminé puis tryjoin : valeur de retour de 0x6000 (99).

@@ -11,16 +11,7 @@ static uint32_t argument(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
 __attribute__((noreturn)) static void chk_fail(CPU *c) {
     rt_trap(c, c->eip, "*** buffer overflow detected ***: terminated (__chk_fail)");
 }
-// Longueur d'une chaîne invitée bornée à `limit` octets (strnlen).
-static uint32_t bounded_length(CPU *c, uint32_t address, uint32_t limit) {
-    uint32_t n = 0;
-    while (n < limit) {
-        rt_span(c, address + n, 1);
-        if (!R8(address + n)) break;
-        ++n;
-    }
-    return n;
-}
+#define bounded_length rt_bounded_strnlen
 
 int rt_fortify_shim(CPU *c, const char *name) {
     if (!strcmp(name, "__stack_chk_fail"))

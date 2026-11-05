@@ -130,8 +130,11 @@ int steam_dylib_available(void) { return open_library() != NULL; }
 
 void *steam_flat(CPU *c, const char *symbol) {
     void *handle = open_library();
-    if (!handle) fail(c, "Steam: cannot load the official libsteam_api.dylib (%s; config key steam_api_dylib): %s",
-                      steam_dylib_path(), dlerror());
+    if (!handle) {
+        const char *path = steam_dylib_path(), *error = *path ? dlerror() : NULL;
+        fail(c, "Steam: cannot load the official libsteam_api.dylib (%s; config key steam_api_dylib): %s",
+             *path ? path : "no path", error ? error : *path ? "dlopen failed" : "no path configured");
+    }
     void *fn = dlsym(handle, symbol);
     if (!fn) fail(c, "Steam: %s is absent from %s", symbol, steam_dylib_path());
     return fn;
@@ -590,17 +593,24 @@ static void dispatch_result(CPU *c, uint64_t call, int32_t id, const void *data,
 }
 
 typedef struct { int32_t user, id; uint8_t *param; int32_t size; } CallbackMsg;
+// Symboles de la distribution manuelle, résolus une fois (enable_manual_dispatch) :
+// RunCallbacks est appelé à chaque image, et la dylib n'est jamais déchargée.
+static struct {
+    int32_t (*pipe[2])(void);                                  // [0] client, [1] serveur de jeu
+    void (*run_frame)(int32_t);
+    bool (*next)(int32_t, CallbackMsg *);
+    void (*release)(int32_t);
+    bool (*result)(int32_t, uint64_t, void *, int32_t, int32_t, bool *);
+} dispatch;
 static void run_callbacks(CPU *c, int server) {
     if (!manual_dispatch || dispatching[server]) return;   // pas de ré-entrance, comme la dylib
-    int32_t pipe = server ? FLAT(int32_t (*)(void), "SteamGameServer_GetHSteamPipe")()
-                          : FLAT(int32_t (*)(void), "SteamAPI_GetHSteamPipe")();
+    int32_t pipe = dispatch.pipe[server]();
     if (!pipe) return;
     dispatching[server] = 1;
-    FLAT(void (*)(int32_t), "SteamAPI_ManualDispatch_RunFrame")(pipe);
-    bool (*next)(int32_t, CallbackMsg *) = FLAT(bool (*)(int32_t, CallbackMsg *), "SteamAPI_ManualDispatch_GetNextCallback");
-    void (*release)(int32_t) = FLAT(void (*)(int32_t), "SteamAPI_ManualDispatch_FreeLastCallback");
-    bool (*result)(int32_t, uint64_t, void *, int32_t, int32_t, bool *) =
-        FLAT(bool (*)(int32_t, uint64_t, void *, int32_t, int32_t, bool *), "SteamAPI_ManualDispatch_GetAPICallResult");
+    dispatch.run_frame(pipe);
+    bool (*next)(int32_t, CallbackMsg *) = dispatch.next;
+    void (*release)(int32_t) = dispatch.release;
+    bool (*result)(int32_t, uint64_t, void *, int32_t, int32_t, bool *) = dispatch.result;
     CallbackMsg msg;
     while (next(pipe, &msg)) {
         if (msg.id == CALL_COMPLETED && msg.size >= 16) {
@@ -662,6 +672,12 @@ static void capture_end(Capture *k) {
 static void enable_manual_dispatch(CPU *c) {
     if (manual_dispatch) return;
     FLAT(void (*)(void), "SteamAPI_ManualDispatch_Init")();
+    dispatch.pipe[0] = FLAT(int32_t (*)(void), "SteamAPI_GetHSteamPipe");
+    dispatch.pipe[1] = FLAT(int32_t (*)(void), "SteamGameServer_GetHSteamPipe");
+    dispatch.run_frame = FLAT(void (*)(int32_t), "SteamAPI_ManualDispatch_RunFrame");
+    dispatch.next = FLAT(bool (*)(int32_t, CallbackMsg *), "SteamAPI_ManualDispatch_GetNextCallback");
+    dispatch.release = FLAT(void (*)(int32_t), "SteamAPI_ManualDispatch_FreeLastCallback");
+    dispatch.result = FLAT(bool (*)(int32_t, uint64_t, void *, int32_t, int32_t, bool *), "SteamAPI_ManualDispatch_GetAPICallResult");
     manual_dispatch = 1;
 }
 
@@ -764,14 +780,10 @@ static void host_warning_hook(int severity, const char *text) {
     int attached = !c;
     if (attached) c = rt_foreign_thread_attach();
     size_t length = strlen(text);
-    char *copy = malloc(length + 1);
-    if (!copy) rt_trap(c, c->eip, "Steam warning hook: out of memory");
-    memcpy(copy, text, length + 1);
-    steam_mask_ids(copy, length);
     uint32_t guest = rt_alloc((uint32_t)length + 1);
     if (!guest) rt_trap(c, c->eip, "Steam warning hook: guest memory exhausted");
-    memcpy(GPTR(guest), copy, length + 1);
-    free(copy);
+    memcpy(GPTR(guest), text, length + 1);
+    steam_mask_ids((char *)GPTR(guest), length);
     uint32_t arguments[] = {(uint32_t)severity, guest};
     rt_invoke(c, fn, arguments, 2);
     rt_free(guest);

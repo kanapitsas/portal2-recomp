@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Génère runtime/ios/steam_stub_generated.c : une définition hôte de chaque
-fonction plate de libsteam_api que le pont (runtime/steam_generated.c) peut
-appeler, pour le stub Steam du build iOS (runtime/ios/steam_stub.c).
+"""Generate runtime/ios/steam_stub_generated.c: a host definition of every flat
+libsteam_api function the bridge (runtime/steam_generated.c) can call, for the
+Steam stub of the iOS build (runtime/ios/steam_stub.c).
 
-Par défaut une fonction renvoie 0, false, NULL ou "" ; RESPONSES donne les
-réponses d'un utilisateur connecté, hors ligne, qui possède Portal 2 (620).
-Une fonction qui renvoie un pointeur à partir d'une version d'interface
-renvoie l'objet d'interface du stub. Les fonctions déjà écrites à la main
-dans steam_stub.c sont sautées.
+By default a function returns 0, false, NULL or ""; RESPONSES gives the answers
+of a logged-in, offline user who owns Portal 2 (620). A function returning a
+pointer from an interface version returns the stub's interface object.
+Functions already hand-written in steam_stub.c are skipped.
+
+    python3 tools/gen_steam_stub.py [output.c]
 """
+import argparse
 import re
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -77,8 +78,8 @@ def default(ret):
     return 'return 0;'
 
 
-def main():
-    out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / 'runtime/ios/steam_stub_generated.c'
+def generate():
+    """(source text, generated function count, hand-written function count)."""
     skip = handwritten()
     lines = ['/* Généré par tools/gen_steam_stub.py depuis runtime/steam_generated.c. Ne pas modifier. */',
              '/* Stub Steam du build iOS seulement : voir runtime/ios/steam_stub.c. */',
@@ -101,8 +102,16 @@ def main():
         lines.append(f'EXPORT {ret}{"" if ret.endswith("*") else " "}{name}({params}) {{ {unused} {body} }}')
         count += 1
     lines += ['#endif', '']
-    out.write_text('\n'.join(lines))
-    print(f'{count} fonctions plates générées ({len(skip)} écrites à la main) -> {out}')
+    return '\n'.join(lines), count, len(skip)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('output', nargs='?', type=Path, default=ROOT / 'runtime/ios/steam_stub_generated.c')
+    out = parser.parse_args().output
+    text, count, skipped = generate()
+    out.write_text(text)
+    print(f'{count} flat functions generated ({skipped} hand-written) -> {out}')
 
 
 if __name__ == '__main__':

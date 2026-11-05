@@ -244,9 +244,8 @@ static void publish(CPU *c, Locale *l) {
 }
 
 // --- nl_langinfo -----------------------------------------------------------
-static const char *const days[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-static const char *const months[] = {"January", "February", "March", "April", "May", "June", "July",
-                                     "August", "September", "October", "November", "December"};
+#define days rt_day_names      // tables partagées avec asctime/strftime (time.c)
+#define months rt_month_names
 // Élément LC_TIME texte (index 0..49 étroits, 52..100 larges correspondants).
 static const char *time_item(unsigned index, char *scratch) {
     if (index <= 6) { snprintf(scratch, 4, "%s", days[index]); return scratch; }

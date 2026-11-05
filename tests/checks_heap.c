@@ -6,12 +6,22 @@ RT_CHECK(heap_reuses_frees_and_rejects_unknown_addresses) {
     uint32_t a = rt_alloc(24), b = rt_alloc(24);
     assert(a && b && a != b && !(a & 15) && !(b & 15));
     assert(rt_heap_usable_size(a) == 32);                       // classe de 32 octets
-    uint32_t m1 = rt_alloc(100000), m2 = rt_alloc(100000);
-    assert(m1 && m2 && rt_heap_usable_size(m1) == 102400);      // zones de 4 Kio au-delà de 16 Kio
+    // Deux zones adjacentes : des zones libres laissées par les checks précédents
+    // (TCB des threads joints, 0x11000 octets) peuvent servir la première
+    // allocation ; on les garde occupées jusqu'à obtenir une paire contiguë.
+    uint32_t held[16]; unsigned held_count = 0, m1, m2;
+    for (;;) {
+        m1 = rt_alloc(100000); m2 = rt_alloc(100000);
+        assert(m1 && m2 && rt_heap_usable_size(m1) == 102400);  // zones de 4 Kio au-delà de 16 Kio
+        if (m2 == m1 + 102400) break;
+        assert(held_count + 2 <= 16);
+        held[held_count++] = m1; held[held_count++] = m2;
+    }
     assert(!rt_free(m1) && !rt_free(m2));
     uint32_t m3 = rt_alloc(150000);                              // réutilise les deux zones fusionnées
     assert(m3 == m1 || m3 < m2);
     assert(!rt_free(m3));
+    for (unsigned i = 0; i < held_count; ++i) assert(!rt_free(held[i]));
     memset(GPTR(a), 0xab, 24);
     assert(rt_free(a) == 0 && rt_heap_usable_size(a) == 0);
     assert(rt_free(a) == -1);                                     // double libération détectée

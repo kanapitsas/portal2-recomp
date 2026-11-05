@@ -31,7 +31,7 @@ scale 2, no vsync), and fixes the too-dark image of the gl4es path.
 ```sh
 # in the mtld3d checkout (branch feat/native-host), once per mtld3d change:
 make native-ios PROFILE=production        # native/target/aarch64-apple-ios/production/libd3d9metal.a
-# here: gameprep must have kept shaderapivk.so (it does on this branch)
+# here: gameprep must have kept shaderapivk.so
 python3 tools/build_ios.py --target device --release \
     --d3d9metal ../mtld3d/native/target/aarch64-apple-ios/production/libd3d9metal.a
 tools/ios_device.sh install
@@ -69,18 +69,29 @@ Journal setting) then shows `[ios] renderer: Metal (...)`,
 
 ## Building and running
 
+What `./setup.sh --ios` runs, step by step (`python3 tools/gameprep.py`
+first if it was not done for macOS):
+
 ```sh
-ios/deps/build.sh device                          # SDL2, FreeType, gl4es (once, or after changing the patch)
-python3 tools/build_ios.py --target device --release   # for playing: -O2 without memory checks
-tools/ios_device.sh install                       # installs on the connected iPhone
+P2_IOS_DEPS=deps/ios-deps ios/deps/build.sh device      # SDL2, FreeType, gl4es (once, or after changing the patch)
+python3 tools/build_ios.py --target device --release --deps deps/ios-deps/device   # for playing: -O2 without memory checks
+tools/ios_device.sh install                       # installs on the connected iPhone (unlocked, Developer Mode on)
 tools/ios_device.sh data                          # copies the game data (~11.5 GB, once)
-tools/ios_device.sh run 120 VAR=value…            # launches, waits, pulls back Documents/game.log
+tools/ios_device.sh run [seconds] [VAR=value…]    # launches, waits (180 s by default), pulls back Documents/game.log
 ```
 
-Simulator: `python3 tools/build_ios.py` then `tools/run_ios_sim.sh <seconds>`
-(`P2_SIM_DEVICE=<UDID>` for a different simulator). The simulator renders in
-software and interpolates triangles clipped at the near plane incorrectly
-(`ios/probe/clip_test.c`): its artifacts do not exist on a real device.
+`ios/deps/build.sh` writes to `P2_IOS_DEPS` (default `../work/ios-deps`) and
+`build_ios.py --deps` reads the matching `<prefix>/device`; `setup.sh` uses
+`deps/ios-deps` (`P2_DEPS` moves it). `P2_DEVICE=<UDID or name>` picks the
+iPhone for `tools/ios_device.sh` when several are connected.
+
+Simulator: `ios/deps/build.sh sim`, `python3 tools/build_ios.py`, then
+`tools/run_ios_sim.sh <seconds>` (`P2_SIM_DEVICE=<UDID>` for a different
+simulator; `P2_SIM_AUDIO=1` to hear the sound on the Mac's speakers, muted
+otherwise). The simulator renders in software and interpolates triangles
+clipped at the near plane incorrectly (`ios/probe/clip_test.c`): its
+artifacts do not exist on a real device. The Metal renderer is not available
+in the simulator.
 
 Signing (free account): 7-day profiles obtained through
 `xcodebuild -allowProvisioningUpdates` on `ios/signing/project.yml`, then
@@ -107,7 +118,7 @@ Replace `YOURTEAMID` with your team ID (Xcode > Settings > Accounts, or the
 (one per line), for example `+map` followed by `sp_a2_laser_intro`.
 
 The game language is written into the app's `launch.args` when it is built
-(`-language <name>`, chosen as on the Mac: see "Game language" in the README).
+(`-language <name>`, chosen as on the Mac: see [Game language](usage.md#game-language)).
 To change it, set `"language"` in `config/local.json` and rebuild.
 
 ## Settings (iOS Settings app)
@@ -154,9 +165,21 @@ translation and that the keys match between the code and the settings page.
 | `P2_BACKTAP_LOG=1` | logs every candidate (from half the thresholds) and the background noise every 5 s |
 | `P2_TOUCH_TEST_CLICK=s,x,y` | left click at (x, y) points, s seconds after the first menu |
 | `P2_TOUCH_TEST_MOVE=0.5,1` (+ `_SECONDS`, `_DELAY`, `_ANGLE`, `P2_TOUCH_TEST_WASD`) | forced deflections of the movement stick |
-| `P2_IOS_RENDER_SCALE=1/2/native` | render scale (points → pixels); `tools/ios_bench.py` compares antialiasing × scale |
+| `P2_IOS_RENDER_SCALE=1/2/native` | render scale (points → pixels); `tools/ios_bench.py` compares antialiasing × scale (`--renderer opengl` by default, `--renderer d3d9` for Metal) |
+| `P2_IOS_NO_PRESENT=1` | frames rendered but never presented, so the display cap does not limit the measured rate (OpenGL only; under Metal the display caps at 60 fps) |
+| `P2_IOS_AUTOEXEC="cmd; convar=value; pause 5; …"` | console commands, convar settings and pauses (seconds) run in order once the menu is gone, starting 5 s later |
 | `P2_GL_STREAM_UNSYNC=0`, `P2_IOS_BGRA=0`, `P2_IOS_SRGB=0` | disable the fast paths or the emulation |
-| `P2_IOS_SHADER_DUMP=<directory>`, `P2_IOS_GL_TRACE=1`, `P2_IOS_DRAW_LOG=<frame>` | converted shaders, compilation, draws for one frame |
+| `P2_IOS_SHADER_DUMP=<directory>`, `P2_IOS_DRAW_LOG=<frame>` | converted shaders, draws for one frame |
+| `P2_IOS_GL_TRACE=1` | logs each distinct texture upload combination once (function, target, level, formats, GL error) and traces shader compilation and program linking |
+| `P2_IOS_PROBE_FRAMES=1` | every 120 frames, reads a few pixels of the system framebuffer before presenting (all black = nothing drawn) |
+| `P2_IOS_DEBUG_UV=1` | every fragment shader that receives `oT0` shows `fract(oT0.xy)` instead (texture coordinate check) |
+| `P2_IOS_SKIP_DRAWS=<n>` or `<a>-<b>` | skips draw n (or a up to b, excluded) of every frame, counted as in `P2_IOS_DRAW_LOG` |
+| `P2_IOS_SKIP_PROGRAMS=45,802` | skips every draw made with these GL program ids |
+| `P2_IOS_PROGRAM_DUMP=<directory>` | writes the shader sources of the programs described by `P2_IOS_DRAW_LOG` |
+| `P2_IOS_SRGB_TRACE=1` | sRGB and border-state statistics every 2 000 draws |
+| `P2_FONT_DIRS=<dir>:<dir>` | font directories indexed by the minimal fontconfig (default `/System/Library/Fonts`) |
+| `P2_FONT_LOG=1` | logs every font match (by default only the first request per family) |
+| `P2_FRAME_LOG=1`, `P2_GATE_TIMING=1`, `P2_TRACE_*`, `P2_NATIVE_<NAME>=0` | as on the Mac: see [usage.md](usage.md#diagnostics) |
 
 Game console: `-condebug` writes it to
 `Documents/portal2-userdata/portal2/console.log`.
@@ -237,7 +260,9 @@ a_z < 0 at the peak, a tap on the screen a_z > 0.
 | unsynchronized `glBufferSubData` | ~19 |
 | BGRA colors in the buffer, swizzled by the shader | ~47 |
 
-Uncapped by the display (`tools/ios_bench.py`, `P2_IOS_NO_PRESENT=1`),
+Uncapped by the display (`tools/ios_bench.py`, `P2_IOS_NO_PRESENT=1`; these
+are OpenGL numbers, `ios_bench.py --renderer d3d9` measures Metal, where the
+display caps at 60 fps and `P2_IOS_NO_PRESENT` has no effect),
 sp_a2_laser_stairs at the spawn point: native 2796×1290 90 fps (4× MSAA) or
 94 (without); scale 2 (1864×860) 154; 1.5 178. The GPU is the bottleneck: scale 2 is the
 default on device. Heavy view of the same room (setpos -188.94 -396.92

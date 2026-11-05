@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Charge des .so ELF i386 à des adresses fixes et applique toutes leurs relocations hors ligne.
+"""Load i386 ELF .so files at fixed addresses and apply all their relocations offline.
 
-Sortie, pour chaque module : une copie de l'ELF dont les octets sont relocalisés (code et données),
-et un JSON de métadonnées (base, segments, init, exports, imports, points d'entrée connus).
-Le désassemblage se fait ensuite sur la copie relocalisée, avec --adjust-vma=base.
+Output, per module: a copy of the ELF with relocated bytes (code and data) and a
+JSON of metadata (base, segments, init, exports, imports, known entry points).
+Disassembly then runs on the relocated copy, with --adjust-vma=base.
 """
 import json, os, struct, sys
 
@@ -23,7 +23,8 @@ class Elf:
     def __init__(self, path, base, modid):
         self.path, self.base, self.modid = path, base, modid
         self.name = os.path.basename(path)
-        self.data = bytearray(open(path, 'rb').read())
+        with open(path, 'rb') as f:
+            self.data = bytearray(f.read())
         d = self.data
         assert d[:4] == b'\x7fELF' and d[4] == 1, 'ELF32 attendu'
         (self.e_type, self.e_machine, _, self.e_entry, self.e_phoff, self.e_shoff, _, _,
@@ -108,9 +109,9 @@ class Elf:
 
 
 def lookup_scopes(mods, program='portal2_linux'):
-    """Ordre de recherche des symboles de chaque module, comme ld.so :
-    portée globale (programme + DT_NEEDED en largeur) puis portée locale du
-    module (lui-même + ses DT_NEEDED en largeur), sans doublon."""
+    """Symbol search order of each module, like ld.so: global scope (program +
+    DT_NEEDED, breadth first) then the module's local scope (itself + its
+    DT_NEEDED, breadth first), without duplicates."""
     by_name = {m.name: m for m in mods}
     def breadth_first(root):
         order, queue, seen = [], [root], {root.name}
@@ -139,7 +140,7 @@ def main():
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', required=True)
-    ap.add_argument('mods', nargs='+', help='chemin.so@0xBASE, dans l\'ordre de chargement')
+    ap.add_argument('mods', nargs='+', help='path.so@0xBASE, in load order')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     mods = []
@@ -197,7 +198,8 @@ def main():
     for m in mods:
         tls_sym_off = {}
         n_by_type = {}
-        for off, typ, si in m.rels():
+        rels = m.rels()   # parsed once: reused below for the code pointers in data
+        for off, typ, si in rels:
             n_by_type[typ] = n_by_type.get(typ, 0) + 1
             if typ == R_386_NONE:
                 continue
@@ -237,7 +239,8 @@ def main():
             else:
                 raise SystemExit(f'{m.name}: relocation {typ} non gérée à {off:#x}')
         img = os.path.join(a.out, m.name)
-        open(img, 'wb').write(m.data)
+        with open(img, 'wb') as f:
+            f.write(m.data)
 
         text = m.secs['.text']
         entries = set()
@@ -260,7 +263,7 @@ def main():
         # pointeurs vers .text présents dans les données (vtables, tables de fonctions)
         tlo, thi = m.base + text['addr'], m.base + text['addr'] + text['size']
         ptrs = set()
-        for off, typ, si in m.rels():
+        for off, typ, si in rels:
             if typ in (R_386_RELATIVE, R_386_32):
                 v = m.u32(off)
                 in_text = text['addr'] <= off < text['addr'] + text['size']
@@ -283,7 +286,8 @@ def main():
         print(f'{m.name}: base {m.base:#x}, {len(entries)} entrées, {len(ptrs)} pointeurs de code en données, relocs {n_by_type}')
     meta_all['imports'] = [dict(name=n, addr=imports[n]) for n in order]
     meta_all['data_imports'] = list(data_imports.values())
-    json.dump(meta_all, open(os.path.join(a.out, 'layout.json'), 'w'), indent=1)
+    with open(os.path.join(a.out, 'layout.json'), 'w') as f:
+        json.dump(meta_all, f, indent=1)
     print(f'{len(order)} imports libc')
 
 

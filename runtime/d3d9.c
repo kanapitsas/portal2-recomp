@@ -97,7 +97,12 @@ static int executable_dir(char *out, size_t size) {
 // Ordre : P2_D3D9METAL, ../Frameworks (app macOS), Frameworks (app iOS), dossier de l'exécutable.
 static void *open_library(char *path, size_t size) {
     const char *env = getenv("P2_D3D9METAL");
-    if (env && *env) { snprintf(path, size, "%s", env); return dlopen(env, RTLD_NOW | RTLD_LOCAL); }
+    if (env && *env) {
+        snprintf(path, size, "%s", env);
+        void *handle = dlopen(env, RTLD_NOW | RTLD_LOCAL);
+        if (!handle) fprintf(stderr, "d3d9: dlopen %s: %s\n", env, dlerror());
+        return handle;
+    }
     char dir[PATH_MAX];
     if (executable_dir(dir, sizeof(dir))) return NULL;
     static const char *const candidates[] = {"%s/../Frameworks/libd3d9metal.dylib", "%s/Frameworks/libd3d9metal.dylib",
@@ -266,7 +271,7 @@ static int load_library(void) {
             void *handle = open_library(library_path, sizeof(library_path));
             init = handle ? (d3d9metal_init_fn)dlsym(handle, "d3d9metal_init") : NULL;
             create = handle ? (d3d9metal_create_fn)dlsym(handle, "d3d9metal_Direct3DCreate9") : NULL;
-            if (!init || !create) fprintf(stderr, "d3d9: %s: %s\n", library_path, handle ? "d3d9metal_* exports missing" : "not found");
+            if (!init || !create) fprintf(stderr, "d3d9: %s: %s\n", library_path, handle ? "d3d9metal_* exports missing" : "not loaded");
 #endif
         } else snprintf(library_path, sizeof(library_path), "(test library)");
         if (init && create) {
@@ -910,8 +915,11 @@ static int d3d9_present_call(CPU *c, const char *name, void *data) {
     const D3d9Method *m = data;
     if (m->name[9] == 'D') rt_d3d9_draw_overlay(self_of(c, m));   // IDirect3DDevice9::Present (pas la chaîne d'échange)
     d3d9_call(c, name, data);
-    void (*hook)(void) = rt_d3d9_on_present;
-    if (hook && (int32_t)c->eax >= 0) hook();
+    if ((int32_t)c->eax >= 0) {
+        rt_frame_log_tick();                                  // P2_FRAME_LOG, Mac et iOS (sdl_video.c)
+        void (*hook)(void) = rt_d3d9_on_present;
+        if (hook) hook();
+    }
     return 1;
 }
 static int d3d9_timed_present(CPU *c, const char *name, void *data) {

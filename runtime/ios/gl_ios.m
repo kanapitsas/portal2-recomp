@@ -1,4 +1,4 @@
-// OpenGL hôte sur iOS : contexte ES 2 par SDL, gl4es par-dessus. Voir gl_ios.h.
+// OpenGL hôte sur iOS : contexte ES 3 par SDL, gl4es par-dessus. Voir gl_ios.h.
 #include <TargetConditionals.h>
 #if TARGET_OS_IPHONE
 #define GLES_SILENCE_DEPRECATION 1
@@ -12,6 +12,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>
+#include "env_ios.h"
 #include "gl4esinit.h"
 
 void gl4es_pre_swap(void);
@@ -51,7 +52,9 @@ static const GLubyte *es_get_string(GLenum name) {
     return (const GLubyte *)extensions;
 }
 // P2_IOS_GL_TRACE=1 : échecs de compilation et d'édition de liens des shaders
-// ES que gl4es produit à partir du GLSL de togl (journal + source, 20 premiers).
+// ES que gl4es produit à partir du GLSL de togl (journal + source, 20 premiers),
+// paramètres de texture notables et combinaisons d'envoi de texture (plus bas).
+static int trace_enabled(void) { return RT_IOS_ENV_FLAG("P2_IOS_GL_TRACE", 0); }
 static void (*es_compile_shader)(GLuint);
 static void (*es_link_program)(GLuint);
 static void es_compile(GLuint shader) {
@@ -152,7 +155,7 @@ static void shader_source(GLuint shader, GLsizei count, const GLchar *const *str
 // Formats dimensionnés équivalents d'ES 3.
 #define HALF_FLOAT_OES 0x8D61
 static GLenum es3_type(GLenum type) { return type == HALF_FLOAT_OES ? GL_HALF_FLOAT : type; }
-static GLint es3_internal(GLint internal, GLenum format, GLenum type) {
+static GLint es3_internal(GLint internal, GLenum type) {
     switch (internal) {
     case GL_DEPTH_COMPONENT:
         return type == GL_UNSIGNED_INT ? GL_DEPTH_COMPONENT24 : type == GL_FLOAT ? GL_DEPTH_COMPONENT32F : GL_DEPTH_COMPONENT16;
@@ -160,13 +163,13 @@ static GLint es3_internal(GLint internal, GLenum format, GLenum type) {
     case GL_RGBA: case GL_RGB: case GL_RG: case GL_RED:
         if (type != HALF_FLOAT_OES && type != GL_HALF_FLOAT && type != GL_FLOAT) return internal;
         return internal == GL_RGBA ? GL_RGBA16F : internal == GL_RGB ? GL_RGB16F : internal == GL_RG ? GL_RG16F : GL_R16F;
-    default: (void)format; return internal;
+    default: return internal;
     }
 }
 static void (*es_tex_image_2d)(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const void *);
 static void (*es_tex_sub_image_2d)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void *);
 static void es3_tex_image_2d(GLenum t, GLint l, GLint i, GLsizei w, GLsizei h, GLint b, GLenum f, GLenum ty, const void *d) {
-    es_tex_image_2d(t, l, es3_internal(i, f, ty), w, h, b, f, es3_type(ty), d);
+    es_tex_image_2d(t, l, es3_internal(i, ty), w, h, b, f, es3_type(ty), d);
 }
 static void es3_tex_sub_image_2d(GLenum t, GLint l, GLint x, GLint y, GLsizei w, GLsizei h, GLenum f, GLenum ty, const void *d) {
     es_tex_sub_image_2d(t, l, x, y, w, h, f, es3_type(ty), d);
@@ -203,13 +206,21 @@ static GLint (*es_get_uniform_location)(GLuint, const GLchar *);
 static void (*es_uniform1i)(GLint, GLint);
 static void (*es_link_program_always)(GLuint);
 static void link_program_always(GLuint program) { ++bgra_generation; es_link_program_always(program); }
+// Adressage ouvert, sondage linéaire sur 8 cases : deux programmes de même
+// case d'origine ne s'évincent plus à chaque tracé. Une case périmée
+// (génération d'avant) ou vide est reprise ; sinon la case d'origine.
 static BgraEntry *bgra_entry(GLuint program) {
     if (!program || !es_get_uniform_location) return NULL;
-    BgraEntry *e = &bgra_cache[(program * 2654435761u) % 1024];
-    if (e->program != program || e->generation != bgra_generation) {
-        *e = (BgraEntry){program, es_get_uniform_location(program, "p2_bgra"), ~0u, bgra_generation};
+    unsigned home = (program * 2654435761u) % 1024;
+    BgraEntry *victim = NULL;
+    for (unsigned i = 0; i < 8; ++i) {
+        BgraEntry *e = &bgra_cache[(home + i) % 1024];
+        if (e->program == program && e->generation == bgra_generation) return e;
+        if (!victim && (!e->program || e->generation != bgra_generation)) victim = e;
     }
-    return e;
+    if (!victim) victim = &bgra_cache[home];
+    *victim = (BgraEntry){program, es_get_uniform_location(program, "p2_bgra"), ~0u, bgra_generation};
+    return victim;
 }
 int gl4es_p2_bgra_program(GLuint program) { BgraEntry *e = bgra_entry(program); return e && e->location >= 0; }
 void gl4es_p2_bgra_mask(GLuint program, unsigned mask) {
@@ -229,7 +240,7 @@ static void *gles_function(const char *name) {
     if (!strcmp(name, "glTexSubImage2D")) { es_tex_sub_image_2d = dlsym(gles, name); return (void *)es3_tex_sub_image_2d; }
     if (!strcmp(name, "glGetString")) return (void *)es_get_string;
     if (!strcmp(name, "glShaderSource")) { es_shader_source = dlsym(gles, name); return (void *)shader_source; }
-    if (getenv("P2_IOS_GL_TRACE")) {
+    if (trace_enabled()) {
         if (!strcmp(name, "glCompileShader")) { es_compile_shader = dlsym(gles, name); return (void *)es_compile; }
         if (!strcmp(name, "glLinkProgram")) { es_link_program = dlsym(gles, name); return (void *)es_link; }
     }
@@ -376,7 +387,6 @@ static GLenum check_framebuffer_status(GLenum target) {
 // EXT_texture_sRGB_decode est annoncé à togl : son paramètre de texture est
 // absorbé ici au lieu d'atteindre gl4es/OpenGL ES (GL_INVALID_ENUM).
 #define TEXTURE_SRGB_DECODE 0x8A48
-static void tex_parameter_3d_i(GLenum target, GLenum name, GLint value);
 // Niveaux et LOD de mipmaps : gl4es (pensé pour ES 2) les garde pour lui sans
 // les transmettre ; en ES 3 ils existent. Sans eux, une chaîne de mipmaps
 // partielle (MAX_LEVEL réglé par togl) rend la texture incomplète : noire.
@@ -396,7 +406,6 @@ static void es_level_parameter(GLenum target, GLenum name, GLfloat value) {
     if (real_bound != name_bound) glBindTexture(target, (GLuint)real_bound);
     if (real_unit != unit) glActiveTexture((GLenum)real_unit);
 }
-static int trace_enabled(void);
 static void trace_parameter(GLenum target, GLenum name, GLfloat v0, const GLfloat *v) {
     int border = name == 0x1004 && v && (v[0] || v[1] || v[2] || v[3]);
     if (!trace_enabled() || (v0 != 0x812D && !border)) return;
@@ -406,29 +415,8 @@ static void trace_parameter(GLenum target, GLenum name, GLfloat v0, const GLfloa
     fprintf(stderr, "[gl-trace] paramètre %#x cible %#x texture %d = %g %g %g %g\n", name, target, bound, v0,
             v ? v[1] : 0, v ? v[2] : 0, v ? v[3] : 0);
 }
-static void tex_parameteri(GLenum target, GLenum name, GLint value) {
-    trace_parameter(target, name, (GLfloat)value, NULL);
-    rt_ios_srgb_wrap_mode(target, name, value);
-    if (name == TEXTURE_SRGB_DECODE) { rt_ios_srgb_decode(target, value); return; }
-    if (target == 0x806F) { tex_parameter_3d_i(target, name, value); return; }
-    gl4es_tex_parameteri(target, name, value);
-    if (level_parameter(name)) es_level_parameter(target, name, (GLfloat)value);
-}
-static void tex_parameteriv(GLenum target, GLenum name, const GLint *values) {
-    rt_ios_srgb_wrap_mode(target, name, values[0]);
-    if (name == TEXTURE_SRGB_DECODE) { rt_ios_srgb_decode(target, values[0]); return; }
-    if (target == 0x806F) { tex_parameter_3d_i(target, name, values[0]); return; }
-    gl4es_tex_parameteriv(target, name, values);
-    if (level_parameter(name)) es_level_parameter(target, name, (GLfloat)values[0]);
-}
-
 // P2_IOS_GL_TRACE=1 : chaque combinaison distincte d'envoi de texture
 // (fonction, cible, niveau, formats) est journalisée une fois, avec l'erreur GL.
-static int trace_enabled(void) {
-    static int enabled = -1;
-    if (enabled < 0) { const char *e = getenv("P2_IOS_GL_TRACE"); enabled = e && *e == '1'; }
-    return enabled;
-}
 static void trace_upload(const char *fn, GLenum target, GLint level, GLenum internal, GLsizei w, GLsizei h,
                          GLenum format, GLenum type, const void *data) {
     static struct { const char *fn; GLenum target, internal, format, type; GLint level; int data; } seen[256];
@@ -556,26 +544,32 @@ static void tex_sub_image_3d(GLenum target, GLint level, GLint x, GLint y, GLint
     with_unit_end(previous);
     free(owned);
 }
-static void tex_parameter_3d_i(GLenum target, GLenum name, GLint value) {
-    GLint previous = with_unit_begin(); glTexParameteri(target, name, value); with_unit_end(previous);
-}
-static void tex_parameterf(GLenum target, GLenum name, GLfloat value) {
-    rt_ios_srgb_wrap_mode(target, name, (GLint)value);
-    if (name == TEXTURE_SRGB_DECODE) { rt_ios_srgb_decode(target, (GLint)value); return; }
-    if (target != TARGET_3D) {
-        gl4es_tex_parameterf(target, name, value);
-        if (level_parameter(name)) es_level_parameter(target, name, value);
-        return;
+// Paramètres de texture : les quatre entrées (i, iv, f, fv) suivent le même
+// chemin. Le paramètre EXT_texture_sRGB_decode est absorbé (srgb.c) ; une
+// texture 3D va directement à OpenGL ES ; sinon gl4es, puis les niveaux et LOD
+// de mipmaps qu'il ne transmet pas.
+enum { PARAM_I, PARAM_IV, PARAM_F, PARAM_FV };
+static void tex_parameter(int kind, GLenum target, GLenum name, GLint i, const GLint *iv, GLfloat f, const GLfloat *fv) {
+    GLfloat value = kind == PARAM_I ? (GLfloat)i : kind == PARAM_IV ? (GLfloat)iv[0] : kind == PARAM_F ? f : fv[0];
+    GLint ivalue = kind == PARAM_I ? i : kind == PARAM_IV ? iv[0] : (GLint)value;
+    trace_parameter(target, name, value, kind == PARAM_FV && name == 0x1004 ? fv : NULL);
+    rt_ios_srgb_wrap_mode(target, name, ivalue);
+    if (name == TEXTURE_SRGB_DECODE) { rt_ios_srgb_decode(target, ivalue); return; }
+    int es = target == TARGET_3D;
+    GLint previous = es ? with_unit_begin() : 0;
+    switch (kind) {
+    case PARAM_I: if (es) glTexParameteri(target, name, i); else gl4es_tex_parameteri(target, name, i); break;
+    case PARAM_IV: if (es) glTexParameteri(target, name, iv[0]); else gl4es_tex_parameteriv(target, name, iv); break;
+    case PARAM_F: if (es) glTexParameterf(target, name, f); else gl4es_tex_parameterf(target, name, f); break;
+    default: if (es) glTexParameterfv(target, name, fv); else gl4es_tex_parameterfv(target, name, fv); break;
     }
-    GLint previous = with_unit_begin(); glTexParameterf(target, name, value); with_unit_end(previous);
+    if (es) with_unit_end(previous);
+    else if (level_parameter(name)) es_level_parameter(target, name, value);
 }
-static void tex_parameterfv(GLenum target, GLenum name, const GLfloat *values) {
-    trace_parameter(target, name, values[0], name == 0x1004 ? values : NULL);
-    rt_ios_srgb_wrap_mode(target, name, (GLint)values[0]);
-    if (name == TEXTURE_SRGB_DECODE) { rt_ios_srgb_decode(target, (GLint)values[0]); return; }
-    if (target != TARGET_3D) { gl4es_tex_parameterfv(target, name, values); return; }
-    GLint previous = with_unit_begin(); glTexParameterfv(target, name, values); with_unit_end(previous);
-}
+static void tex_parameteri(GLenum t, GLenum n, GLint v) { tex_parameter(PARAM_I, t, n, v, NULL, 0, NULL); }
+static void tex_parameteriv(GLenum t, GLenum n, const GLint *v) { tex_parameter(PARAM_IV, t, n, 0, v, 0, NULL); }
+static void tex_parameterf(GLenum t, GLenum n, GLfloat v) { tex_parameter(PARAM_F, t, n, 0, NULL, v, NULL); }
+static void tex_parameterfv(GLenum t, GLenum n, const GLfloat *v) { tex_parameter(PARAM_FV, t, n, 0, NULL, 0, v); }
 
 // ---- textures 16 bits normalisées (UNSIGNED_SHORT) ----
 // OpenGL ES n'a pas de RGBA16 normalisé et gl4es le rend noir (mesuré) : c'est
@@ -649,6 +643,13 @@ static void mark_half(GLuint texture, int on) {
     half_textures[texture] = (unsigned char)on;
 }
 static void *traced(const char *name);
+// Envoi avec un GL_UNPACK_ALIGNMENT donné, l'alignement d'avant rétabli.
+static void with_unpack_alignment(GLint alignment, void (^upload)(void)) {
+    GLint previous = 4; gl4es_get_integerv(GL_UNPACK_ALIGNMENT, &previous);
+    g4_pixel_storei(GL_UNPACK_ALIGNMENT, alignment);
+    upload();
+    g4_pixel_storei(GL_UNPACK_ALIGNMENT, previous);
+}
 static void narrow_init(void) {
     if (g4_tex_image_2d_plain) return;
     void *t = traced("glTexImage2D"), *u = traced("glTexSubImage2D");   // traces si P2_IOS_GL_TRACE
@@ -692,18 +693,12 @@ static void tex_image_2d(GLenum t, GLint l, GLint i, GLsizei w, GLsizei h, GLint
     if (ty != GL_UNSIGNED_SHORT || !n) { g4_tex_image_2d_plain(t, l, i, w, h, b, f, ty, d); free(zeros); return; }
     if (half) {
         unsigned short *data = half_u16(d, w, h, n, &f);
-        GLint alignment = 4; gl4es_get_integerv(GL_UNPACK_ALIGNMENT, &alignment);
-        g4_pixel_storei(GL_UNPACK_ALIGNMENT, 2);
-        g4_tex_image_2d_plain(t, l, half, w, h, b, f, GL_HALF_FLOAT, d ? data : NULL);
-        g4_pixel_storei(GL_UNPACK_ALIGNMENT, alignment);
+        with_unpack_alignment(2, ^{ g4_tex_image_2d_plain(t, l, half, w, h, b, f, GL_HALF_FLOAT, d ? data : NULL); });
         free(data);
         return;
     }
     unsigned char *narrow = narrow_u16(d, w, h, n);
-    GLint alignment = 4; gl4es_get_integerv(GL_UNPACK_ALIGNMENT, &alignment);
-    g4_pixel_storei(GL_UNPACK_ALIGNMENT, 1);
-    g4_tex_image_2d_plain(t, l, narrow_internal(i), w, h, b, f, GL_UNSIGNED_BYTE, d ? narrow : NULL);
-    g4_pixel_storei(GL_UNPACK_ALIGNMENT, alignment);
+    with_unpack_alignment(1, ^{ g4_tex_image_2d_plain(t, l, narrow_internal(i), w, h, b, f, GL_UNSIGNED_BYTE, d ? narrow : NULL); });
     free(narrow);
 }
 static void tex_sub_image_2d(GLenum t, GLint l, GLint x, GLint y, GLsizei w, GLsizei h, GLenum f, GLenum ty, const void *d) {
@@ -715,19 +710,13 @@ static void tex_sub_image_2d(GLenum t, GLint l, GLint x, GLint y, GLsizei w, GLs
     if (texture && texture < half_size && half_textures[texture]) {
         unsigned short *data = half_u16(d, w, h, n, &f);
         if (!data) return;
-        GLint alignment = 4; gl4es_get_integerv(GL_UNPACK_ALIGNMENT, &alignment);
-        g4_pixel_storei(GL_UNPACK_ALIGNMENT, 2);
-        g4_tex_sub_image_2d_plain(t, l, x, y, w, h, f, GL_HALF_FLOAT, data);
-        g4_pixel_storei(GL_UNPACK_ALIGNMENT, alignment);
+        with_unpack_alignment(2, ^{ g4_tex_sub_image_2d_plain(t, l, x, y, w, h, f, GL_HALF_FLOAT, data); });
         free(data);
         return;
     }
     unsigned char *narrow = narrow_u16(d, w, h, n);
     if (!narrow) return;
-    GLint alignment = 4; gl4es_get_integerv(GL_UNPACK_ALIGNMENT, &alignment);
-    g4_pixel_storei(GL_UNPACK_ALIGNMENT, 1);
-    g4_tex_sub_image_2d_plain(t, l, x, y, w, h, f, GL_UNSIGNED_BYTE, narrow);
-    g4_pixel_storei(GL_UNPACK_ALIGNMENT, alignment);
+    with_unpack_alignment(1, ^{ g4_tex_sub_image_2d_plain(t, l, x, y, w, h, f, GL_UNSIGNED_BYTE, narrow); });
     free(narrow);
 }
 
@@ -813,7 +802,8 @@ void rt_ios_request_frame_rate(void) {
     fprintf(stderr, "[gl-ios] fréquence d'affichage demandée : jusqu'à %.0f Hz\n", wanted);
 }
 
-float rt_ios_render_scale(void);   // sdl_ios.m
+float rt_ios_render_scale(void);                     // sdl_ios.m
+void rt_ios_view_set_scale(void *uiview, float wanted);  // sdl_ios.m
 SDL_GLContext rt_ios_gl_create_context(SDL_Window *window) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);   // ES 3 : 16 unités de texture (togl en utilise 16)
@@ -829,12 +819,8 @@ SDL_GLContext rt_ios_gl_create_context(SDL_Window *window) {
         // SDL crée sa vue GL à l'échelle native ; la vue reprend la nôtre et
         // SDL recrée ses renderbuffers à la taille voulue (layoutSubviews).
         UIView *view = info.info.uikit.window.rootViewController.view;
-        CGFloat wanted = rt_ios_render_scale();
-        if (view && wanted > 1 && fabs(view.contentScaleFactor - wanted) > 0.01) {
-            view.contentScaleFactor = wanted;
-            [view setNeedsLayout];
-            [view layoutIfNeeded];
-        }
+        float wanted = rt_ios_render_scale();
+        if (wanted > 1) rt_ios_view_set_scale((__bridge void *)view, wanted);
     }
     SDL_GL_GetDrawableSize(window, &drawable_width, &drawable_height);
     rt_ios_request_frame_rate();
@@ -847,9 +833,8 @@ SDL_GLContext rt_ios_gl_create_context(SDL_Window *window) {
 // P2_IOS_PROBE_FRAMES=1 : toutes les 120 images, quelques pixels du FBO
 // système juste avant la présentation (noir partout = rien n'y est dessiné).
 static void probe_frame(void) {
-    static int enabled = -1, frame;
-    if (enabled < 0) { const char *e = getenv("P2_IOS_PROBE_FRAMES"); enabled = e && *e == '1'; }
-    if (!enabled || ++frame % 120) return;
+    static int frame;
+    if (!RT_IOS_ENV_FLAG("P2_IOS_PROBE_FRAMES", 0) || ++frame % 120) return;
     void (*read)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *) = dlsym(gles, "glReadPixels");
     GLint bound = 0; real_get_integerv(GL_FRAMEBUFFER_BINDING, &bound);
     real_bind_framebuffer(GL_FRAMEBUFFER, system_framebuffer);
@@ -879,9 +864,7 @@ void rt_ios_gl_swap_window(SDL_Window *window) {
     // P2_IOS_NO_PRESENT=1 (banc) : images rendues mais jamais présentées, donc
     // sans plafond de l'écran (qui arrondit à 120, 60, 40… i/s) ; l'écran reste
     // figé, la cadence du journal (P2_FRAME_LOG) est la vraie.
-    static int present = -1;
-    if (present < 0) present = !getenv("P2_IOS_NO_PRESENT");
-    if (!present) {
+    if (RT_IOS_ENV_FLAG("P2_IOS_NO_PRESENT", 0)) {
         static void (*flush)(void);
         if (!flush) flush = dlsym(gles, "glFlush");
         flush();
