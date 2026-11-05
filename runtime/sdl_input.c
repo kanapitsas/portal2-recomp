@@ -212,10 +212,12 @@ void rt_sdl_event_to_host(CPU *c, uint32_t guest, SDL_Event *host) {
 // (thread interne SDL) n'a ni pile ni TLS invitée : il est piégé.
 typedef struct Watch { uint32_t function, userdata; struct Watch *next; } Watch;
 static Watch *watches;
+static void log_input_event(const SDL_Event *e);
 
 static int watch_trampoline(void *opaque, SDL_Event *event) {
     Watch *w = opaque;
     if (!rt_sdl_event_is_sdl2(event->type)) return 1;   // inconnu de SDL2 : invisible pour l'invité
+    log_input_event(event);   // le jeu peut consommer les entrées par observateur plutôt que par PollEvent
     CPU *c = rt_shim_cpu();
     if (!c) {
         fprintf(stderr, "SDL event watch %#x called on a host thread outside any guest SDL call\n", w->function);
@@ -330,6 +332,14 @@ static void log_input_event(const SDL_Event *e) {
         if (e->caxis.value > 16000 || e->caxis.value < -16000)
             fprintf(stderr, "[input] %u controller %d axis %d %d\n", t, e->caxis.which, e->caxis.axis, e->caxis.value);
         break;
+    case SDL_JOYBUTTONDOWN: case SDL_JOYBUTTONUP:
+        fprintf(stderr, "[input] %u joystick %d button %d %s\n", t, e->jbutton.which, e->jbutton.button,
+                e->type == SDL_JOYBUTTONDOWN ? "down" : "up");
+        break;
+    case SDL_JOYAXISMOTION:
+        if (e->jaxis.value > 16000 || e->jaxis.value < -16000)
+            fprintf(stderr, "[input] %u joystick %d axis %d %d\n", t, e->jaxis.which, e->jaxis.axis, e->jaxis.value);
+        break;
     case SDL_KEYDOWN:
         fprintf(stderr, "[input] %u key %s\n", t, SDL_GetScancodeName(e->key.keysym.scancode));
         break;
@@ -360,6 +370,29 @@ int rt_touch_shaper_pop(TouchShaper *t, uint32_t now, SDL_Event *out) {
     return 1;
 }
 static TouchShaper touch_shaper;
+static SDL_GameController *diagnostic_controller;
+static void log_controller_state(void) {
+    if (!rt_input_logging() || !diagnostic_controller) return;
+    static uint32_t last;
+    uint32_t now = SDL_GetTicks();
+    if (now - last < 500) return;
+    last = now;
+    SDL_GameController *p = diagnostic_controller;
+    // L'accéléromètre bouge (gravité + bruit) à chaque rapport reçu, manette
+    // posée : des valeurs figées ou nulles veulent dire qu'aucun rapport
+    // n'arrive, sans que personne ait à toucher la manette.
+    float accel[3] = {0, 0, 0};
+    if (SDL_GameControllerHasSensor(p, SDL_SENSOR_ACCEL)) {
+        if (!SDL_GameControllerIsSensorEnabled(p, SDL_SENSOR_ACCEL)) SDL_GameControllerSetSensorEnabled(p, SDL_SENSOR_ACCEL, SDL_TRUE);
+        SDL_GameControllerGetSensorData(p, SDL_SENSOR_ACCEL, accel, 3);
+    }
+    fprintf(stderr, "[input] state attached=%d focus=%d axes=%d,%d,%d,%d buttons=%d,%d accel=%.3f,%.3f,%.3f\n",
+            SDL_GameControllerGetAttached(p), SDL_GetKeyboardFocus() != NULL,
+            SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_LEFTX), SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_LEFTY),
+            SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_RIGHTX), SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_RIGHTY),
+            SDL_GameControllerGetButton(p, SDL_CONTROLLER_BUTTON_A), SDL_GameControllerGetButton(p, SDL_CONTROLLER_BUTTON_B),
+            accel[0], accel[1], accel[2]);
+}
 
 // Déplacement de souris synthétique (aller-retour d'un pixel, souris réelle et
 // non tactile) demandé par runtime/ios/game_state.c à l'ouverture d'un menu.
@@ -419,6 +452,7 @@ static void poll_into(CPU *c, uint32_t guest, int *got) {
     if (!(*got = nudge_event(&event)) && !(*got = rt_touch_shaper_pop(&touch_shaper, now, &event)))
         while ((*got = SDL_PollEvent(&event)) &&
                (!rt_sdl_event_is_sdl2(event.type) || rt_touch_shaper_hold(&touch_shaper, &event, now))) {}
+    log_controller_state();
     // F3 : compteur d'images hôte (fps_overlay.c). La touche reste transmise au
     // jeu, qui ne l'associe à rien par défaut.
     if (*got && event.type == SDL_KEYDOWN && !event.key.repeat && event.key.keysym.scancode == SDL_SCANCODE_F3)
@@ -504,10 +538,12 @@ static int sdl_input_shim(CPU *c, const char *name) {
         c->eax = (uint32_t)SDL_NumJoysticks();
     } else if (!strcmp(n, "IsGameController")) {
         c->eax = SDL_IsGameController((int)argument(c, 0)) ? 1 : 0;
+        if (input_logging()) fprintf(stderr, "[input] device %u is game controller: %u\n", argument(c, 0), c->eax);
     } else if (!strcmp(n, "JoystickNameForIndex")) {
         c->eax = intern_name(c, SDL_JoystickNameForIndex((int)argument(c, 0)));
     } else if (!strcmp(n, "JoystickOpen")) {
         c->eax = ref_acquire(c, SDL_JoystickOpen((int)argument(c, 0)), KIND_JOYSTICK, 1);
+        if (input_logging()) fprintf(stderr, "[input] joystick open %u: %s\n", argument(c, 0), c->eax ? "ok" : SDL_GetError());
     } else if (!strcmp(n, "JoystickClose")) {
         uint32_t handle = argument(c, 0);
         SDL_JoystickClose(ref_host(c, handle, KIND_JOYSTICK));
@@ -516,9 +552,15 @@ static int sdl_input_shim(CPU *c, const char *name) {
         c->eax = (uint32_t)SDL_JoystickInstanceID(ref_host(c, argument(c, 0), KIND_JOYSTICK));
     } else if (!strcmp(n, "GameControllerOpen")) {
         c->eax = ref_acquire(c, SDL_GameControllerOpen((int)argument(c, 0)), KIND_CONTROLLER, 1);
+        if (c->eax && input_logging()) diagnostic_controller = ref_host(c, c->eax, KIND_CONTROLLER);
+        if (input_logging()) fprintf(stderr, "[input] controller open %u: %s; name=%s joystick-events=%d controller-events=%d background=%s\n",
+                                     argument(c, 0), c->eax ? "ok" : SDL_GetError(),
+                                     SDL_JoystickNameForIndex((int)argument(c, 0)), SDL_JoystickEventState(SDL_QUERY),
+                                     SDL_GameControllerEventState(SDL_QUERY), SDL_GetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS) ?: "unset");
     } else if (!strcmp(n, "GameControllerClose")) {
         uint32_t handle = argument(c, 0);
         SDL_GameController *controller = ref_host(c, handle, KIND_CONTROLLER);
+        if (controller == diagnostic_controller) diagnostic_controller = NULL;
         Ref *r = ref_find(handle, KIND_CONTROLLER);
         int last = r && r->refs == 1;
         SDL_Joystick *joystick = last ? SDL_GameControllerGetJoystick(controller) : NULL;
