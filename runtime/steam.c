@@ -305,6 +305,37 @@ void *steam_proxy_host(uint32_t proxy) {
 // ISteamGameCoordinator001 : SendMessage, IsMessageAvailable, RetrieveMessage.
 static int virtual_bridge(CPU *c, const char *name, uint32_t table, long iface) {
     unsigned slot;
+    if (!strcmp(name, "SteamInput006::slot17") || !strcmp(name, "SteamInput006::slot21") ||
+        !strcmp(name, "SteamInput006::slot29")) {
+        // Steam Input returns these structures by value. C++ i386 uses a
+        // hidden result pointer even for the two-byte digital result; ARM64
+        // uses its own structure-return ABI. The compiler translates the host
+        // call when the function pointer has the actual return type.
+        typedef struct __attribute__((packed)) { uint8_t state, active; } Digital;
+        typedef struct __attribute__((packed)) { int32_t mode; float x, y; uint8_t active; } Analog;
+        typedef struct { float value[10]; } Motion;
+        uint32_t out = arg(c, 0), object = arg(c, 1), a = c->esp + 12;
+        void *host = object && R32(object) == table ? steam_proxy_host(object) : NULL;
+        if (!host) fail(c, "Steam: %s called on an object that is not a %s proxy", name, interface_version((size_t)iface));
+        uint64_t pad = R64(a);
+        void **methods = *(void ***)host;
+        if (!strcmp(name, "SteamInput006::slot17")) {
+            typedef Digital (*Fn)(void *, uint64_t, uint64_t);
+            Digital value = ((Fn)methods[17])(host, pad, R64(a + 8));
+            memcpy(rt_write_span(c, out, sizeof(value)), &value, sizeof(value));
+        } else if (!strcmp(name, "SteamInput006::slot21")) {
+            typedef Analog (*Fn)(void *, uint64_t, uint64_t);
+            Analog value = ((Fn)methods[21])(host, pad, R64(a + 8));
+            memcpy(rt_write_span(c, out, sizeof(value)), &value, sizeof(value));
+        } else {
+            typedef Motion (*Fn)(void *, uint64_t);
+            Motion value = ((Fn)methods[29])(host, pad);
+            memcpy(rt_write_span(c, out, sizeof(value)), &value, sizeof(value));
+        }
+        c->eax = out;
+        steam_pop_hidden_pointer(c);
+        return 1;
+    }
     if (!strcmp(name, "SteamUtils010::slot7")) {
         // GetCSERIPPort(uint32 *ip, uint16 *port) -> bool : obsolète, sans
         // fonction flat, toujours dans la vtable du client (lu au chargement de carte).
@@ -382,6 +413,16 @@ static int method_shim(CPU *c, const char *name) {
     uint32_t table = iface < 0 || ((size_t)iface < steam_interface_count && !vtables) ? 0 : *interface_vtable((size_t)iface);
     pthread_mutex_unlock(&lock);
     if (iface < 0) return 0;
+    // Diagnostic P2_STEAM_INPUT=0 : le jeu ne démarre jamais Steam Input et n'y
+    // voit aucune manette ; il ne lit alors les manettes que par SDL. Sert à
+    // savoir si l'initialisation de Steam Input coupe les rapports HID au jeu.
+    const char *steam_input = getenv("P2_STEAM_INPUT");
+    if (steam_input && *steam_input == '0' &&
+        (!strcmp(name, "SteamInput006::Init") || !strcmp(name, "SteamInput006::GetConnectedControllers") ||
+         !strcmp(name, "SteamController008::Init") || !strcmp(name, "SteamController008::GetConnectedControllers"))) {
+        c->eax = 0;
+        return 1;
+    }
     const SteamMethodInfo *m = find_method(name);
     if (!m && virtual_bridge(c, name, table, iface)) return 1;
     if (!m) fail(c, "Steam: %s has no flat function in SDK 1.53a%s", name, "");

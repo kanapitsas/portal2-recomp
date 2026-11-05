@@ -156,6 +156,42 @@ static void fake_terminate(Fake *self, uint32_t ip, uint16_t port) { (void)self;
 static int32_t fake_controllers(Fake *self, uint64_t *handles) {
     (void)self; for (int i = 0; i < 16; ++i) handles[i] = i < 2 ? UINT64_C(0x1000000000) + (uint64_t)i : 0; return 2;
 }
+typedef struct __attribute__((packed)) { uint8_t state, active; } TestDigital;
+typedef struct __attribute__((packed)) { int32_t mode; float x, y; uint8_t active; } TestAnalog;
+typedef struct { float value[10]; } TestMotion;
+static TestDigital fake_digital(Fake *self, uint64_t pad, uint64_t action) {
+    assert(self == &fake_input && pad == UINT64_C(0x1122334455667788) && action == UINT64_C(0x8877665544332211));
+    return (TestDigital){1, 1};
+}
+static TestAnalog fake_analog(Fake *self, uint64_t pad, uint64_t action) {
+    assert(self == &fake_input && pad == UINT64_C(0x1122334455667788) && action == UINT64_C(0x8877665544332211));
+    return (TestAnalog){3, 0.5f, -0.25f, 1};
+}
+static TestMotion fake_motion(Fake *self, uint64_t pad) {
+    assert(self == &fake_input && pad == UINT64_C(0x1122334455667788));
+    return (TestMotion){{1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f}};
+}
+
+RT_CHECK(steam_input_struct_results_cross_abis) {
+    CPU c; rt_cpu_reset(&c);
+    uint32_t input = steam_proxy(&c, &fake_input, "SteamInput006");
+    input_vtable[17] = (void *)fake_digital;
+    input_vtable[21] = (void *)fake_analog;
+    input_vtable[29] = (void *)fake_motion;
+    const unsigned slots[] = {17, 21, 29};
+    for (unsigned i = 0; i < 3; ++i) {
+        rt_cpu_reset(&c); c.esp = STACK;
+        if (slots[i] != 29) { PUSH(&c, 0x88776655); PUSH(&c, 0x44332211); }
+        PUSH(&c, 0x11223344); PUSH(&c, 0x55667788); PUSH(&c, input); PUSH(&c, SCRATCH);
+        uint32_t before = c.esp;
+        memset(GPTR(SCRATCH), 0xcc, 48);
+        rt_call(&c, R32(R32(input) + 4 * slots[i]), RT_RETURN_SENTINEL);
+        assert(c.esp == before + 4 && c.eax == SCRATCH);
+        if (slots[i] == 17) assert(R8(SCRATCH) == 1 && R8(SCRATCH + 1) == 1 && R8(SCRATCH + 2) == 0xcc);
+        if (slots[i] == 21) assert(R32(SCRATCH) == 3 && RF(SCRATCH + 4) == 0.5f && RF(SCRATCH + 8) == -0.25f && R8(SCRATCH + 12) == 1 && R8(SCRATCH + 13) == 0xcc);
+        if (slots[i] == 29) assert(RF(SCRATCH) == 1.0f && RF(SCRATCH + 36) == 10.0f && R8(SCRATCH + 40) == 0xcc);
+    }
+}
 static const char *ugc_name_seen = "unset";
 static bool fake_ugc_details(Fake *self, uint64_t handle, uint32_t *app, const char **name, int32_t *size, uint64_t *owner) {
     (void)self; assert(handle == UINT64_C(0x1122334455667788) && app && size && owner);
@@ -249,6 +285,11 @@ RT_CHECK(steam_marshalling_through_official_flat_api) {
     uint32_t handles[] = {SCRATCH + 0x400};
     assert(call_method(input, "SteamInput006::GetConnectedControllers", 0, 1, handles).eax == 2);
     assert(R64(SCRATCH + 0x400) == UINT64_C(0x1000000000) && R64(SCRATCH + 0x408) == UINT64_C(0x1000000001) && !R64(SCRATCH + 0x478));
+    // P2_STEAM_INPUT=0 : aucune manette Steam Input, sans appeler Steam.
+    setenv("P2_STEAM_INPUT", "0", 1);
+    W64(SCRATCH + 0x400, 0);
+    assert(call_method(input, "SteamInput006::GetConnectedControllers", 0, 1, handles).eax == 0 && !R64(SCRATCH + 0x400));
+    unsetenv("P2_STEAM_INPUT");
 
     // char ** rempli par Steam (GetUGCDetails) : l'invité reçoit une copie internée ; NULL accepté.
     storage_vtable[method("STEAMREMOTESTORAGE_INTERFACE_VERSION016::GetUGCDetails")->slot] = (void *)fake_ugc_details;
