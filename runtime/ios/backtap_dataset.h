@@ -88,6 +88,10 @@ void rt_btds_tick(rt_btds *ds, double now);
 void rt_btds_flush(rt_btds *ds);
 // Étiquette d'un candidat d'après les tirs connus (exposé pour les tests).
 rt_btds_label rt_btds_label_of(const rt_btds *ds, const rt_btds_candidate *c, int *side);
+// Jeu de données voulu ? Seulement à la demande du joueur : enregistrement brut
+// (raw = P2_BACKTAP_RAW, réglage « Record taps ») ou dataset = P2_BACKTAP_DATASET
+// à 1 ou à un fichier ; « 0 » le coupe toujours. *custom : dataset nomme un fichier.
+int rt_btds_wanted(const char *dataset, const char *raw, int *custom);
 // Ligne d'en-tête du fichier CSV (à écrire quand le fichier est neuf).
 extern const char rt_btds_header[];
 // Fraction des seuils qui ouvre un candidat du détecteur large (P2_BACKTAP_WIDE).

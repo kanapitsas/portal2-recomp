@@ -188,7 +188,7 @@
 		</dict>
 		<dict>
 			<key>FooterText</key>
-			<string>Tap the back of the phone near the left edge for the blue portal, near the right edge for the orange one. Without back taps, portal buttons appear at the top of the screen. “Record taps” writes the sensor readings of each game to Portal 2’s backtap folder (Files app).</string>
+			<string>Tap the back of the phone near the left edge for the blue portal, near the right edge for the orange one. Without back taps, portal buttons appear at the top of the screen. “Record taps” writes the sensor readings of each game to Portal 2’s backtap folder (Files app) and shows a ✗ button to report a wrong shot or a missed tap.</string>
 			<key>Title</key>
 			<string>Portals</string>
 			<key>Type</key>

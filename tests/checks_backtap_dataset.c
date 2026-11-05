@@ -254,3 +254,14 @@ RT_CHECK(backtap_dataset_user_flags_timing) {
     rt_btds_flag_add(&ds, 102.0);
     int side; assert(last_label(&ds, &side) == RT_BTDS_USER_MISSED);
 }
+
+// Rien sans la demande du joueur : ni fichier ni bouton ✗ quand « Record taps » est coupé.
+RT_CHECK(backtap_dataset_only_on_request) {
+    int custom;
+    assert(!rt_btds_wanted(NULL, NULL, &custom) && !custom);
+    assert(!rt_btds_wanted("", "", &custom));
+    assert(rt_btds_wanted(NULL, "Documents/backtap/", &custom) && !custom);   // réglage « Record taps »
+    assert(!rt_btds_wanted("0", "Documents/backtap/", &custom));              // coupé malgré le réglage
+    assert(rt_btds_wanted("1", NULL, &custom) && !custom);
+    assert(rt_btds_wanted("Documents/essai.csv", NULL, &custom) && custom);
+}

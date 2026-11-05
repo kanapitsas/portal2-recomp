@@ -286,6 +286,12 @@ void rt_btds_flush(rt_btds *ds) {
     if (ds->out) fflush(ds->out);
 }
 
+int rt_btds_wanted(const char *dataset, const char *raw, int *custom) {
+    *custom = dataset && *dataset && strcmp(dataset, "0") && strcmp(dataset, "1");
+    if (dataset && !strcmp(dataset, "0")) return 0;
+    return (dataset && *dataset) || (raw && *raw);
+}
+
 // En-tête du fichier (écrit par l'appelant quand le fichier est neuf).
 const char rt_btds_header[] =
     "session,tag,t,label,label_side,fired,reject,weak,gyro,method,peak,jerk,acc_x,acc_y,acc_z,rot_x,rot_y,rot_z,"

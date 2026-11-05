@@ -225,8 +225,9 @@ visible in the Files app), or `P2_BACKTAP_RAW=Documents/backtap.raw` (samples an
 
 ### Tap dataset (guessed labels)
 
-The game keeps a dataset of back-tap candidates, labeled from what the player
-does next, as groundwork for a detector that learns from each player
+While Settings > Portal 2 > Record taps is on (or with `P2_BACKTAP_DATASET`
+set), the game also keeps a dataset of back-tap candidates, labeled from what
+the player does next, as groundwork for a detector that learns from each player
 (`runtime/ios/backtap_dataset.c`, tested by `tests/checks_backtap_dataset.c`).
 A second detector with a wider gate (a quarter of the thresholds instead of
 half; `P2_BACKTAP_WIDE`) runs next to the game's, which is unchanged, so taps
@@ -243,7 +244,8 @@ verdict, 100 ms after), and a label set 1.5 s later:
 | `after_fire` | not fired, less than 1.5 s after a shot (hand rebound) |
 | `quiet` | none of the above: probably not a tap |
 
-The ✗ button (top right, left of pause; only while the dataset is on) lets
+The ✗ button (top right, left of pause; only while the dataset is on, so never
+with Record taps off) lets
 the player say "that was wrong". Its meaning comes from context, and it takes
 precedence over the guessed labels:
 
@@ -275,7 +277,7 @@ which the replay tool reads.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `P2_BACKTAP_DATASET` | `Documents/backtap/dataset.csv` | `0` disables the dataset, a path (relative to HOME) moves it |
+| `P2_BACKTAP_DATASET` | on with Record taps (`P2_BACKTAP_RAW`), off otherwise | `1` turns it on in `Documents/backtap/dataset.csv`, a path (relative to HOME) turns it on there, `0` keeps it off even with Record taps |
 | `P2_BACKTAP_TAG` | empty | written on every line, to mark a session with known intent (e.g. `left-only`, `no-taps`) |
 | `P2_BACKTAP_WIDE` | 0.25 | fraction of the thresholds that opens a candidate of the wide detector |
 

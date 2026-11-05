@@ -175,8 +175,11 @@ static float backtap_hold;            // s : durée de l'appui
 static FILE *backtap_raw;
 // Jeu de données à étiquettes devinées (backtap_dataset.c), sur la file des
 // capteurs : détecteur large (quart des seuils), fichier
-// Documents/backtap/dataset.csv gardé d'une partie à l'autre ; P2_BACKTAP_DATASET=0
-// le coupe, =<fichier> (relatif à HOME) le déplace, P2_BACKTAP_TAG étiquette la session.
+// Documents/backtap/dataset.csv gardé d'une partie à l'autre, bouton ✗ et
+// ligne DATA. Seulement à la demande du joueur : avec l'enregistrement brut
+// (réglage « Record taps », P2_BACKTAP_RAW) ou P2_BACKTAP_DATASET=1 ou
+// =<fichier> (relatif à HOME) ; P2_BACKTAP_DATASET=0 le coupe toujours.
+// P2_BACKTAP_TAG étiquette la session.
 static rt_backtap backtap_wide;
 static rt_btds backtap_dataset;
 static int backtap_dataset_on;
@@ -254,9 +257,10 @@ static void backtap_start(void) {
     float hz = rt_backtap_env_float("P2_BACKTAP_HZ", 200, 10);
     rt_backtap_init(&backtap_detector, &p);
     const char *dataset = getenv("P2_BACKTAP_DATASET");
-    if (!dataset || *dataset != '0' || dataset[1]) {
+    int custom;
+    if (rt_btds_wanted(dataset, raw, &custom)) {
         char path[1024];
-        if (dataset && *dataset)
+        if (custom)
             snprintf(path, sizeof(path), "%s%s%s", dataset[0] == '/' ? "" : getenv("HOME"), dataset[0] == '/' ? "" : "/", dataset);
         else {
             snprintf(path, sizeof(path), "%s/Documents/backtap", getenv("HOME"));
