@@ -1,4 +1,4 @@
-"""SSE/x87 lowering used by the constructor milestone (x87 modeled in double)."""
+"""SSE and x87 lowering for tools/lift.py: scalar/packed SSE on c->xmm, x87 modelled as a double stack."""
 import re
 
 

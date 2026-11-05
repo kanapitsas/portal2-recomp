@@ -1,12 +1,14 @@
 #!/bin/bash
-# Portal 2 sur un appareil iOS réel, par câble (xcrun devicectl).
-#   tools/ios_device.sh probe [VAR=valeur...]   sonde (P2_PROBE_CLIP=1 : découpe au plan proche)
-#   tools/ios_device.sh install                  installe build/ios/device/Portal2.app
-#   tools/ios_device.sh data                     copie les données dans Documents (prep, game, linux)
-#   tools/ios_device.sh has-data                 code 0 si les données sont complètes sur l'appareil
-#   tools/ios_device.sh prep                     recopie seulement Documents/prep (après un gameprep : ~80 Mo)
-#   tools/ios_device.sh run [secondes] [VAR=valeur...]   lance, puis rapatrie Documents/game.log
-# Appareil : P2_DEVICE (UDID ou nom), sinon le premier iPhone/iPad connecté.
+# Portal 2 on a real iOS device, over the cable (xcrun devicectl).
+#   tools/ios_device.sh probe [VAR=value...]    probe app (P2_PROBE_CLIP=1: near-plane clipping)
+#   tools/ios_device.sh install                  install build/ios/device/Portal2.app
+#   tools/ios_device.sh data                     copy the data into Documents (prep, game, linux)
+#   tools/ios_device.sh has-data                 exit 0 when the data on the device is complete
+#   tools/ios_device.sh has-mark                 exit 0 when a copy state marker exists (used by setup.sh)
+#   tools/ios_device.sh has-game                 exit 0 when Documents/game/portal2 exists (older copies)
+#   tools/ios_device.sh prep                     copy only Documents/prep again (after gameprep: ~80 MB)
+#   tools/ios_device.sh run [seconds] [VAR=value...]   launch (default 180 s), then fetch Documents/game.log
+# Device: P2_DEVICE (UDID or name), else the first connected iPhone/iPad.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 DEVICE=${P2_DEVICE:-$(xcrun devicectl list devices 2>/dev/null |
@@ -81,7 +83,8 @@ prep)
   ;;
 run)
   shift
-  SECONDS_MAX=${1:-180}; shift || true
+  SECONDS_MAX=180
+  case "${1:-}" in ''|*=*) ;; *) SECONDS_MAX=$1; shift ;; esac   # seconds are optional: `run P2_RENDERER=opengl`
   dc device process launch --terminate-existing \
     --environment-variables "$(env_json P2_LOG_FILE=Documents/game.log P2_FRAME_LOG=1 "$@")" $APP_ID
   sleep "$SECONDS_MAX"
@@ -90,5 +93,5 @@ run)
     --source Documents/game.log --destination build/ios/device/game.log
   echo "journal : build/ios/device/game.log ($(wc -l < build/ios/device/game.log) lignes)"
   ;;
-*) sed -n '2,8p' "$0"; exit 2 ;;
+*) awk 'NR > 1 && !/^#/ {exit} NR > 1 {sub(/^# ?/, ""); print}' "$0"; exit 2 ;;
 esac

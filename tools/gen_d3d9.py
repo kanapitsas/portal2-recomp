@@ -1,48 +1,46 @@
 #!/usr/bin/env python3
-"""Génère runtime/d3d9_generated.{c,h} : pont COM Direct3D 9 invité i386 → hôte.
+"""Generate runtime/d3d9_generated.{c,h}: the guest i386 -> host Direct3D 9 COM bridge.
 
-shaderapivk.so (Linux i386) appelle Direct3D 9 par des vtables COM, comme le
-ferait DXVK-native : cdecl, `this` en premier sur la pile, l'appelant dépile.
-Le runtime lui donne des mandataires invités {vtable invitée, étiquette, u64
-objet hôte} ; chaque emplacement de vtable est une adresse
-rt_dynamic_import("Interface::Méthode") dont la route mène au thunk généré
-ici, qui lit les arguments i386, traduit les pointeurs selon une règle
-explicite et appelle la méthode de l'objet hôte (ABI arm64, `this` en premier).
+shaderapivk.so (Linux i386) calls Direct3D 9 through COM vtables, as
+DXVK-native would: cdecl, `this` first on the stack, caller pops. The runtime
+hands it guest proxies {guest vtable, tag, u64 host object}; each vtable slot
+is an rt_dynamic_import("Interface::Method") address routed to the thunk
+generated here, which reads the i386 arguments, translates pointers by an
+explicit rule and calls the host object's method (arm64 ABI, `this` first).
 
-La table SIGNATURES décrit toutes les interfaces dans l'ordre de d3d9.h.
-Types d'argument (un mot de pile chacun, d3d9 n'a aucun argument 64 bits) :
+The SIGNATURES table describes every interface in d3d9.h order.
+Argument kinds (one stack word each; d3d9 has no 64-bit argument):
 
-  u, i, f            scalaire 32 bits (UINT/DWORD/enum/BOOL/D3DCOLOR, INT, float)
-  in:EXPR            pointeur invité lu en place (même disposition i386/arm64),
-                     EXPR octets
-  out:EXPR           idem, écrit par l'hôte
-  if:IFACE           interface en entrée (mandataire → objet hôte)
-  pp:IFACE           interface en sortie (objet hôte → mandataire unique)
-  child:IFACE        idem, niveau de texture partageant le compte de this :
-                     le groupe entier est retiré quand le compte tombe à 0
-  owned:IFACE        idem, objet qui dépend de this sans partager son compte
-                     (tampon arrière) : retiré avec this
-  hwnd               HWND : handle SDL_Window invité → SDL_Window* hôte
-  shared             HANDLE *pSharedHandle (doit être NULL en d3d9 non Ex)
-  params, params_out D3DPRESENT_PARAMETERS (56 octets i386, 64 arm64) entrée/sortie, sortie
-  adapterid          D3DADAPTER_IDENTIFIER9 en sortie (1100 / 1104)
-  creation           D3DDEVICE_CREATION_PARAMETERS en sortie (16 / 24)
-  lockptr            void ** de Lock : pointeur hôte → adresse invitée
-  lockrect, lockbox  D3DLOCKED_RECT / D3DLOCKED_BOX en sortie (pBits traduit)
-  shader             jetons de shader (taille lue jusqu'au jeton de fin)
-  decl               D3DVERTEXELEMENT9[] (jusqu'à D3DDECL_END)
+  u, i, f            32-bit scalar (UINT/DWORD/enum/BOOL/D3DCOLOR, INT, float)
+  in:EXPR            guest pointer read in place (same i386/arm64 layout), EXPR bytes
+  out:EXPR           same, written by the host
+  if:IFACE           interface in (proxy -> host object)
+  pp:IFACE           interface out (host object -> unique proxy)
+  child:IFACE        same, texture level sharing this's refcount: the whole
+                     group is removed when the count drops to 0
+  owned:IFACE        same, object depending on this without sharing its count
+                     (back buffer): removed with this
+  hwnd               HWND: guest SDL_Window handle -> host SDL_Window*
+  shared             HANDLE *pSharedHandle (must be NULL outside d3d9 Ex)
+  params, params_out D3DPRESENT_PARAMETERS (56 bytes i386, 64 arm64) in/out, out
+  adapterid          D3DADAPTER_IDENTIFIER9 out (1100 / 1104)
+  creation           D3DDEVICE_CREATION_PARAMETERS out (16 / 24)
+  lockptr            void ** of Lock: host pointer -> guest address
+  lockrect, lockbox  D3DLOCKED_RECT / D3DLOCKED_BOX out (pBits translated)
+  shader             shader tokens (size read up to the end token)
+  decl               D3DVERTEXELEMENT9[] (up to D3DDECL_END)
   rgndata            RGNDATA *
 
-Un pointeur invité nul devient NULL côté hôte, quel que soit le type : la
-validation des arguments obligatoires reste celle de l'implémentation hôte.
+A null guest pointer becomes NULL on the host whatever the kind: validation of
+mandatory arguments stays the host implementation's.
 
-EXPR est une expression C sur les autres paramètres scalaires (par leur nom) ;
-D(p) lit le DWORD invité pointé par le paramètre pointeur p (0 si NULL).
-Suffixes de méthode : !manual (écrite dans runtime/d3d9.c, nommée
-d3d9_manual_<Interface>_<Méthode>), !stub (E_NOTIMPL ou 0, journalisé une fois).
+EXPR is a C expression over the other scalar parameters (by name); D(p) reads
+the guest DWORD pointed to by pointer parameter p (0 if NULL). Method suffixes:
+!manual (written in runtime/d3d9.c as d3d9_manual_<Interface>_<Method>),
+!stub (E_NOTIMPL or 0, logged once).
 
-    python3 tools/gen_d3d9.py            # écrit runtime/d3d9_generated.{c,h}
-    python3 tools/gen_d3d9.py --check    # vérifie qu'ils sont à jour
+    python3 tools/gen_d3d9.py            # writes runtime/d3d9_generated.{c,h}
+    python3 tools/gen_d3d9.py --check    # fails if they are out of date
 """
 import argparse
 import re
@@ -338,7 +336,7 @@ class Interface:
         self.id = None
 
     def vtable(self):
-        """Méthodes de la vtable complète, dans l'ordre de d3d9.h."""
+        """Methods of the full vtable, in d3d9.h order."""
         return (self.parent.vtable() if self.parent else []) + self.methods
 
 
@@ -366,7 +364,7 @@ def parse(text=SIGNATURES):
         names = [p.name for p in params]
         if len(set(names)) != len(names):
             raise SystemExit(f'{current.name}::{name} : paramètres en double')
-        current.methods.append(Method(current, ret, name, params, set(flags.split()) and {f[1:] for f in flags.split()}))
+        current.methods.append(Method(current, ret, name, params, {f[1:] for f in flags.split()}))
     ordered = list(interfaces.values())
     for i, iface in enumerate(ordered):
         iface.id = i
@@ -379,7 +377,7 @@ def parse(text=SIGNATURES):
 
 
 def split_args(text):
-    """Découpe sur les virgules hors parenthèses (expressions de taille)."""
+    """Split on commas outside parentheses (size expressions)."""
     depth, start, out = 0, 0, []
     for i, ch in enumerate(text):
         if ch == '(':
@@ -394,7 +392,7 @@ def split_args(text):
 
 
 def derived(interfaces, base):
-    """Masque des interfaces concrètes qui héritent de base (base comprise)."""
+    """Mask of the concrete interfaces deriving from base (base included)."""
     mask = 0
     for iface in interfaces:
         walk = iface
@@ -406,7 +404,7 @@ def derived(interfaces, base):
 
 
 def size_expr(method, expr):
-    """Expression de taille : noms de paramètres scalaires → a_<nom>, D(p) → déréférence invitée."""
+    """Size expression: scalar parameter names -> a_<name>, D(p) -> guest dereference."""
     scalars = {p.name for p in method.params if p.scalar}
     pointers = {p.name for p in method.params if not p.scalar}
 
@@ -583,20 +581,20 @@ def generate():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--check', action='store_true', help='échoue si les fichiers générés ne sont pas à jour')
+    parser.add_argument('--check', action='store_true', help='fail if the generated files are out of date')
     args = parser.parse_args()
     header, source = generate()
     targets = {ROOT / 'runtime/d3d9_generated.h': header, ROOT / 'runtime/d3d9_generated.c': source}
     if args.check:
         stale = [str(p) for p, text in targets.items() if not p.exists() or p.read_text() != text]
         if stale:
-            sys.exit('à régénérer (python3 tools/gen_d3d9.py) : ' + ', '.join(stale))
+            sys.exit('out of date (run python3 tools/gen_d3d9.py): ' + ', '.join(stale))
         return 0
     for path, text in targets.items():
         path.write_text(text)
     interfaces = parse()
     count = sum(len(i.methods) for i in interfaces)
-    print(f'runtime/d3d9_generated.c : {len(interfaces)} interfaces, {count} méthodes')
+    print(f'runtime/d3d9_generated.c: {len(interfaces)} interfaces, {count} methods')
     return 0
 
 

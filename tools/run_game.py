@@ -1,25 +1,28 @@
 #!/usr/bin/env python3
 """Run the native executable against the user's real game data and log output."""
 import argparse
-import json
 import shutil
 import os
 from pathlib import Path
 import subprocess
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import localconfig  # noqa: E402
+
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--build', action='store_true')
 parser.add_argument('--timeout', type=int, default=60)
-parser.add_argument('--show', action='store_true', help='afficher la fenêtre (sinon P2_HIDDEN_WINDOWS=1)')
+parser.add_argument('--show', action='store_true', help='show the window (otherwise P2_HIDDEN_WINDOWS=1)')
 parser.add_argument('--binary', type=Path, default=Path('build/portal2-native'),
-                    help='exécutable à lancer (comparaisons A/B sans toucher build/portal2-native)')
+                    help='executable to run (A/B comparisons without touching build/portal2-native)')
 parser.add_argument('arguments', nargs=argparse.REMAINDER)
 args = parser.parse_args()
 if args.build:
     result = subprocess.run([sys.executable, 'tools/build_game.py'])
     if result.returncode: sys.exit(result.returncode)
-config = json.loads(Path('config/local.json').read_text())
+config = localconfig.load()
+if not config: sys.exit('config/local.json missing: run ./setup.sh')
 game_args = args.arguments
 if game_args[:1] == ['--']: game_args = game_args[1:]
 if not game_args: game_args = ['-game', 'portal2', '-novid', '-windowed', '-w', '1280', '-h', '720']
@@ -30,10 +33,12 @@ game_args = [*game_args, *language_args]
 # Les lancements de diagnostic (fenêtre cachée) travaillent sur une copie des
 # données utilisateur : jamais deux instances sur les mêmes sauvegardes et
 # réglages, ni de modification des réglages de l'utilisateur.
-user_dir = Path(config.get('user_dir') or '../work/portal2-userdata').expanduser().resolve()
+user_dir = localconfig.user_dir(config)
 if not args.show:
     diag_dir = user_dir.with_name('portal2-userdata-diag')
-    if not diag_dir.exists(): shutil.copytree(user_dir, diag_dir, symlinks=True)
+    if not diag_dir.exists():
+        if user_dir.is_dir(): shutil.copytree(user_dir, diag_dir, symlinks=True)
+        else: diag_dir.mkdir(parents=True)   # no saves yet: the game starts from scratch
     user_dir = diag_dir
 command = [str(args.binary.resolve()), '--images', str(Path('build/game/prep').resolve()),
            '--game-dir', config['game_root'], '--linux-root', config['linux_root'],

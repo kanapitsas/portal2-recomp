@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Identifiant de l'app iOS (CFBundleIdentifier).
+"""Bundle identifier of the iOS app (CFBundleIdentifier).
 
-Chaque compte Apple doit signer sous son propre identifiant : P2_BUNDLE_ID,
-sinon "ios_bundle_id" dans config/local.json, sinon un identifiant d'exemple
-qui suffit au simulateur. La sonde (ios/probe) prend l'identifiant suivi de
-« .probe ».
+Each Apple account must sign under its own identifier: P2_BUNDLE_ID, else
+"ios_bundle_id" in config/local.json, else an example identifier that is enough
+for the simulator. The probe (ios/probe) uses the identifier followed by ".probe".
 
     python3 tools/ios_bundle_id.py [--probe]
 """

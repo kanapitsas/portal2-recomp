@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Images PE32 (greffons Miles .asi) : en-têtes, sections, exportations,
-importations et relocations de base, pour la traduction d'avance.
+"""PE32 images (Miles .asi plugins): headers, sections, exports, imports and
+base relocations, for ahead-of-time translation.
 
-Sous Linux, libMiles charge lui-même les greffons Windows de bin/linux32 avec
-son propre chargeur PE : il choisit l'adresse à l'exécution, recopie les
-sections à leur RVA et applique la table .reloc. Le code traduit est donc
-relocalisable : chaque mot couvert par une relocation vaut
-`valeur_fichier + delta` à l'exécution (delta = base réelle - ImageBase), et
-les fonctions sont indexées par RVA (voir lift.generate_pe, runtime/pe.c).
+On Linux, libMiles loads the Windows plugins of bin/linux32 with its own PE
+loader: it picks the address at run time, copies the sections to their RVA and
+applies the .reloc table. The translated code is therefore relocatable: every
+word covered by a relocation is `file_value + delta` at run time (delta =
+actual base - ImageBase), and functions are indexed by RVA (see
+lift.generate_pe, runtime/pe.c).
 """
 from pathlib import Path
 import struct
@@ -22,7 +22,7 @@ class PeError(ValueError):
 
 
 def fnv1a64(data):
-    """Empreinte du fichier, recalculée par runtime/pe.c (rt_pe_hash)."""
+    """File hash, recomputed by runtime/pe.c (rt_pe_hash)."""
     value = 0xcbf29ce484222325
     for byte in data:
         value = ((value ^ byte) * 0x100000001b3) & 0xffffffffffffffff
@@ -60,7 +60,7 @@ class PeImage:
             name = d[o:o + 8].rstrip(b'\0').decode('latin-1')
             virtual_size, rva, raw_size, raw_offset = struct.unpack_from('<IIII', d, o + 8)
             flags = struct.unpack_from('<I', d, o + 36)[0]
-            self.sections.append(dict(name=name, rva=rva, size=max(virtual_size, 0) or raw_size,
+            self.sections.append(dict(name=name, rva=rva, size=virtual_size or raw_size,   # VirtualSize is 0 in some images
                                       raw_offset=raw_offset, raw_size=raw_size, flags=flags,
                                       executable=bool(flags & (IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_CNT_CODE))))
         # Image telle qu'un chargeur la projette (sections à leur RVA, reste nul).
@@ -128,7 +128,7 @@ class PeImage:
         return exports
 
     def _imports(self):
-        """[(dll, nom ou #ordinal, RVA de l'entrée d'IAT)] : le chargeur de Miles les remplit."""
+        """[(dll, name or #ordinal, RVA of the IAT entry)]: filled in by the Miles loader."""
         rva, _ = self.directory(1)
         out = []
         while rva:
@@ -149,20 +149,20 @@ class PeImage:
         return [s for s in self.sections if s['executable']]
 
     def executable(self, address):
-        """`address` est une adresse au ImageBase préféré."""
+        """`address` is an address at the preferred ImageBase."""
         rva = address - self.image_base
         return any(s['rva'] <= rva < s['rva'] + s['size'] for s in self.executable_sections())
 
     def code_target(self, value):
-        """Valeur (au ImageBase préféré) que libMiles relocalise vers la vue
-        exécutable : RAD_dll_fixup_base_address ne considère que la section
-        nommée .text ; tout le reste pointe la vue écrivable."""
+        """Value (at the preferred ImageBase) that libMiles relocates to the
+        executable view: RAD_dll_fixup_base_address only considers the section
+        named .text; everything else points into the writable view."""
         rva = value - self.image_base
         return any(s['name'] == '.text' and s['rva'] <= rva < s['rva'] + s['size'] for s in self.sections)
 
     def code_pointers(self):
-        """Valeurs relocalisées (adresses au ImageBase préféré) qui désignent du code,
-        avec l'emplacement de la relocation : {(emplacement RVA, valeur)}."""
+        """Relocated values (addresses at the preferred ImageBase) that point to
+        code, with the relocation's location: {(location RVA, value)}."""
         out = []
         for r in self.relocs:
             value = self.u32(r)

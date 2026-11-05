@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Résout et agrège un profil brut d'iOS (P2_PROFILE_RAW=1, fichier .raw).
+"""Resolve and aggregate a raw iOS profile (P2_PROFILE_RAW=1, .raw file).
 
-Les cadres du cache partagé y sont « bibliothèque+décalage » ; ils sont
-résolus par atos avec les symboles de l'appareil copiés par Xcode
-(~/Library/Developer/Xcode/iOS DeviceSupport/<appareil>/arm64e/Symbols).
+Shared-cache frames are "library+offset"; atos resolves them with the device
+symbols copied by Xcode
+(~/Library/Developer/Xcode/iOS DeviceSupport/<device>/arm64e/Symbols).
 
     python3 tools/ios_symbolize.py build/ios/device/profile.txt.raw [--all-threads] [--top 40]
 """
@@ -18,8 +18,9 @@ LOCATED = re.compile(r'^(.+)\+0x([0-9a-f]+)$')
 
 
 def symbol_files():
+    """Symbol file by name, preferring the most recently written DeviceSupport folder."""
     found = {}
-    for root in sorted(SUPPORT.glob('*/*/Symbols'), key=lambda p: p.stat().st_mtime):
+    for root in sorted(SUPPORT.glob('*/*/Symbols'), key=lambda p: p.stat().st_mtime, reverse=True):
         for path in root.rglob('*'):
             if path.is_file() and '.dSYM' not in str(path) and path.suffix in ('', '.dylib'):
                 found.setdefault(path.name, path)
@@ -65,10 +66,10 @@ def main():
         resolved = [names.get(f, f) for f in frames]
         leaf[resolved[0]] += hits
         for name in set(resolved): inclusive[name] += hits
-    print(f'{total} échantillons')
-    print('== feuille')
+    print(f'{total} samples')
+    print('== leaf')
     for name, n in leaf.most_common(args.top): print(f'{100 * n / total:6.2f}% {name}')
-    print('== inclusif (fonction présente dans la pile)')
+    print('== inclusive (function present in the stack)')
     for name, n in inclusive.most_common(args.top): print(f'{100 * n / total:6.2f}% {name}')
 
 

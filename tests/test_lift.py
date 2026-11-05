@@ -154,5 +154,57 @@ class LifterTests(unittest.TestCase):
             lift.lift(0x10, insns)
 
 
+class ResolveExportTests(unittest.TestCase):
+    """lift.resolve_export on a synthetic layout: the four spec forms and their errors."""
+    LAYOUT = {'imports': [], 'modules': [
+        {'name': 'libfake.so', 'base': 0x10000000, 'init': 0x10000500, 'init_array': [0x10000600, 0x10000700],
+         'names': {'0x10000100': 'f', '0x10000200': 'g', '0x10000210': 'g'},
+         'exports': {'f': 0x10000100, 'both': 0x10000300},
+         'loads': [dict(off=0, vaddr=0x10000000, filesz=0x1000, memsz=0x1000, flags=5),
+                   dict(off=0x1000, vaddr=0x10001000, filesz=0x1000, memsz=0x2000, flags=6)]},
+        {'name': 'libother.so', 'base': 0x20000000, 'init': 0, 'init_array': [], 'names': {},
+         'exports': {'both': 0x20000300},
+         'loads': [dict(off=0, vaddr=0x20000000, filesz=0x1000, memsz=0x1000, flags=5)]}]}
+
+    def test_export_form(self):
+        self.assertEqual(lift.resolve_export(self.LAYOUT, 'f'), 0x10000100)
+        with self.assertRaisesRegex(lift.Unsupported, 'found 0'):
+            lift.resolve_export(self.LAYOUT, 'missing')
+        with self.assertRaisesRegex(lift.Unsupported, 'found 2'):
+            lift.resolve_export(self.LAYOUT, 'both')          # defined by two modules
+
+    def test_symbol_form(self):
+        self.assertEqual(lift.resolve_export(self.LAYOUT, 'libfake.so:symbol:f'), 0x10000100)
+        with self.assertRaisesRegex(lift.Unsupported, 'found 2'):
+            lift.resolve_export(self.LAYOUT, 'libfake.so:symbol:g')   # two addresses carry the name
+        with self.assertRaisesRegex(lift.Unsupported, 'found 0'):
+            lift.resolve_export(self.LAYOUT, 'nope.so:symbol:f')
+
+    def test_code_form(self):
+        self.assertEqual(lift.resolve_export(self.LAYOUT, 'libfake.so:code:0x40'), 0x10000040)
+        self.assertEqual(lift.resolve_export(self.LAYOUT, 'libfake.so:code:64'), 0x10000040)
+        with self.assertRaisesRegex(lift.Unsupported, 'outside executable'):
+            lift.resolve_export(self.LAYOUT, 'libfake.so:code:0x1000')   # writable segment
+        with self.assertRaisesRegex(lift.Unsupported, 'outside executable'):
+            lift.resolve_export(self.LAYOUT, 'nope.so:code:0x40')
+        with self.assertRaisesRegex(lift.Unsupported, 'invalid code offset'):
+            lift.resolve_export(self.LAYOUT, 'libfake.so:code:zz')
+
+    def test_init_form(self):
+        self.assertEqual(lift.resolve_export(self.LAYOUT, 'libfake.so:init:dt'), 0x10000500)
+        self.assertEqual(lift.resolve_export(self.LAYOUT, 'libfake.so:init:1'), 0x10000700)
+        with self.assertRaisesRegex(lift.Unsupported, 'unknown module'):
+            lift.resolve_export(self.LAYOUT, 'nope.so:init:dt')
+        for bad in ('libfake.so:init:2', 'libfake.so:init:x'):
+            with self.assertRaisesRegex(lift.Unsupported, 'unknown constructor'):
+                lift.resolve_export(self.LAYOUT, bad)
+
+    def test_owner_follows_executable_segments(self):
+        self.assertEqual(lift.owner(self.LAYOUT, 0x10000fff)['name'], 'libfake.so')
+        self.assertEqual(lift.owner(self.LAYOUT, 0x20000000)['name'], 'libother.so')
+        for outside in (0x0fffffff, 0x10001000, 0x10001800, 0x20001000):
+            self.assertIsNone(lift.owner(self.LAYOUT, outside))
+
+
 if __name__ == '__main__':
     unittest.main()

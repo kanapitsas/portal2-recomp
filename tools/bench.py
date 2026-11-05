@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Banc du code généré (tests/bench.c) sur libtier0/libvstdlib.
+"""Benchmark the generated code (tests/bench.c) on libtier0/libvstdlib.
 
-Chaque configuration est un jeu d'options clang (par ex. -DRT_FAST_MEMORY) ;
-le même C généré est compilé avec chacune, puis exécuté plusieurs fois. Les
-sommes de contrôle doivent être identiques entre configurations.
+Each configuration is a set of clang options (e.g. -DRT_FAST_MEMORY); the same
+generated C is built with each one, then run several times. The checksums must
+be identical across configurations.
 
-    python3 tools/bench.py                      # configuration par défaut
+    python3 tools/bench.py                      # default configuration
     python3 tools/bench.py --config base= --config fast=-DRT_FAST_MEMORY
 """
 import argparse
@@ -18,20 +18,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import json
 import lift
+from build_game import HOST_CFLAGS, HOST_LIBS   # single source of the host flags (with the Makefile)
 
 ROOT = Path(__file__).resolve().parent.parent
 EXPORTS = ['EncodeBinaryToString', 'DecodeBinaryFromString', 'V_UTF8ToUnicode', 'V_UnicodeToUTF8', 'KeyValuesSystem']
-HOST_LIBS = ['-L/opt/homebrew/lib', '-lSDL2', '-lfreetype', '-lfontconfig', '-liconv',
-             '-framework', 'OpenGL', '-framework', 'OpenAL']
-HOST_CFLAGS = ['-I/opt/homebrew/include', '-I/opt/homebrew/include/freetype2', '-DGL_SILENCE_DEPRECATION',
-               '-DOPENAL_DEPRECATED=', '-DAL_SILENCE_DEPRECATION']
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--input-dir', default='../work/portal2-linux/bin')
     ap.add_argument('--opt', default='1')
-    ap.add_argument('--config', action='append', help='nom=options clang séparées par des espaces')
+    ap.add_argument('--config', action='append', help='name=space-separated clang options')
     ap.add_argument('--runs', type=int, default=5)
     ap.add_argument('--rounds', type=int, default=40)
     args = ap.parse_args()
@@ -75,7 +72,7 @@ def main():
         print(f'{name:10s} {line}   {" ".join(s for _, s in sums)}')
         base = base or times
     if len({tuple(s) for _, s in results.values()}) != 1:
-        raise SystemExit('bench: sommes de contrôle différentes entre configurations')
+        raise SystemExit('bench: checksums differ between configurations')
 
 
 if __name__ == '__main__':

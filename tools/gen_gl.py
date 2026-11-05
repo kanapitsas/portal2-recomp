@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Génère runtime/gl_generated.c : thunks i386 cdecl → OpenGL hôte.
+"""Generate runtime/gl_generated.c: i386 cdecl -> host OpenGL thunks.
 
-La liste NAMES est celle que libtogl.so demande à SDL_GL_GetProcAddress
-(voir docs/gl-audit.md). Les prototypes viennent des en-têtes du SDK
-(gl.h, glext.h, gl3.h d'OpenGL.framework). Chaque paramètre pointeur doit
-avoir une règle explicite dans RULES (ou la fonction figurer dans MANUAL,
-écrite à la main dans runtime/gl.c) : le générateur refuse de deviner.
+NAMES is the list libtogl.so asks SDL_GL_GetProcAddress for (see
+docs/gl-audit.md). Prototypes come from the SDK headers (gl.h, glext.h, gl3.h
+of OpenGL.framework). Every pointer parameter needs an explicit rule in RULES
+(or the function must be in MANUAL, hand-written in runtime/gl.c): the
+generator refuses to guess.
 
-    python3 tools/gen_gl.py            # écrit runtime/gl_generated.c
+    python3 tools/gen_gl.py            # writes runtime/gl_generated.c
 """
 import re
 import subprocess
@@ -298,7 +298,8 @@ typedef struct { const char *name; rt_gl_thunk thunk; } RtGlEntry;
 '''
 
 
-def main():
+def generate():
+    """(source text, generated function count, names absent from the headers)."""
     protos = headers()
     out, table, absent = [PREAMBLE], [], []
     for fn in sorted(MANUAL):
@@ -322,9 +323,14 @@ def main():
     out += table
     out.append('};')
     out.append('const unsigned rt_gl_entry_count = sizeof(rt_gl_entries) / sizeof(*rt_gl_entries);')
+    return '\n'.join(out) + '\n', len(table), absent
+
+
+def main():
+    text, count, absent = generate()
     target = Path(__file__).resolve().parent.parent / 'runtime/gl_generated.c'
-    target.write_text('\n'.join(out) + '\n')
-    print(f'{target}: {len(table)} fonctions, {len(absent)} absentes')
+    target.write_text(text)
+    print(f'{target}: {count} functions, {len(absent)} absent from the headers')
 
 
 if __name__ == '__main__':

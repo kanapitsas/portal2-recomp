@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Mesure statique (borne basse) des méthodes Steam appelées par le jeu.
+"""Static (lower bound) count of the Steam methods the game calls.
 
-Suit les accesseurs `SteamInternal_ContextInit` -> objet -> vtable -> `call [vt+off]`, les champs
-des contextes globaux remplis par ces accesseurs et les pointeurs globaux vers ces contextes.
-Les contextes membres d'objets (Steam3Client...) échappent à cette heuristique.
-Usage : python3 tools/steam_callsites.py build/game/prep/layout.json
+Follows the `SteamInternal_ContextInit` accessors -> object -> vtable -> `call [vt+off]`, the
+fields of the global contexts those accessors fill and the global pointers to those contexts.
+Contexts that are object members (Steam3Client...) escape this heuristic.
+Usage: python3 tools/steam_callsites.py build/game/prep/layout.json
 """
 import json, re, sys, struct, collections
 sys.path.insert(0, 'tools')

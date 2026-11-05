@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Crée « Portal 2 Natif.app », lançable depuis le Finder ou le Dock.
+"""Create "Portal 2 Natif.app", launchable from the Finder or the Dock.
 
-L'application ne recopie pas les données du jeu, mais embarque une copie de
-build/portal2-native et les dylibs Homebrew dont il dépend
-(Contents/Frameworks) : elle fonctionne sans Homebrew. Après une recompilation,
-relancer ce script pour mettre l'app à jour. Le lanceur reprend les chemins de
-config/local.json. Il démarre Steam s'il ne tourne pas et écrit le journal dans ~/Library/Logs/Portal2Natif.log.
+The app does not copy the game data; it embeds a copy of build/portal2-native
+and the Homebrew dylibs it depends on (Contents/Frameworks), so it runs without
+Homebrew. Re-run this script after a rebuild to update the app. The launcher
+takes its paths from config/local.json, starts Steam if it is not running and
+logs to ~/Library/Logs/Portal2Natif.log.
 
-Les modules préparés (build/game/prep, ~75 Mo) sont copiés dans
-Contents/Resources/prep : refaire l'app après tools/gameprep.py. Sans user_dir
-dans config/local.json, les sauvegardes vont dans
-~/Library/Application Support/Portal 2 Natif/userdata (l'ancien défaut
-../work/portal2-userdata y est recopié une fois). ./uninstall.sh retire le tout.
+The prepared modules (build/game/prep, ~75 MB) are copied into
+Contents/Resources/prep: rebuild the app after tools/gameprep.py. Without
+user_dir in config/local.json, saves go to
+~/Library/Application Support/Portal 2 Natif/userdata (the old default
+../work/portal2-userdata is copied there once). ./uninstall.sh removes it all.
 
     python3 tools/make_app.py                      # ~/Applications
     python3 tools/make_app.py --dest /Applications
@@ -27,13 +27,16 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import localconfig  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
-NAME = 'Portal 2 Natif'
+NAME = localconfig.APP_NAME
 # Sans -w/-h/-windowed : résolution et mode choisis dans le menu Vidéo du jeu
 # (enregistrés dans update/cfg/video.txt) ; Retina selon la résolution.
 DEFAULT_ARGS = ['-game', 'portal2', '-novid']
 # Données propres à l'app, hors du dépôt : ./uninstall.sh supprime ce dossier.
-SUPPORT = Path.home() / 'Library/Application Support' / NAME
+SUPPORT = localconfig.SUPPORT
 OLD_USER_DIR = '../work/portal2-userdata'  # ancien défaut, relatif au dépôt
 
 LAUNCHER = '''#!/bin/bash
@@ -41,8 +44,9 @@ LAUNCHER = '''#!/bin/bash
 LOG="$HOME/Library/Logs/Portal2Natif.log"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 alert() {{ /usr/bin/osascript -e "display alert \\"{name}\\" message \\"$1\\" as critical" >/dev/null 2>&1; }}
+GAME_DIR={game_dir}   # quoted by shlex: never re-parsed by the shell
 if [ ! -x "$HERE/portal2-native" ]; then alert "Exécutable introuvable dans l'app. Relancer tools/make_app.py."; exit 1; fi
-if [ ! -d {game_dir} ]; then alert "Données du jeu introuvables (disque externe débranché ?) : {game_dir_text}"; exit 1; fi
+if [ ! -d "$GAME_DIR" ]; then alert "Données du jeu introuvables (disque externe débranché ?) : $GAME_DIR"; exit 1; fi
 # L'API Steam a besoin du client Steam ouvert et connecté.
 if ! /usr/bin/pgrep -qx steam_osx; then
     /usr/bin/open -ga Steam
@@ -85,7 +89,7 @@ def run(*cmd):
 
 
 def macho_deps(path):
-    """Dépendances (LC_LOAD_*) d'un Mach-O, sans son propre identifiant."""
+    """Dependencies (LC_LOAD_*) of a Mach-O, without its own install name."""
     lines = run('otool', '-L', str(path)).splitlines()[1:]
     deps = [line.strip().rsplit(' (compatibility', 1)[0] for line in lines if line.strip()]
     ident = run('otool', '-D', str(path)).splitlines()[1:]
@@ -98,7 +102,7 @@ def macho_rpaths(path):
 
 
 def resolve_dep(dep, loader, executable):
-    """Fichier source d'une dépendance, None si elle vient du système."""
+    """Source file of a dependency, None when it comes from the system."""
     if dep.startswith(SYSTEM_PREFIXES): return None
     expand = lambda p: p.replace('@loader_path', str(loader.parent)).replace('@executable_path', str(executable.parent))
     if dep.startswith('@rpath/'):
@@ -111,7 +115,7 @@ def resolve_dep(dep, loader, executable):
 
 
 def bundle_libraries(app, binary):
-    """Copie l'exécutable dans l'app avec ses dylibs non système et les réécrit en @rpath."""
+    """Copy the executable into the app with its non-system dylibs, rewritten to @rpath."""
     frameworks = app / 'Contents/Frameworks'
     frameworks.mkdir(parents=True, exist_ok=True)
     target = app / 'Contents/MacOS/portal2-native'
@@ -159,8 +163,8 @@ def bundle_libraries(app, binary):
 
 
 def bundle_steam_api(app, config):
-    """Copie la libsteam_api.dylib configurée (chargée par dlopen, donc absente
-    d'otool -L) dans Frameworks, où le lanceur la désigne."""
+    """Copy the configured libsteam_api.dylib (dlopen'ed, so absent from
+    otool -L) into Frameworks, where the launcher points to it."""
     source = Path(config.get('steam_api_dylib') or '').expanduser()
     if not source.is_file():
         sys.exit(f'libsteam_api.dylib not found ({source}): re-run ./setup.sh')
@@ -170,8 +174,8 @@ def bundle_steam_api(app, config):
 
 
 def bundle_d3d9metal(app, config):
-    """Copie la libd3d9metal.dylib configurée (rendu Direct3D 9 natif, chargée
-    par dlopen depuis Frameworks/, rendu par défaut) ; rien sans clé."""
+    """Copy the configured libd3d9metal.dylib (native Direct3D 9 renderer,
+    dlopen'ed from Frameworks/, the default renderer); nothing without the key."""
     if not config.get('d3d9metal_dylib'): return
     source = Path(config['d3d9metal_dylib']).expanduser()
     if not source.is_file(): sys.exit(f'make_app: d3d9metal_dylib {source} not found')
@@ -181,7 +185,7 @@ def bundle_d3d9metal(app, config):
 
 
 def sign_app(app):
-    """Signature ad hoc : install_name_tool invalide celle de l'éditeur de liens."""
+    """Ad hoc signature: install_name_tool invalidates the linker's."""
     for lib in sorted((app / 'Contents/Frameworks').glob('*.dylib')):
         run('codesign', '--force', '-s', '-', str(lib))
     run('codesign', '--force', '-s', '-', str(app / 'Contents/MacOS/portal2-native'))
@@ -189,10 +193,10 @@ def sign_app(app):
 
 
 def user_dir(config):
-    """Dossier des sauvegardes : user_dir de la config, sinon SUPPORT/userdata,
-    initialisé une fois par copie (jamais déplacement) de l'ancien défaut."""
-    if config.get('user_dir'): return Path(config['user_dir']).expanduser().resolve()
-    new, old = SUPPORT / 'userdata', ROOT / OLD_USER_DIR
+    """Saves folder: user_dir of the config, else SUPPORT/userdata, initialised
+    once by copying (never moving) the old default."""
+    if config.get('user_dir'): return localconfig.user_dir(config)
+    new, old = localconfig.user_dir(config, support=SUPPORT), ROOT / OLD_USER_DIR
     if not new.exists() and old.is_dir():
         partial = new.with_name(new.name + '.partial')
         if partial.exists(): shutil.rmtree(partial)
@@ -203,7 +207,7 @@ def user_dir(config):
 
 
 def copy_tree(source, dest):
-    """Copie source vers dest ; clones APFS (cp -c, sans espace disque en plus) si possible."""
+    """Copy source to dest; APFS clones (cp -c, no extra disk space) when possible."""
     if dest.exists(): shutil.rmtree(dest)
     if subprocess.run(['/bin/cp', '-cR', str(source), str(dest)], capture_output=True).returncode:
         if dest.exists(): shutil.rmtree(dest)
@@ -227,7 +231,6 @@ def build_app(app, binary, prep, config, paths, game_args):
     launcher = macos / 'launcher'
     launcher.write_text(LAUNCHER.format(
         name=NAME, game_args=shlex.join(game_args or DEFAULT_ARGS),
-        binary_text=str(binary), game_dir_text=str(paths['game_dir']).replace('"', ''),
         **{key: shlex.quote(str(value)) for key, value in paths.items()}))
     launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     bundle_libraries(app, binary)
@@ -252,7 +255,7 @@ def main():
     parser.add_argument('game_args', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     game_args = args.game_args[1:] if args.game_args[:1] == ['--'] else args.game_args
-    config = json.loads((ROOT / 'config/local.json').read_text())
+    config = localconfig.load(ROOT / 'config/local.json')
     binary = ROOT / 'build/portal2-native'
     prep = ROOT / 'build/game/prep'
     if not (prep / 'layout.json').exists(): raise SystemExit(f'{prep} absent : lancer tools/gameprep.py')

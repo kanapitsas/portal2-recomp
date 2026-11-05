@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""Strict integer i386 -> C AOT spike. Unsupported reachable instructions are errors.
+"""i386 -> C ahead-of-time translator for the whole game (ELF modules and PE plugins).
 
-The generated C contains one native function per requested export and direct C
-branches for guest control flow. It never fetches or interprets guest opcodes.
-Direct calls are followed transitively; indirect calls/tail jumps use a checked
-dispatch table. SSE and x87 are outside this milestone.
+Every guest function becomes one C function over the runtime's CPU state: direct
+C branches for control flow, direct calls between translated functions, a checked
+dispatch table (rt_lookup) for indirect calls and tail jumps, and host shims for
+libc imports. Integer, SSE and x87 instructions are lowered (float_lift.py);
+an unsupported reachable instruction is an error, never emulated. `generate`
+emits one file for a set of roots (smoke tests); `generate_sharded` lifts the
+whole game in parallel into files grouped by guest address (tools/build_game.py);
+`generate_pe` emits relocatable C for the Miles .asi plugins (tools/peprep.py).
 """
 import argparse
 import json
 import hashlib
+import bisect
 import marshal
 import os
 import shutil
@@ -23,6 +28,11 @@ for full, low, high, word in [('eax', 'al', 'ah', 'ax'), ('ebx', 'bl', 'bh', 'bx
                               ('ecx', 'cl', 'ch', 'cx'), ('edx', 'dl', 'dh', 'dx')]:
     REGS.update({low: (full, 8, 0), high: (full, 8, 8), word: (full, 16, 0)})
 REGS.update({r[1:]: (r, 16, 0) for r in ['esp', 'ebp', 'esi', 'edi']})
+# Operand syntax of objdump's Intel output, matched once per operand.
+_MEMORY_OPERAND = re.compile(r'(?:(byte|word|dword|qword|xmmword) ptr )?(?:(gs|fs):)?\[(.*)\]')
+_RELOCATED_IMMEDIATE = re.compile(r'@c?0x[0-9a-f]+')
+_HEX_LITERAL = re.compile(r'0x[0-9a-f]+')
+_SWITCH_TABLE = re.compile(r'(?:dword ptr )?\[(?:4\*(\w+) \+ (0x[0-9a-f]+)|(0x[0-9a-f]+) \+ 4\*(\w+))\]')
 CC = dict(o='O', no='NO', b='B', c='B', nae='B', ae='AE', nb='AE', nc='AE',
           e='E', z='E', ne='NE', nz='NE', be='BE', na='BE', a='A', nbe='A',
           s='S', ns='NS', p='P', pe='P', np='NP', po='NP', l='L', nge='L',
@@ -45,7 +55,7 @@ CODE_RELOCATED = 'x_'
 
 
 def relocated(token):
-    """`@0x...` (donnée) ou `@c0x...` (code) -> expression C relogée."""
+    """`@0x...` (data) or `@c0x...` (code) -> relocated C expression."""
     code = token.startswith('@c')
     return f'({int(token[2 if code else 1:], 0):#x}u + {CODE_RELOCATED if code else RELOCATED})'
 
@@ -87,7 +97,7 @@ class Operand:
         self.reg = REGS.get(text)
         self.addr = None
         self.width = self.reg[1] if self.reg else None
-        m = re.fullmatch(r'(?:(byte|word|dword|qword|xmmword) ptr )?(?:(gs|fs):)?\[(.*)\]', text)
+        m = _MEMORY_OPERAND.fullmatch(text)
         if m:
             if m[2] == 'fs': raise Unsupported('FS segment is not implemented')
             self.effective_addr = address(m[3])
@@ -95,7 +105,7 @@ class Operand:
             self.width = {None: None, 'byte': 8, 'word': 16, 'dword': 32, 'qword': 64, 'xmmword': 128}[m[1]]
         self.imm = None
         self.relocated = None
-        if not self.reg and self.addr is None and re.fullmatch(r'@c?0x[0-9a-f]+', text):
+        if not self.reg and self.addr is None and _RELOCATED_IMMEDIATE.fullmatch(text):
             self.relocated = text   # immédiat relocalisé : pas une constante
             return
         if not self.reg and self.addr is None:
@@ -197,8 +207,8 @@ def string_instruction(op, args, nxt):
 
 
 def code_address(address, rebase):
-    """Adresse invitée d'un point de code : constante, ou relative au module
-    (greffons PE chargés à une base choisie à l'exécution)."""
+    """Guest address of a code location: a constant, or module-relative
+    (PE plugins loaded at a base chosen at run time)."""
     return f'({address:#x}u + {CODE_RELOCATED})' if rebase else f'{address:#x}u'
 
 
@@ -520,10 +530,11 @@ def dead_flags(translated, flow, resume=frozenset()):
         info[pc] = kind
     def solve(reads_of):
         live = dict.fromkeys(translated, False)
+        order = sorted(translated, reverse=True)   # once, not per fixpoint iteration
         changed = True
         while changed:
             changed = False
-            for pc in sorted(translated, reverse=True):
+            for pc in order:
                 _, _, kills = info[pc]
                 out = any(live.get(s, True) for s in flow.get(pc, ()))
                 value = reads_of(pc) or (out and not kills)
@@ -547,8 +558,8 @@ def dead_flags(translated, flow, resume=frozenset()):
 def lift(entry, insns, entries=frozenset(), callees=None, tables=None, setjmp=None, delta=None):
     """Translate one function. `setjmp(target)` tells whether a direct call
     target is setjmp; its return sites become resume points for longjmp.
-    `delta` (expression C) : code relogeable d'un greffon PE, chaque adresse
-    de code et chaque valeur relocalisée vaut alors adresse + delta."""
+    `delta` (C expression): relocatable code of a PE plugin, every code
+    address and relocated value is then address + delta."""
     pending = [entry]
     translated = {}
     flow = {}
@@ -605,10 +616,10 @@ _DIRECT = re.compile(r'rt_(call|jump)_fn\(c, fn_([0-9a-f]+), ')
 
 
 def link_direct(body, compiled, imports=frozenset()):
-    """Résout les appels et sauts directs d'un corps généré : une cible
-    traduite garde l'appel C direct, toute autre (import, fonction non
-    traduite) repasse par rt_call/rt_dispatch, qui piège si elle est inconnue.
-    Renvoie (corps, adresses traduites référencées)."""
+    """Resolve the direct calls and jumps of a generated body: a translated
+    target keeps the direct C call, any other (import, untranslated function)
+    goes through rt_call/rt_dispatch, which traps when it is unknown.
+    Returns (body, referenced translated addresses)."""
     used = set()
 
     def resolve(m):
@@ -698,6 +709,8 @@ class JumpTables:
         return None
 
     def __call__(self, pc):
+        if self.insns[pc][1] != 'jmp':
+            return None   # only jumps have tables: keep the cache to them
         if pc not in self.cache:
             self.cache[pc] = self.resolve(pc)
         return self.cache[pc]
@@ -707,8 +720,7 @@ class JumpTables:
         if op != 'jmp':
             return None
         history = self.before(pc, 8)
-        pattern = r'(?:dword ptr )?\[(?:4\*(\w+) \+ (0x[0-9a-f]+)|(0x[0-9a-f]+) \+ 4\*(\w+))\]'
-        m = re.fullmatch(pattern, args)
+        m = _SWITCH_TABLE.fullmatch(args)
         if m:
             index = m[1] or m[4]; table = int(m[2] or m[3], 16); base = 0; rest = history
         elif args in REGS and REGS[args][1] == 32 and len(history) >= 2:
@@ -819,8 +831,9 @@ def scan(entry, insns, entries=frozenset(), callees=None, visited=None, tables=N
     return len(seen), failures, indirect
 
 
-# Keep this list synchronized with runtime/shims.c. Unknown imports fail closed.
-# New runtime files declare their names on `// SHIMS: a b c` lines instead (see declared_shims).
+# Frozen list of the original shims (runtime/shims.c), kept as is for compatibility.
+# New shims are not added here: a runtime file declares its names on `// SHIMS: a b c`
+# lines (see declared_shims). Unknown imports fail closed.
 _CORE_SHIMS = frozenset('pthread_create pthread_join pthread_attr_init pthread_attr_setstacksize pthread_attr_destroy pthread_getschedparam pthread_setschedparam pthread_exit pthread_equal pthread_cond_wait pthread_cond_timedwait '
                   'feof ferror clearerr fileno fileno_unlocked ftell ftello ftello64 fseek fseeko fseeko64 rewind strrchr '
                   'memset memcpy memmove memcmp strlen strcpy stpcpy strncpy strcmp '
@@ -883,8 +896,12 @@ def resolve_export(layout, spec):
 def module_instructions(mod, objdump, disasm_cache=None):
     """Disassemble one prepared module, through the optional content-addressed cache."""
     cache_path = None
+    found = shutil.which(objdump)
+    if found is None:
+        raise Unsupported(f'{objdump!r} not found: install the Xcode command line tools (xcode-select --install) '
+                          'or pass the path of an LLVM objdump')
     if disasm_cache is not None:
-        tool = Path(shutil.which(objdump) or objdump).resolve()
+        tool = Path(found).resolve()
         identity = (f'parser-v2:{mod["base"]}:{tool}:'
                     f'{tool.stat().st_mtime_ns}:{tool.stat().st_size}').encode()
         digest = hashlib.sha256(identity + Path(mod['image']).read_bytes()).hexdigest()
@@ -922,7 +939,7 @@ def generate(layout, exports, objdump, allow_unimplemented=False, disasm_cache=N
                     loaded.add(mod['name'])
                 return
         raise Unsupported(f'entry {entry:#x} lies outside executable segments')
-    imports = {item['addr']: item['name'] for item in layout['imports']}
+    imports = import_map(layout)
     entries = {e for m in layout['modules'] for e in m['entries']}
     entries.update(entry for _, entry in selected)
     entries.update(imports)
@@ -962,7 +979,20 @@ def generate(layout, exports, objdump, allow_unimplemented=False, disasm_cache=N
     code.append('gfn rt_lookup(uint32_t target) { switch (target) {')
     for entry in sorted(compiled):
         code.append(f'case {entry:#x}u: return fn_{entry:x};')
-    code.extend(['default: return NULL; } }', 'uint32_t rt_export(const char *name) {'])
+    code.append('default: return NULL; } }')
+    code += runtime_tables(layout, selected, imports)
+    return '\n'.join(code)
+
+
+def import_map(layout):
+    """Thunk address -> import name, from a prepared layout."""
+    return {item['addr']: item['name'] for item in layout['imports']}
+
+
+def runtime_tables(layout, selected, imports):
+    """C lines of rt_export, rt_import_name, rt_load_images and the module
+    registry, common to `generate` and `dispatch_source`."""
+    code = ['uint32_t rt_export(const char *name) {']
     for name, entry in selected:
         code.append(f'if (!strcmp(name, {json.dumps(name)})) return {entry:#x}u;')
     code.extend(['return 0; }', 'const char *rt_import_name(uint32_t target) { switch (target) {'])
@@ -981,7 +1011,7 @@ def generate(layout, exports, objdump, allow_unimplemented=False, disasm_cache=N
         code.append(f'if (rt_init_import_data({json.dumps(item["name"])}, {item["addr"]:#x}u, {item["size"]}u)) return -1;')
     code.extend(['return 0; }', ''])
     code.append(registry.generate(layout))
-    return '\n'.join(code)
+    return code
 
 
 # ---------------------------------------------------------------------------
@@ -1033,7 +1063,7 @@ def code_pointer_roots(module, insns):
                     candidates.append((module['gotplt'] + offset) & 0xffffffff)
         elif op in ('push', 'mov'):
             candidates += [int(x, 16) for x in (o.strip() for o in args.split(','))
-                           if re.fullmatch(r'0x[0-9a-f]+', x)]
+                           if _HEX_LITERAL.fullmatch(x)]
         found.update(a for a in candidates if a in insns and executable(module, a))
     return found
 
@@ -1048,8 +1078,28 @@ def _code_pointer_job(name):
         insns.drop_transient()
 
 
+# owner() runs several times per function over the whole game: the executable
+# segments of a layout are indexed once (by identity; a layout is never mutated
+# after loading, the module count guards against a reused id) and searched by bisection.
+_OWNER_INDEX = {}
+
+
+def _owner_ranges(layout):
+    cached = _OWNER_INDEX.get(id(layout))
+    if cached is None or cached[0] is not layout or cached[1] != len(layout['modules']):
+        ranges = sorted(((s['vaddr'], s['vaddr'] + s['filesz'], m) for m in layout['modules']
+                         for s in m['loads'] if s['flags'] & 1), key=lambda r: r[:2])
+        cached = _OWNER_INDEX[id(layout)] = (layout, len(layout['modules']), [r[0] for r in ranges], ranges)
+    return cached[2], cached[3]
+
+
 def owner(layout, address):
-    return next((m for m in layout['modules'] if executable(m, address)), None)
+    """Module whose executable segments hold `address`, or None."""
+    starts, ranges = _owner_ranges(layout)
+    i = bisect.bisect_right(starts, address) - 1
+    if i >= 0 and ranges[i][0] <= address < ranges[i][1]:
+        return ranges[i][2]
+    return None
 
 
 # Remplacements natifs de fonctions invitées chaudes : (module, décalage) ->
@@ -1085,7 +1135,7 @@ def guest_bytes(module, address, count):
 
 
 def native_override(layout, entry, body, log=print):
-    """Corps de fn_<entry> remplacé par un aiguillage vers le runtime, ou None."""
+    """Body of fn_<entry> replaced by a switch to the runtime, or None."""
     module = owner(layout, entry)
     spec = module and NATIVE_OVERRIDES.get((module['name'], entry - module['base']))
     if not spec:
@@ -1225,15 +1275,18 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
     every known root of every module) into C files grouped by guest address.
 
     Returns a manifest: shard name -> sorted function entries, plus counts.
-    Generated code is identical to `generate` for the same entry set; only
-    the file layout differs (functions are extern, looked up by dispatch.c).
+    Same translator as `generate`, but functions are extern (looked up by
+    dispatch.c) and the whole-game pass differs: function boundaries come from
+    module_boundaries, code pointers found in data and code become roots
+    (code_pointer_roots) and hot guest functions can be replaced by native
+    ones (native_override).
     """
     import gc
     import multiprocessing
     import time
     started = time.time()
     selected = [(name, resolve_export(layout, name)) for name in specs]
-    imports = {item['addr']: item['name'] for item in layout['imports']}
+    imports = import_map(layout)
     roots = {entry for _, entry in selected}
     named = set(roots)
     if whole_game:
@@ -1395,25 +1448,7 @@ def dispatch_source(layout, selected, imports, functions):
                  '}']
     else:
         code.append('gfn rt_lookup(uint32_t target) { (void)target; (void)entry_address; (void)entry_function; return NULL; }')
-    code.append('uint32_t rt_export(const char *name) {')
-    for name, entry in selected:
-        code.append(f'if (!strcmp(name, {json.dumps(name)})) return {entry:#x}u;')
-    code.extend(['return 0; }', 'const char *rt_import_name(uint32_t target) { switch (target) {'])
-    for addr, name in sorted(imports.items()):
-        code.append(f'case {addr:#x}u: return {json.dumps(name)};')
-    code.extend(['default: return NULL; } }', 'int rt_load_images(const char *directory) {'])
-    for mod in layout['modules']:
-        for seg in mod['loads']:
-            code.append(f'if (rt_load_segment(directory, {json.dumps(mod["name"])}, '
-                        f'{seg["off"]}u, {seg["vaddr"]:#x}u, {seg["filesz"]}u, {seg["memsz"]}u)) return -1;')
-        tls = mod.get('tls')
-        if tls:
-            code.append(f'if (rt_register_tls(directory, {json.dumps(mod["name"])}, {mod["modid"]}u, '
-                        f'{tls["off"]}u, {tls["filesz"]}u, {tls["memsz"]}u, {tls["align"]}u)) return -1;')
-    for item in layout.get('data_imports', []):
-        code.append(f'if (rt_init_import_data({json.dumps(item["name"])}, {item["addr"]:#x}u, {item["size"]}u)) return -1;')
-    code.extend(['return 0; }', ''])
-    code.append(registry.generate(layout))
+    code += runtime_tables(layout, selected, imports)
     return '\n'.join(code)
 
 
@@ -1432,10 +1467,10 @@ _TOKEN = re.compile(r'([+-]\s*)?\b(0x[0-9a-f]+)\b')
 
 
 def mark_relocations(insn, words, image):
-    """Instruction `insn` dont les octets couvrent les mots relocalisés `words`
-    (adresses au ImageBase préféré). Chaque mot doit apparaître comme un
-    opérand (immédiat ou déplacement) de même valeur ; sinon l'instruction est
-    refusée (`unrelocatable`), jamais traduite avec une constante fausse."""
+    """Instruction `insn` whose bytes cover the relocated words `words`
+    (addresses at the preferred ImageBase). Each word must appear as an
+    operand (immediate or displacement) of the same value; otherwise the
+    instruction is refused (`unrelocatable`), never translated with a wrong constant."""
     pc_end, op, args = insn
     values = [image.u32(w - image.image_base) for w in words]
     tokens = [(m, ((-int(m[2], 16)) if m[1] and m[1].strip() == '-' else int(m[2], 16)) & 0xffffffff)
@@ -1454,12 +1489,12 @@ def mark_relocations(insn, words, image):
 
 
 class PeInstructions(dict):
-    """Instructions d'un greffon PE, relocalisations marquées. Le code des
-    DLL MSVC contient des données (tables de switch) : le désassemblage
-    linéaire peut s'y désynchroniser. Toute adresse de code demandée qui n'est
-    pas une frontière connue est donc redécodée à partir d'elle ; le décodage
-    d'une adresse ne dépend que de ses octets, l'union des décodages reste
-    cohérente. `raw` garde le texte non marqué (reconnaissance des tables)."""
+    """Instructions of a PE plugin, relocations marked. MSVC DLL code holds
+    data (switch tables): linear disassembly can desynchronise there. Any
+    requested code address that is not a known boundary is therefore decoded
+    again from itself; decoding an address only depends on its bytes, so the
+    union of decodings stays consistent. `raw` keeps the unmarked text (table
+    recognition)."""
     WINDOW = 0x800
 
     def __init__(self, image, objdump):
@@ -1510,7 +1545,7 @@ class PeInstructions(dict):
 
 
 class _RawView:
-    """Vue non marquée de PeInstructions pour JumpTables (même décodage paresseux)."""
+    """Unmarked view of PeInstructions for JumpTables (same lazy decoding)."""
     def __init__(self, insns):
         self.insns = insns
         self.previous = insns.previous
@@ -1530,9 +1565,9 @@ class _RawView:
 
 
 class PeTables(JumpTables):
-    """Tables de switch MSVC (`jmp [4*I + T]`, T relocalisé) lues dans l'image
-    au ImageBase préféré ; le code généré compare la cible calculée à
-    l'exécution, moins d_, à ces valeurs."""
+    """MSVC switch tables (`jmp [4*I + T]`, T relocated) read from the image
+    at the preferred ImageBase; the generated code compares the target
+    computed at run time, minus d_, with these values."""
 
     def __init__(self, image, insns):
         super().__init__({'modules': []}, _RawView(insns))
@@ -1548,10 +1583,10 @@ class PeTables(JumpTables):
 
 
 def pe_pointer_roots(image, insns):
-    """Valeurs relocalisées qui désignent du code et servent de pointeur de
-    fonction : stockées hors du code, immédiates d'une instruction, ou entrées
-    de table dans le code (cibles de switch). Une valeur qui n'apparaît que
-    comme déplacement mémoire (`[4*eax + T]`, base de table) n'en est pas une."""
+    """Relocated values that point to code and serve as function pointers:
+    stored outside the code, immediates of an instruction, or table entries in
+    the code (switch targets). A value that only appears as a memory
+    displacement (`[4*eax + T]`, table base) is not one."""
     import bisect
     starts = sorted(insns.raw)
     roots = set()
@@ -1576,9 +1611,9 @@ def pe_pointer_roots(image, insns):
 
 
 def generate_pe(image, tag, objdump='objdump', log=print):
-    """C relogeable d'un greffon PE et son descripteur RtPeImage (runtime/pe.c).
-    Renvoie (source, statistiques). Une fonction non traduisible n'est pas
-    émise : si Miles l'appelle, l'aiguillage piège (« not recompiled »)."""
+    """Relocatable C of a PE plugin and its RtPeImage descriptor (runtime/pe.c).
+    Returns (source, statistics). An untranslatable function is not emitted:
+    if Miles calls it, the dispatcher traps ("not recompiled")."""
     if not re.fullmatch(r'[a-z0-9_]+', tag):
         raise Unsupported(f'invalid plugin tag {tag!r}')
     for rva in image.relocs:

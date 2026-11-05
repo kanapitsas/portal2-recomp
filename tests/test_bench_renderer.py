@@ -152,9 +152,6 @@ class Plan(unittest.TestCase):
         self.assertIn('+map sp_a2_laser_over_goo', printed)
 
 
-if __name__ == '__main__':
-    unittest.main()
-
 
 class ColdRunFilterTests(unittest.TestCase):
     def test_invalid_cold_runs_stay_out_of_the_summary(self):
@@ -164,3 +161,7 @@ class ColdRunFilterTests(unittest.TestCase):
         summary = bench.summarize([reset, good])
         self.assertEqual(summary['gl']['cold_max_ms'], 10)
         self.assertEqual(summary['gl']['cold_load_s'], 20)
+
+
+if __name__ == '__main__':
+    unittest.main()

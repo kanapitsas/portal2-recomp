@@ -39,6 +39,9 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import localconfig  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DYLIB = ROOT.parent / 'mtld3d/native/target/release/libd3d9metal.dylib'
 LOAD_MARKER = 'Redownloading all lightmaps'
@@ -223,7 +226,7 @@ def build_plan(args, config):
     renderers = [r.strip() for r in args.renderers.split(',') if r.strip()]
     for r in renderers:
         if r not in ('gl', 'd3d9'): sys.exit(f'unknown renderer {r!r} (gl, d3d9)')
-    user_dir = Path(config.get('user_dir') or ROOT.parent / 'work/portal2-userdata').expanduser().resolve()
+    user_dir = localconfig.user_dir(config)
     diag = user_dir.with_name('portal2-userdata-diag')
     source = diag if diag.exists() else user_dir
     runs = []
@@ -527,7 +530,7 @@ def main(argv=None):
         report(out, settings, results)
         return 0
     config_path = Path(args.config)
-    config = json.loads(config_path.read_text()) if config_path.exists() else {}
+    config = localconfig.load(config_path)
     date = time.strftime('%Y%m%d-%H%M%S')
     out = Path(args.out) if args.out else ROOT / 'build/bench' / date
     runs = build_plan(args, config)

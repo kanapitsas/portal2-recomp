@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Banc de cadence en jeu (diagnostic, fenêtre cachée, son muet, focus simulé).
+"""In-game frame-rate bench (diagnostic: hidden window, muted sound, simulated focus).
 
-Lance N fois la carte donnée et rapporte la moyenne des cadences mesurées
-dans la seconde moitié de chaque lancement (après chargement et premières
-compilations de shaders), ainsi que la charge machine.
+Launches the given map N times and reports the mean of the frame rates measured
+in the second half of each run (after loading and the first shader compilations),
+along with the machine load.
 """
 import argparse
 import os
@@ -20,7 +20,7 @@ parser.add_argument('--map', default='sp_a1_intro1')
 parser.add_argument('--size', default='1280x720')
 parser.add_argument('--label', default='')
 parser.add_argument('--binary', default='build/portal2-native')
-parser.add_argument('--extra', default='', help='arguments du jeu ajoutés (convars : "+mat_forceaniso 1")')
+parser.add_argument('--extra', default='', help='extra game arguments (convars: "+mat_forceaniso 1")')
 args = parser.parse_args()
 width, height = args.size.split('x')
 results = []

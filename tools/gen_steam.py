@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Génère runtime/steam_generated.c : tables des interfaces Steam (SDK 1.53a) pour le pont invité.
+"""Generate runtime/steam_generated.c: Steam interface tables (SDK 1.53a) for the guest bridge.
 
-Sources, toutes locales :
-- emplacements de vtable : désassemblage ARM64 de la `libsteam_api.dylib` officielle. Chaque
-  fonction « flat » `SteamAPI_ISteamX_Méthode` y est un appel terminal `ldr x8,[x0]; ldr xN,[x8,#off];
-  br xN` : l'emplacement est off/8 (ABI Itanium, même ordre qu'en i386 GCC), et N, premier registre
-  libre, donne le nombre d'arguments entiers (vérification croisée des signatures) ;
-- signatures : `NativeMethods.cs` de Steamworks.NET 20.1.0 (MIT, même paquet), et le type de
-  retour des enveloppes C# (CSteamID/CGameID rendus par valeur, chaînes, interfaces) ;
-- ISteamController n'a pas d'équivalent C# : ses méthodes reprennent la signature de la
-  méthode homonyme d'ISteamInput lorsque le nombre d'arguments du désassemblage concorde.
+Sources, all local:
+- vtable slots: ARM64 disassembly of the official `libsteam_api.dylib`. Each flat function
+  `SteamAPI_ISteamX_Method` is a tail call `ldr x8,[x0]; ldr xN,[x8,#off]; br xN`: the slot is
+  off/8 (Itanium ABI, same order as i386 GCC) and N, the first free register, gives the number
+  of integer arguments (cross-check of the signatures);
+- signatures: `NativeMethods.cs` of Steamworks.NET 20.1.0 (MIT, same package), and the return
+  type of the C# wrappers (CSteamID/CGameID returned by value, strings, interfaces);
+- ISteamController has no C# counterpart: its methods take the signature of the ISteamInput
+  method of the same name when the disassembled argument count agrees.
 
-Une méthode dont le marshalling ne se déduit pas sûrement des types reste un piège nommé.
-Le fichier généré ne contient que des noms, emplacements et conversions d'arguments.
+A method whose marshalling cannot be derived safely from the types stays a named trap.
+The generated file only holds names, slots and argument conversions.
 """
 import argparse
 import json
@@ -91,7 +91,7 @@ def sdk_files(pkg):
 
 
 def typedefs(files):
-    """Types enveloppes (AppId_t...) -> scalaire C# ; énumérations -> int."""
+    """Wrapper types (AppId_t...) -> C# scalar; enums -> int."""
     result = {}
     for path, asset in files.items():
         if '/Runtime/types/' in path and path.endswith('.cs'):
@@ -167,7 +167,7 @@ class Unsupported(Exception):
 
 
 def plan_method(flat, method, ret, params, wrapper, types, gprs):
-    """Renvoie (corps C, sret) ; lève Unsupported avec la raison."""
+    """Return (C body, sret); raise Unsupported with the reason."""
     def scalar(t):
         t = types.get(t, t)
         return SCALARS.get(t)
