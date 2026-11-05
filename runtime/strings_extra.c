@@ -33,7 +33,7 @@ static uint32_t token(CPU *c, uint32_t start, uint32_t delimiters, uint32_t *sav
 // Les messages sont des chaînes invitées allouées une fois par errno et
 // partagées avec strerror (libc.c) : auparavant strerror allouait à chaque appel.
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-static uint32_t messages[256];
+static uint32_t messages[256], unknown_message;   // adresses invitées, oubliées par rt_strings_extra_destroy
 static uint32_t known_message(int code) {
     if (code <= 0 || code >= 256) return 0;
     int native = rt_darwin_errno(code);
@@ -54,9 +54,9 @@ uint32_t rt_strerror_message(int code) {
     if (message) return message;
     // glibc : « Success » pour 0, sinon « Unknown error N » dans un tampon
     // statique (strerror n'est pas réentrant, comme dans glibc).
-    static uint32_t unknown;
     pthread_mutex_lock(&lock);
-    if (!unknown) unknown = rt_alloc(32);
+    if (!unknown_message) unknown_message = rt_alloc(32);
+    uint32_t unknown = unknown_message;
     if (unknown) {
         if (code) snprintf(GPTR(unknown), 32, "Unknown error %d", code);
         else strcpy(GPTR(unknown), "Success");
@@ -66,6 +66,13 @@ uint32_t rt_strerror_message(int code) {
 }
 
 static uint32_t strtok_state;  // glibc : état de strtok global au processus
+// Les adresses invitées gardées ici ne survivent pas à rt_destroy (tas remis
+// à zéro, mémoire démappée) : appelé par rt_shims_destroy.
+void rt_strings_extra_destroy(void) {
+    pthread_mutex_lock(&lock);
+    memset(messages, 0, sizeof(messages)); unknown_message = 0; strtok_state = 0;
+    pthread_mutex_unlock(&lock);
+}
 
 static int strings_extra(CPU *c, const char *name) {
     if (!strcmp(name, "memchr")) {

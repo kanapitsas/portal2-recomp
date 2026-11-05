@@ -11,6 +11,7 @@ int rt_darwin_errno(int linux_value);
 // Message strerror d'un errno Linux : chaîne invitée mémorisée par errno,
 // tampon statique pour « Unknown error N » (strings_extra.c). 0 si sans mémoire.
 uint32_t rt_strerror_message(int linux_value);
+void rt_strings_extra_destroy(void);   // oublie ces adresses invitées (rt_shims_destroy)
 // Signaux : numéros Linux i386 <-> Darwin. 0 si pas d'équivalent.
 int rt_linux_signal(int darwin);
 int rt_darwin_signal(int linux_value);

@@ -7,10 +7,12 @@ typedef struct { uint32_t function, arg, dso; } ExitHandler;
 static ExitHandler *handlers;
 static size_t handler_count, handler_capacity;
 
+void rt_strings_extra_destroy(void);   // strings_extra.c (posix.h)
 void rt_shims_destroy(void) {
     rt_pthreads_destroy();
     rt_futex_destroy();
     rt_libc_destroy();
+    rt_strings_extra_destroy();
     rt_tls_destroy();
     rt_modules_destroy();
     rt_vm_destroy();

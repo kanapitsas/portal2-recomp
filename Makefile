@@ -22,7 +22,12 @@ EXPORTS = Plat_IsInBenchmarkMode Plat_SetBenchmarkMode AreAllAssertsDisabled Set
 .PHONY: all test check clean
 all: build/tier0-smoke
 
-$(PREP)/layout.json: tools/elfprep.py $(INPUT_DIR_DEP)/libtier0.so $(INPUT_DIR_DEP)/libvstdlib.so
+# $(PREP)/input-dir records the INPUT_DIR in use, so a changed depot regenerates the images.
+.PHONY: .FORCE
+.FORCE:
+$(PREP)/input-dir: .FORCE
+	@mkdir -p $(PREP); [ "$$(cat $@ 2>/dev/null)" = "$(INPUT_DIR)" ] || echo "$(INPUT_DIR)" > $@
+$(PREP)/layout.json: tools/elfprep.py $(INPUT_DIR_DEP)/libtier0.so $(INPUT_DIR_DEP)/libvstdlib.so $(PREP)/input-dir
 	$(PYTHON) tools/elfprep.py --out $(PREP) "$(INPUT_DIR)/libtier0.so@0x10000000" "$(INPUT_DIR)/libvstdlib.so@0x11000000"
 
 build/tier0.c: Makefile tools/lift.py tools/float_lift.py tools/registry.py $(PREP)/layout.json
