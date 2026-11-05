@@ -116,7 +116,8 @@ static void store_end(Store *s) {
     if (s->wide) W32(s->address + 4 * s->written, 0);
     else W8(s->address + s->written, 0);
 }
-static void store_integer(CPU *c, uint32_t address, unsigned size, uint64_t value) {
+#define store_integer rt_store_integer
+void rt_store_integer(CPU *c, uint32_t address, unsigned size, uint64_t value) {
     rt_span(c, address, size);
     if (size == 1) W8(address, (uint32_t)value);
     else if (size == 2) W16(address, (uint32_t)value);

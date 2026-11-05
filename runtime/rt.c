@@ -115,7 +115,7 @@ void rt_destroy(void) {
 
 int rt_map(uint32_t addr, uint64_t size) {
     if (!M || !size || size > address_space - addr) return -1;
-    uint64_t page = (uint64_t)sysconf(_SC_PAGESIZE);
+    uint64_t page = rt_host_page_size();
     uint64_t lo = addr & ~(page - 1);
     uint64_t hi = ((uint64_t)addr + size + page - 1) & ~(page - 1);
     return mprotect(M + lo, (size_t)(hi - lo), PROT_READ | PROT_WRITE);

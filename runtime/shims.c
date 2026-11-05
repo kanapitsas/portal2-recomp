@@ -1,6 +1,7 @@
 #include "rt.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
 
 typedef struct { uint32_t function, arg, dso; } ExitHandler;
 static ExitHandler *handlers;
@@ -29,14 +30,32 @@ int rt_atexit_get(size_t index, uint32_t *function, uint32_t *arg, uint32_t *dso
 }
 
 static uint32_t arg(CPU *c, unsigned index) { return R32(c->esp + 4 + 4 * index); }
-void *rt_span(CPU *c, uint32_t address, uint64_t length) {
+// Une page écrivable est aussi lisible (page_flags, vm.c) : un seul contrôle
+// de la table suffit pour chaque mode.
+static void *span(CPU *c, uint32_t address, uint64_t length, int mode) {
     if (length > (UINT64_C(1) << 32) - address || (length && !address))
         rt_trap(c, c->eip, "invalid libc guest span");
-    rt_check_span(address, length, 1);
+    rt_check_span(address, length, mode);
     return GPTR(address);
 }
-void *rt_write_span(CPU *c, uint32_t address, uint64_t length) {
-    void *result = rt_span(c, address, length); rt_check_span(address, length, 2); return result;
+void *rt_span(CPU *c, uint32_t address, uint64_t length) { return span(c, address, length, 1); }
+void *rt_write_span(CPU *c, uint32_t address, uint64_t length) { return span(c, address, length, 2); }
+uint32_t rt_bounded_strnlen(CPU *c, uint32_t address, uint32_t limit) {
+    uint32_t n = 0;
+    while (n < limit) {
+        uint32_t at = address + n;
+        uint64_t chunk = (((uint64_t)at | 4095) + 1) - at;   // jusqu'à la fin de la page de 4 Kio
+        if (chunk > limit - n) chunk = limit - n;
+        const uint8_t *page = rt_span(c, at, chunk), *nul = memchr(page, 0, (size_t)chunk);
+        if (nul) return n + (uint32_t)(nul - page);
+        n += (uint32_t)chunk;
+    }
+    return limit;
+}
+int rt_read_timespec(CPU *c, uint32_t pointer, struct timespec *out) {
+    rt_span(c, pointer, 8);
+    out->tv_sec = (int32_t)R32(pointer); out->tv_nsec = (int32_t)R32(pointer + 4);
+    return out->tv_nsec < 0 || out->tv_nsec >= 1000000000 ? -1 : 0;
 }
 uint32_t rt_string_length(CPU *c, uint32_t address) {
     if (!address) rt_trap(c, c->eip, "null guest string");
@@ -94,16 +113,10 @@ static int core_shim(CPU *c, const char *name) {
         c->eax = !strcmp(name, "stpcpy") ? a + n : a;
     } else if (!strcmp(name, "strncpy")) {
         a = arg(c, 0); b = arg(c, 1); n = arg(c, 2);
-        rt_write_span(c, a, n);
-        uint32_t i = 0;
-        while (i < n) {
-            rt_span(c, b, (uint64_t)i + 1);
-            uint8_t value = R8(b + i);
-            W8(a + i, value);
-            if (!value) break;
-            ++i;
-        }
-        if (i < n) memset(GPTR(a + i), 0, n - i);
+        uint8_t *to = rt_write_span(c, a, n);
+        uint32_t i = rt_bounded_strnlen(c, b, n);
+        memmove(to, GPTR(b), i);
+        memset(to + i, 0, n - i);
         c->eax = a;
     } else if (!strcmp(name, "strcmp")) core_strcmp(c);
     else if (!strcmp(name, "malloc")) core_malloc(c);

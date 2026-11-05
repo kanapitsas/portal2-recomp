@@ -1,12 +1,16 @@
 // Tas invité (malloc/free/realloc des imports libc) dans 0x80000000-0xc0000000.
 // Métadonnées hors de la mémoire invitée : un débordement invité ne peut pas
-// corrompre l'allocateur. Toutes les opérations sont en O(1) amorti :
-// - petits blocs (<= 16 Kio) : classes de taille, listes libres par classe ;
+// corrompre l'allocateur.
+// - petits blocs (<= 16 Kio) : classes de taille, listes libres par classe,
+//   O(1) amorti ;
 // - au-delà : multiples de 4 Kio, zones libres triées par adresse, fusionnées
 //   avec leurs voisines et réutilisables pour toute taille (sinon la mémoire
 //   libérée dans une classe ne servait plus aux autres : un chargement de carte
-//   épuisait le tas) ;
-// - table de hachage adresse -> taille pour free/realloc/malloc_usable_size.
+//   épuisait le tas). large_alloc/large_free parcourent ce tableau
+//   linéairement (première zone assez grande, insertion triée) : acceptable
+//   tant que les grandes allocations restent rares et les zones libres peu
+//   nombreuses grâce à la fusion ;
+// - table de hachage adresse -> taille pour free/realloc/malloc_usable_size, O(1).
 // Remplace une liste chaînée parcourue entièrement à chaque appel (coût
 // quadratique pendant la traduction des shaders par togl).
 #include "rt.h"

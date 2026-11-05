@@ -9,12 +9,19 @@ uint8_t rt_vm_permissions[(RT_VM_END - RT_VM_BEGIN) / 4096] __attribute__((align
 typedef struct Mapping { uint32_t address, size; int anonymous; struct Mapping *next; } Mapping;
 static Mapping *mappings;
 static uint32_t align_up(uint32_t value, uint32_t alignment) { return (value + alignment - 1) & ~(alignment - 1); }
+// sysconf à chaque projection coûtait un appel système ; la valeur ne change pas.
+uint64_t rt_host_page_size(void) {
+    static _Atomic uint64_t cached;
+    uint64_t page = atomic_load_explicit(&cached, memory_order_relaxed);
+    if (!page) { page = (uint64_t)sysconf(_SC_PAGESIZE); atomic_store_explicit(&cached, page, memory_order_relaxed); }
+    return page;
+}
 static unsigned page_flags(int protection) {
     // On i386 a writable/executable page is also readable.
     return 8u | (unsigned)protection | (protection ? 1u : 0u);
 }
 static int update_host_permissions(uint32_t address, uint32_t size, int discard_empty) {
-    uint64_t host_page = (uint64_t)sysconf(_SC_PAGESIZE);
+    uint64_t host_page = rt_host_page_size();
     uint64_t lo = address & ~(host_page - 1);
     uint64_t hi = ((uint64_t)address + size + host_page - 1) & ~(host_page - 1);
     for (uint64_t base = lo; base < hi; base += host_page) {
@@ -36,7 +43,7 @@ static int update_host_permissions(uint32_t address, uint32_t size, int discard_
 }
 uint32_t rt_mmap(CPU *c, uint32_t hint, uint32_t length, int protection, uint32_t flags, int fd, uint64_t offset) {
     (void)c;
-    uint32_t page = (uint32_t)sysconf(_SC_PAGESIZE);
+    uint32_t page = (uint32_t)rt_host_page_size();
     if (!length || length > RT_VM_END - RT_VM_BEGIN || protection & ~7 || offset % page || !(flags & 3)) { errno = EINVAL; return UINT32_MAX; }
     uint32_t size = align_up(length, page), address = RT_VM_BEGIN;
     int fixed = (flags & 0x10) != 0, no_replace = (flags & 0x100000) != 0;
@@ -101,7 +108,7 @@ int rt_mprotect(uint32_t address, uint32_t length, int protection) {
         memset(rt_vm_permissions + ((address - RT_VM_BEGIN) >> 12), (int)page_flags(protection), size / 4096);
         return update_host_permissions(address, size, 0);
     }
-    size_t page = (size_t)sysconf(_SC_PAGESIZE);
+    size_t page = (size_t)rt_host_page_size();
     if (address % page) { errno = EINVAL; return -1; }
     return mprotect(M + address, length, (int)page_flags(protection) & 3);
 }
@@ -116,7 +123,7 @@ int rt_madvise(uint32_t address, uint32_t length, int advice) {
             if (address < m->address + m->size && (uint64_t)address + size > m->address && !m->anonymous) {
                 errno = ENOTSUP; return -1;
             }
-        uint64_t host_page = (uint64_t)sysconf(_SC_PAGESIZE);
+        uint64_t host_page = rt_host_page_size();
         uint64_t lo = address & ~(host_page - 1), hi = ((uint64_t)address + size + host_page - 1) & ~(host_page - 1);
         if (mprotect(M + lo, (size_t)(hi - lo), PROT_READ | PROT_WRITE)) return -1;
         memset(M + address, 0, size);

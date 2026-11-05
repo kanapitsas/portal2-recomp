@@ -1,9 +1,9 @@
 // Conversions numériques, qsort et rand de la glibc i386.
 // `long` invité = 32 bits, `long long` = 64 bits (retour edx:eax) ; les
 // flottants reviennent dans ST(0). Les variantes `_l` reçoivent un locale_t
-// invité opaque : le runtime n'implémente que la locale « C » (séparateur
-// décimal « . », aucun groupement), ce qui est aussi ce que le jeu obtient tant
-// qu'il n'appelle pas setlocale/newlocale (non fournis par le runtime).
+// invité opaque, ignoré sans vérification (les tests passent des valeurs
+// quelconques) : les seules locales que fournit ctype_locale.c, « C » et
+// « C.UTF-8 », ont le même LC_NUMERIC (séparateur décimal « . », aucun groupement).
 // SHIMS: strtoll strtoull strtold_l __strtod_internal __strtof_internal __strtol_internal
 // SHIMS: __strtoll_internal __strtoul_internal __strtoull_internal __strtod_l __strtof_l
 // SHIMS: qsort rand srand

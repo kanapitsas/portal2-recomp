@@ -109,9 +109,9 @@ static int semaphore_shim(CPU *c, const char *name) {
         else if (!strcmp(name, "sem_trywait")) error = semaphore_wait(s, NULL, 1);
         else if (!strcmp(name, "sem_timedwait")) {
             uint32_t pointer = argument(c, 1);
-            struct timespec deadline = {(int32_t)R32(pointer), (int32_t)R32(pointer + 4)};
+            struct timespec deadline;
             // glibc validates the timeout before trying the fast path.
-            if (deadline.tv_nsec < 0 || deadline.tv_nsec >= 1000000000) error = LINUX_EINVAL;
+            if (rt_read_timespec(c, pointer, &deadline)) error = LINUX_EINVAL;
             else error = semaphore_wait(s, &deadline, 0);
         } else { rt_guest_leave(); return 0; }
     }

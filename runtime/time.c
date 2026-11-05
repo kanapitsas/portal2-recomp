@@ -97,9 +97,11 @@ int rt_time_data_import(const char *name, uint32_t address) {
     return 0;
 }
 
-static const char *const day_names[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-static const char *const month_names[] = {"January", "February", "March", "April", "May", "June", "July",
-                                          "August", "September", "October", "November", "December"};
+const char *const rt_day_names[7] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+const char *const rt_month_names[12] = {"January", "February", "March", "April", "May", "June", "July",
+                                        "August", "September", "October", "November", "December"};
+#define day_names rt_day_names
+#define month_names rt_month_names
 static int leap(int64_t year) { return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0); }
 
 // asctime glibc : "%.3s %.3s%3d %.2d:%.2d:%.2d %d\n".

@@ -55,7 +55,6 @@ uint32_t rt_module_symbol(const GuestModule *module, const char *name) {
     return 0;
 }
 uint32_t rt_invoke(CPU *c, uint32_t address, const uint32_t *args, size_t count) {
-    extern _Thread_local CPU *rt_fault_cpu;
     CPU *outer = rt_fault_cpu;   // diagnostic de faute : CPU de l'appel en cours
     rt_fault_cpu = c;
     uint32_t original = c->esp;

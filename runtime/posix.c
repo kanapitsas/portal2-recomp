@@ -195,18 +195,11 @@ static void scandir_shim(CPU *c, int wide) {
     size_t kept = 0; int error = 0;
     if (!items || !scratch) error = ENOMEM;
     for (size_t i = 0; i < count && !error; ++i) {
-        size_t len = strlen(entries[i].name);
-        if (len > 255) { error = 36; break; }
+        if (strlen(entries[i].name) > 255) { error = 36; break; }
         if (!wide && entries[i].ino > UINT32_MAX) { error = 75; break; }
-        uint32_t header = wide ? 19 : 11, align = wide ? 7 : 3;
-        uint32_t reclen = (uint32_t)((header + len + 1 + align) & ~(size_t)align);
-        uint32_t entry = rt_alloc(reclen);
+        uint32_t entry = rt_alloc(rt_dirent_size(wide, strlen(entries[i].name)));
         if (!entry) { error = 12; break; }
-        memset(GPTR(entry), 0, reclen);
-        if (wide) { W64(entry, entries[i].ino); W64(entry + 8, i + 1); }
-        else { W32(entry, (uint32_t)entries[i].ino); W32(entry + 4, (uint32_t)(i + 1)); }
-        W16(entry + header - 3, reclen); W8(entry + header - 1, entries[i].type);
-        memcpy(GPTR(entry + header), entries[i].name, len + 1);
+        rt_write_dirent(entry, wide, &entries[i], i + 1);
         if (filter && !rt_invoke(c, filter, &entry, 1)) { rt_free(entry); continue; }
         items[kept++] = entry;
     }
@@ -308,10 +301,12 @@ static int linux_ioctl(CPU *c, int fd, uint32_t request, uint32_t value) {
     }
 }
 
-static const char *stream_path(CPU *c, const char *path, const char *mode) {
-    int writing = mode[0] == 'w' || mode[0] == 'a' || strchr(mode, '+');
-    (void)c;
-    return writing ? rt_write_path(path, mode[0] != 'w') : rt_read_path(path);
+// Suffixe aléatoire de tmpnam/mkstemp : 62^6 = 56 800 235 584 noms, glibc
+// tente TMP_MAX (238 328) tirages avant EEXIST.
+#define TMP_ATTEMPTS 238328
+static void random_suffix(char *out) {
+    static const char letters[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    for (int i = 0; i < 6; ++i) out[i] = letters[arc4random_uniform(62)];
 }
 
 static int posix_shim(CPU *c, const char *name) {
@@ -474,7 +469,7 @@ static int posix_shim(CPU *c, const char *name) {
         uint32_t path_address = arg(c, 0), handle = arg(c, 2);
         const char *mode = string(c, arg(c, 1));
         FILE *file = rt_stream_file(c, handle);
-        const char *path = path_address ? stream_path(c, string(c, path_address), mode) : NULL;
+        const char *path = path_address ? rt_stream_path(string(c, path_address), mode) : NULL;
         FILE *result = path_address && !path ? NULL : freopen(path, mode, file);
         if (!result) {
             int error = errno;
@@ -494,11 +489,10 @@ static int posix_shim(CPU *c, const char *name) {
         // glibc : P_tmpdir "/tmp", préfixe « file », L_tmpnam = 20.
         static uint32_t internal;
         uint32_t out = arg(c, 0);
-        static const char letters[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         c->eax = 0;
-        for (int attempt = 0; attempt < 238328; ++attempt) {
+        for (int attempt = 0; attempt < TMP_ATTEMPTS; ++attempt) {
             strcpy(a, "/tmp/file");
-            for (int i = 0; i < 6; ++i) a[9 + i] = letters[arc4random_uniform(62)];
+            random_suffix(a + 9);
             a[15] = 0;
             if (!lstat(a, &info)) continue;
             if (errno != ENOENT) { rt_save_errno(c); return 1; }
@@ -513,11 +507,10 @@ static int posix_shim(CPU *c, const char *name) {
         rt_set_errno(c, 17);
     } else if (!strcmp(name, "mkstemp")) {
         uint32_t template = arg(c, 0), length = rt_string_length(c, template);
-        static const char letters[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         if (length < 6 || memcmp(GPTR(template + length - 6), "XXXXXX", 6) || length >= PATH_MAX) { fail(c, 22); return 1; }
         memcpy(b, GPTR(template), length + 1);
-        for (int attempt = 0; attempt < 238328; ++attempt) {
-            for (int i = 0; i < 6; ++i) b[length - 6 + i] = letters[arc4random_uniform(62)];
+        for (int attempt = 0; attempt < TMP_ATTEMPTS; ++attempt) {
+            random_suffix(b + length - 6);
             if (create_target(b, a)) { if (errno == EEXIST) continue; finish(c, -1); return 1; }
             int fd = open(a, O_RDWR | O_CREAT | O_EXCL, 0600);
             if (fd < 0) { if (errno == EEXIST) continue; finish(c, -1); return 1; }

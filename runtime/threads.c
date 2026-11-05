@@ -37,7 +37,7 @@ static uint32_t argument(CPU *c,unsigned index){return R32(c->esp+4+index*4);}
 static ThreadAttr *find_attr(uint32_t address){for(ThreadAttr *a=attributes;a;a=a->next)if(a->address==address)return a;return NULL;}
 static Thread *find_thread(uint32_t handle){for(Thread *t=threads;t;t=t->next)if(t->handle==handle)return t;return NULL;}
 static void unlink_thread(Thread *t){Thread **link=&threads;while(*link && *link!=t)link=&(*link)->next;if(*link)*link=t->next;}
-// Gate held. Frees a detached or foreign record once its guest code is over.
+// Gate held. Frees a joined, detached or foreign record once its guest code is over.
 static void release(Thread *t){unlink_thread(t);if(t->stack)rt_munmap(t->stack,t->length);rt_tls_release(t->cpu.tid);free(t);}
 static void finish(Thread *t){
     pthread_mutex_lock(&join_lock);t->finished=1;pthread_cond_broadcast(&join_cond);pthread_mutex_unlock(&join_lock);
@@ -63,7 +63,9 @@ static int map_stack(CPU *c,Thread *t,uint32_t size){
     return 0;
 }
 static int linux_signal_valid(uint32_t signal){return signal<=64;}
-// Gate held; waits for t to finish (deadline NULL = no wait), then reaps it.
+// Gate held; waits for t to finish (deadline NULL = no wait), then reaps it:
+// the record, its stack, TCB and TLS blocks are released (a later join or
+// detach of the same handle gets ESRCH, as after a detached thread's end).
 static int join(Thread *t,uint32_t output,const struct timespec *deadline,int nonblocking){
     if(t==current)return 35;                                   // EDEADLK
     if(t->joined || t->joining || t->detached || t->foreign)return EINVAL;
@@ -78,7 +80,7 @@ static int join(Thread *t,uint32_t output,const struct timespec *deadline,int no
     }
     if(!error){saved=rt_guest_suspend();error=pthread_join(t->native,NULL);rt_guest_resume(saved);}
     t->joining=0;
-    if(!error){t->joined=1;if(output)W32(output,t->result);rt_munmap(t->stack,t->length);t->stack=0;}
+    if(!error){t->joined=1;if(output)W32(output,t->result);release(t);}
     return error==ETIMEDOUT?110:error;
 }
 int rt_thread_shim(CPU *c,const char *name) {
@@ -122,10 +124,7 @@ int rt_thread_shim(CPU *c,const char *name) {
         Thread *t=find_thread(address);uint32_t output=argument(c,1);
         if(!t){c->eax=3;return 1;}                             // ESRCH
         struct timespec deadline={0};int timed=!strcmp(name,"pthread_timedjoin_np");
-        if(timed && !t->finished){
-            uint32_t pointer=argument(c,2);deadline.tv_sec=(int32_t)R32(pointer);deadline.tv_nsec=(int32_t)R32(pointer+4);
-            if(deadline.tv_nsec<0 || deadline.tv_nsec>=1000000000){c->eax=EINVAL;return 1;}
-        }
+        if(timed && !t->finished && rt_read_timespec(c,argument(c,2),&deadline)){c->eax=EINVAL;return 1;}
         c->eax=(uint32_t)join(t,output,timed?&deadline:NULL,!strcmp(name,"pthread_tryjoin_np"));
     } else if(!strcmp(name,"pthread_detach")) {
         Thread *t=find_thread(address);

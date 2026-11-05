@@ -22,10 +22,15 @@ typedef struct Attr {
     uint32_t kind;
     struct Attr *next;
 } Attr;
-typedef struct Key { uint32_t id, destructor; pthread_key_t native; struct Key *next; } Key;
+// Clés TLS invitées : tableau indexé par id-1 (PTHREAD_KEYS_MAX glibc = 1024),
+// recherche directe pour set/getspecific ; un id supprimé est réutilisé comme
+// dans glibc. Un id hors table ou libre : EINVAL.
+#define KEYS_MAX 1024u
+typedef struct Key { int used; uint32_t destructor; pthread_key_t native; } Key;
 typedef struct Cond { uint32_t address; pthread_cond_t native; struct Cond *next; } Cond;
 typedef struct Once { uint32_t address; pthread_once_t native; struct Once *next; } Once;
-static Key *keys; static uint32_t next_key = 1;
+static Key keys[KEYS_MAX];
+static Key *find_key(uint32_t id) { return id && id <= KEYS_MAX && keys[id - 1].used ? &keys[id - 1] : NULL; }
 static Cond *conditions;
 static Once *onces;
 static _Thread_local CPU *once_cpu;
@@ -102,9 +107,8 @@ static int timed_lock(CPU *c, Mutex *m, uint32_t pointer) {
     if (m->kind == 2 && m->owned && pthread_equal(m->owner, pthread_self())) return EDEADLK;
     int error = pthread_mutex_trylock(&m->native);
     if (error != EBUSY) return error;
-    struct timespec deadline = {(int32_t)R32(pointer), (int32_t)R32(pointer + 4)}, remaining;
-    (void)c;
-    if (deadline.tv_nsec < 0 || deadline.tv_nsec >= 1000000000) return EINVAL;
+    struct timespec deadline, remaining;
+    if (rt_read_timespec(c, pointer, &deadline)) return EINVAL;
     long backoff = 50000;
     unsigned saved = rt_guest_suspend();
     while ((error = pthread_mutex_trylock(&m->native)) == EBUSY) {
@@ -144,21 +148,21 @@ static int pthread_objects(CPU *c, const char *name) {
     uint32_t address = argument(c, 0);
     int error = 0;
     if (!strcmp(name, "pthread_key_create")) {
-        Key *key = calloc(1, sizeof(*key));
-        if (!key) error = ENOMEM;
+        uint32_t id = 1; while (id <= KEYS_MAX && keys[id - 1].used) ++id;
+        if (id > KEYS_MAX) error = EAGAIN;
         else {
+            Key *key = &keys[id - 1];
             // Guest destructors are retained for the guest thread-exit path;
             // they must never be handed to Darwin as native function pointers.
             error = pthread_key_create(&key->native, NULL);
-            if (error) free(key);
-            else { key->id = next_key++; key->destructor = argument(c, 1); key->next = keys; keys = key; W32(address, key->id); }
+            if (!error) { key->used = 1; key->destructor = argument(c, 1); W32(address, id); }
         }
     } else if (!strcmp(name, "pthread_setspecific") || !strcmp(name, "pthread_getspecific") || !strcmp(name, "pthread_key_delete")) {
-        Key **link = &keys; while (*link && (*link)->id != address) link = &(*link)->next;
-        if (!*link) error = EINVAL;
-        else if (!strcmp(name, "pthread_setspecific")) error = pthread_setspecific((*link)->native, (void *)(uintptr_t)argument(c, 1));
-        else if (!strcmp(name, "pthread_getspecific")) { c->eax = (uint32_t)(uintptr_t)pthread_getspecific((*link)->native); return 1; }
-        else { Key *key = *link; error = pthread_key_delete(key->native); if (!error) { *link = key->next; free(key); } }
+        Key *key = find_key(address);
+        if (!key) error = EINVAL;
+        else if (!strcmp(name, "pthread_setspecific")) error = pthread_setspecific(key->native, (void *)(uintptr_t)argument(c, 1));
+        else if (!strcmp(name, "pthread_getspecific")) { c->eax = (uint32_t)(uintptr_t)pthread_getspecific(key->native); return 1; }
+        else { error = pthread_key_delete(key->native); if (!error) key->used = 0; }
     } else if (!strcmp(name, "pthread_cond_init")) {
         if (argument(c, 1)) rt_trap(c, c->eip, "guest condition attributes not implemented");
         Cond *item = conditions; while (item && item->address != address) item = item->next;
@@ -186,8 +190,7 @@ static int pthread_objects(CPU *c, const char *name) {
         if(!item || !mutex)error=EINVAL;
         else {
             struct timespec deadline={0};int timed=!strcmp(name,"pthread_cond_timedwait");
-            if(timed){uint32_t pointer=argument(c,2);deadline.tv_sec=(int32_t)R32(pointer);deadline.tv_nsec=(int32_t)R32(pointer+4);}
-            if(timed && (deadline.tv_nsec<0 || deadline.tv_nsec>=1000000000))error=EINVAL;
+            if(timed && rt_read_timespec(c,argument(c,2),&deadline))error=EINVAL;
             else {
                 // The wait releases the mutex: an error-checking owner record must
                 // not survive it, or another thread's lock would be misattributed.
@@ -287,12 +290,13 @@ int rt_pthread_shim(CPU *c,const char *name) {
 }
 void rt_thread_destructors(CPU *c) {
     for(unsigned pass=0;pass<4;++pass) {
-        size_t count=0;for(Key *key=keys;key;key=key->next)if(key->destructor && pthread_getspecific(key->native))++count;
+        size_t count=0;for(Key *key=keys;key<keys+KEYS_MAX;++key)if(key->used && key->destructor && pthread_getspecific(key->native))++count;
         if(!count)return;
         struct Pending {uint32_t function,value;} *pending=calloc(count,sizeof(*pending));
         if(!pending)rt_trap(c,c->eip,"cannot snapshot TLS destructors");
         size_t index=0;
-        for(Key *key=keys;key;key=key->next){
+        for(Key *key=keys;key<keys+KEYS_MAX;++key){
+            if(!key->used)continue;
             uint32_t value=(uint32_t)(uintptr_t)pthread_getspecific(key->native);
             if(key->destructor && value){pending[index++]=(struct Pending){key->destructor,value};pthread_setspecific(key->native,NULL);}
         }
@@ -303,10 +307,9 @@ void rt_thread_destructors(CPU *c) {
 void rt_pthreads_destroy(void) {
     rt_guest_enter();
     rt_threads_destroy();
-    while (keys) { Key *next=keys->next; pthread_key_delete(keys->native); free(keys); keys=next; }
+    for (Key *key=keys;key<keys+KEYS_MAX;++key) if (key->used) { pthread_key_delete(key->native); key->used=0; }
     while (conditions) { Cond *next=conditions->next; pthread_cond_destroy(&conditions->native); free(conditions); conditions=next; }
     while (onces) { Once *next=onces->next; free(onces); onces=next; }
-    next_key=1;
     memset(mutex_cache, 0, sizeof(mutex_cache));
     while (mutexes) {
         Mutex *next = mutexes->next;

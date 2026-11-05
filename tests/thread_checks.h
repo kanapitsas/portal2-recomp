@@ -38,7 +38,7 @@ static void check_threads(void) {
         assert(R32(0x2000c004+i*0x100)==args[0]);
         uint32_t error=R32(0x2000c008+i*0x100);assert(error!=main_errno && R32(error)==0x2000c000+i*0x100);
         assert(R32(0x2000c010+i*0x100)==0x9fc0);
-        assert(thread_api(&c,"pthread_join",args,2)==22);
+        assert(thread_api(&c,"pthread_join",args,2)==3);   // ESRCH : fiche libérée par la jonction
     }
     assert(R32(0x2000b0a0)!=R32(0x2000b0a4));
     assert(R32(0x2000c008)!=R32(0x2000c108));
