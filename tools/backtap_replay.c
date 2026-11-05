@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
     static rt_backtap d, wide;
     rt_backtap_init(&d, &p);
     rt_backtap_params pw = p;
-    pw.onset_factor = env("P2_BACKTAP_WIDE", RT_BTDS_WIDE_ONSET);
+    pw.onset_factor = rt_backtap_env_float("P2_BACKTAP_WIDE", RT_BTDS_WIDE_ONSET, 0.01f);   // comme touch_controls.m
     rt_backtap_init(&wide, &pw);
     static rt_btds ds;
     const char *dataset = getenv("P2_BACKTAP_DATASET");

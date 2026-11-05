@@ -274,7 +274,7 @@ static void backtap_start(void) {
             fseek(out, 0, SEEK_END);
             if (!ftell(out)) fputs(rt_btds_header, out);
             rt_backtap_params pw = p;
-            pw.onset_factor = env_float("P2_BACKTAP_WIDE", RT_BTDS_WIDE_ONSET, 0.01f);
+            pw.onset_factor = rt_backtap_env_float("P2_BACKTAP_WIDE", RT_BTDS_WIDE_ONSET, 0.01f);
             rt_backtap_init(&backtap_wide, &pw);
             rt_btds_init(&backtap_dataset, &p, out, getenv("P2_BACKTAP_TAG"), CACurrentMediaTime(), counts);
             backtap_dataset_on = 1;
