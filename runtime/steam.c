@@ -413,16 +413,6 @@ static int method_shim(CPU *c, const char *name) {
     uint32_t table = iface < 0 || ((size_t)iface < steam_interface_count && !vtables) ? 0 : *interface_vtable((size_t)iface);
     pthread_mutex_unlock(&lock);
     if (iface < 0) return 0;
-    // Diagnostic P2_STEAM_INPUT=0 : le jeu ne démarre jamais Steam Input et n'y
-    // voit aucune manette ; il ne lit alors les manettes que par SDL. Sert à
-    // savoir si l'initialisation de Steam Input coupe les rapports HID au jeu.
-    const char *steam_input = getenv("P2_STEAM_INPUT");
-    if (steam_input && *steam_input == '0' &&
-        (!strcmp(name, "SteamInput006::Init") || !strcmp(name, "SteamInput006::GetConnectedControllers") ||
-         !strcmp(name, "SteamController008::Init") || !strcmp(name, "SteamController008::GetConnectedControllers"))) {
-        c->eax = 0;
-        return 1;
-    }
     const SteamMethodInfo *m = find_method(name);
     if (!m && virtual_bridge(c, name, table, iface)) return 1;
     if (!m) fail(c, "Steam: %s has no flat function in SDK 1.53a%s", name, "");

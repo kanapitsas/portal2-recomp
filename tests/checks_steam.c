@@ -285,11 +285,6 @@ RT_CHECK(steam_marshalling_through_official_flat_api) {
     uint32_t handles[] = {SCRATCH + 0x400};
     assert(call_method(input, "SteamInput006::GetConnectedControllers", 0, 1, handles).eax == 2);
     assert(R64(SCRATCH + 0x400) == UINT64_C(0x1000000000) && R64(SCRATCH + 0x408) == UINT64_C(0x1000000001) && !R64(SCRATCH + 0x478));
-    // P2_STEAM_INPUT=0 : aucune manette Steam Input, sans appeler Steam.
-    setenv("P2_STEAM_INPUT", "0", 1);
-    W64(SCRATCH + 0x400, 0);
-    assert(call_method(input, "SteamInput006::GetConnectedControllers", 0, 1, handles).eax == 0 && !R64(SCRATCH + 0x400));
-    unsetenv("P2_STEAM_INPUT");
 
     // char ** rempli par Steam (GetUGCDetails) : l'invité reçoit une copie internée ; NULL accepté.
     storage_vtable[method("STEAMREMOTESTORAGE_INTERFACE_VERSION016::GetUGCDetails")->slot] = (void *)fake_ugc_details;

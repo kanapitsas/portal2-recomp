@@ -373,7 +373,6 @@ static TouchShaper touch_shaper;
 static SDL_GameController *diagnostic_controller;
 static void log_controller_state(void) {
     if (!rt_input_logging() || !diagnostic_controller) return;
-    if (getenv("P2_INPUT_FORCE_UPDATE")) SDL_JoystickUpdate();
     static uint32_t last;
     uint32_t now = SDL_GetTicks();
     if (now - last < 500) return;

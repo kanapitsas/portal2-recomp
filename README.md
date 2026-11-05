@@ -139,7 +139,7 @@ the saves. It never touches the Steam game files or the Linux binaries.
 
 ## More
 
-- [Language, LAN co-op and manual build](docs/usage.md)
+- [Language, controllers, LAN co-op and manual build](docs/usage.md)
 - [iOS port, controls and settings](docs/ios.md)
 - [Metal renderer](docs/d3d9-bridge.md)
 - [Steam bridge](docs/steam.md), [fast memory mode](docs/fast-path.md),

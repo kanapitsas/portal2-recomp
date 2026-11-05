@@ -30,6 +30,23 @@ Steam (Properties > Language) and let it update the game first.
 from. On the iPhone, the language is written into the app at build time
 (same rules, rebuild after changing `config/local.json`).
 
+## Controllers
+
+**Mac**: turn Steam Input off for Portal 2 in Steam (*Portal 2 → Properties →
+Controller → Disable Steam Input*). With Steam Input on, Steam takes the
+controller as soon as the game starts and applies a gamepad-emulation
+template to it. On macOS that emulation only reaches games that Steam itself
+launches, so this app gets no input: the controller shows as connected, but
+nothing works. Tested with an 8BitDo SN30 Pro over Bluetooth in Switch mode
+(seen as a Nintendo Switch Pro Controller). With `P2_INPUT_LOG=1`, the log
+(`~/Library/Logs/Portal2Natif.log`) prints the controller state every half
+second, accelerometer included: if those values stay at zero, Steam still has
+the controller.
+
+**iPhone**: there is no Steam client, so nothing to set. Not yet tried with a
+physical controller: when one connects, the on-screen controls hide
+themselves and the game reads it through SDL.
+
 ## LAN co-op
 
 Two copies of the game on the same network can play co-op without a Steam lobby.
