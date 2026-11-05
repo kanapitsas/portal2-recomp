@@ -25,6 +25,7 @@ const rt_ios_setting rt_ios_settings[] = {
     {"P2BackTapSensitivity", "P2_BACKTAP_SENSITIVITY", NULL, NULL},
     {"P2BackTapInvert", "P2_BACKTAP_INVERT", "1", "0"},
     {"P2PortalButtons", "P2_PORTAL_BUTTONS", NULL, NULL},       // auto, 1, 0
+    {"P2BackTapRecord", "P2_BACKTAP_RAW", "Documents/backtap/", NULL},   // tools/backtap_replay.c
     {"P2Log", "P2_LOG_FILE", "Documents/game.log", NULL},
 };
 const int rt_ios_settings_count = (int)(sizeof(rt_ios_settings) / sizeof(*rt_ios_settings));
