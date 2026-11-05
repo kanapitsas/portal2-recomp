@@ -45,6 +45,7 @@
 // y ; à défaut, le signe de la gravité selon x.
 #include "back_tap.h"
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifndef RT_BACKTAP_MIN_HISTORY
@@ -78,6 +79,40 @@ void rt_backtap_defaults(rt_backtap_params *p) {
     p->pre_rms_max = 0.05f;   // téléphone tenu immobile : ~0,01 g ; marche : 0,1 g et plus
     p->gravity_max = 0.12f;   // ~7° de rotation en 200 ms
     p->onset_factor = 0.5f;   // un candidat précoce cerne mieux le pic ; les faibles sont jugés « sous les seuils »
+}
+
+float rt_backtap_env_float(const char *name, float def, float min) {
+    const char *e = getenv(name);
+    float value = e && *e ? (float)atof(e) : 0;   // comparée en float : « 0.1 » atteint la borne 0,1f
+    return e && *e && value >= min ? value : def;
+}
+int rt_backtap_env_sign(const char *name, int def) {
+    const char *e = getenv(name);
+    return !e || !*e ? def : atoi(e) > 0 ? 1 : atoi(e) < 0 ? -1 : 0;
+}
+void rt_backtap_params_from_env(rt_backtap_params *p) {
+    rt_backtap_defaults(p);
+    // Sensibilité (Réglages : 0,75 / 1 / 1,33) : seuils de détection divisés
+    // d'autant ; les variables par seuil, ci-dessous, priment.
+    float k = rt_backtap_env_float("P2_BACKTAP_SENSITIVITY", 1, 0.1f);
+    p->accel_min /= k; p->jerk_min /= k; p->gyro_accel_min /= k; p->gyro_rot_min /= k;
+    p->accel_min = rt_backtap_env_float("P2_BACKTAP_ACCEL", p->accel_min, 0.001f);
+    p->jerk_min = rt_backtap_env_float("P2_BACKTAP_JERK", p->jerk_min, 0);
+    p->rot_min = rt_backtap_env_float("P2_BACKTAP_ROT", p->rot_min, 0.001f);
+    p->side_x_weight = rt_backtap_env_float("P2_BACKTAP_SIDE_X", p->side_x_weight, 0);
+    p->gyro_accel_min = rt_backtap_env_float("P2_BACKTAP_GYRO_ACCEL", p->gyro_accel_min, 0.001f);
+    p->gyro_rot_min = rt_backtap_env_float("P2_BACKTAP_GYRO_ROT", p->gyro_rot_min, 0.001f);
+    p->gyro_jerk_min = rt_backtap_env_float("P2_BACKTAP_GYRO_JERK", p->gyro_jerk_min, 0);
+    p->gyro_calm_max = rt_backtap_env_float("P2_BACKTAP_GYRO_CALM", p->gyro_calm_max, 0);
+    p->refractory = rt_backtap_env_float("P2_BACKTAP_REFRACTORY", p->refractory, 0);
+    p->touch_guard = rt_backtap_env_float("P2_BACKTAP_TOUCH_GUARD", p->touch_guard, 0);
+    p->max_width = rt_backtap_env_float("P2_BACKTAP_WIDTH", p->max_width, 0.001f);
+    p->flat_z = rt_backtap_env_float("P2_BACKTAP_FLAT", p->flat_z, -2);
+    p->pre_rms_max = rt_backtap_env_float("P2_BACKTAP_AGITATION", p->pre_rms_max, 0.001f);
+    p->gravity_max = rt_backtap_env_float("P2_BACKTAP_GRAVITY", p->gravity_max, 0.001f);
+    p->lateral_sign = rt_backtap_env_sign("P2_BACKTAP_LATERAL", p->lateral_sign);
+    p->z_sign = rt_backtap_env_sign("P2_BACKTAP_ZSIGN", p->z_sign);
+    p->invert = rt_backtap_env_sign("P2_BACKTAP_INVERT", 0) > 0;
 }
 
 void rt_backtap_init(rt_backtap *d, const rt_backtap_params *p) {

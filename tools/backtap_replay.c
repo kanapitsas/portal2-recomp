@@ -9,34 +9,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static float env(const char *name, float def) { const char *e = getenv(name); return e && *e ? (float)atof(e) : def; }
-static int env_sign(const char *name, int def) { const char *e = getenv(name); return !e || !*e ? def : atoi(e) > 0 ? 1 : atoi(e) < 0 ? -1 : 0; }
-
 int main(int argc, char **argv) {
     if (argc != 2) { fprintf(stderr, "usage : %s <enregistrement>\n", argv[0]); return 2; }
     FILE *f = fopen(argv[1], "r");
     if (!f) { perror(argv[1]); return 1; }
     rt_backtap_params p;
-    rt_backtap_defaults(&p);
-    float k = env("P2_BACKTAP_SENSITIVITY", 1);   // comme touch_controls.m
-    if (k > 0.1f) { p.accel_min /= k; p.jerk_min /= k; p.gyro_accel_min /= k; p.gyro_rot_min /= k; }
-    p.accel_min = env("P2_BACKTAP_ACCEL", p.accel_min);
-    p.jerk_min = env("P2_BACKTAP_JERK", p.jerk_min);
-    p.rot_min = env("P2_BACKTAP_ROT", p.rot_min);
-    p.side_x_weight = env("P2_BACKTAP_SIDE_X", p.side_x_weight);
-    p.gyro_accel_min = env("P2_BACKTAP_GYRO_ACCEL", p.gyro_accel_min);
-    p.gyro_rot_min = env("P2_BACKTAP_GYRO_ROT", p.gyro_rot_min);
-    p.gyro_jerk_min = env("P2_BACKTAP_GYRO_JERK", p.gyro_jerk_min);
-    p.gyro_calm_max = env("P2_BACKTAP_GYRO_CALM", p.gyro_calm_max);
-    p.refractory = env("P2_BACKTAP_REFRACTORY", p.refractory);
-    p.touch_guard = env("P2_BACKTAP_TOUCH_GUARD", p.touch_guard);
-    p.max_width = env("P2_BACKTAP_WIDTH", p.max_width);
-    p.pre_rms_max = env("P2_BACKTAP_AGITATION", p.pre_rms_max);
-    p.gravity_max = env("P2_BACKTAP_GRAVITY", p.gravity_max);
-    p.flat_z = env("P2_BACKTAP_FLAT", p.flat_z);
-    p.lateral_sign = env_sign("P2_BACKTAP_LATERAL", p.lateral_sign);
-    p.z_sign = env_sign("P2_BACKTAP_ZSIGN", p.z_sign);
-    p.invert = env_sign("P2_BACKTAP_INVERT", 0) > 0;
+    rt_backtap_params_from_env(&p);   // mêmes variables et bornes que touch_controls.m
     int log = getenv("P2_BACKTAP_LOG") && *getenv("P2_BACKTAP_LOG") != '0';
     static rt_backtap d;
     rt_backtap_init(&d, &p);

@@ -2,6 +2,7 @@
 // sur l'hôte) : échantillons CoreMotion synthétiques, à 100 et 200 Hz.
 #include "checks.h"
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 #include "../runtime/ios/back_tap.c"
 
@@ -375,4 +376,57 @@ RT_CHECK(backtap_light_tap_found_by_gyroscope) {
             assert(o.accepted == 1);
             for (int i = 0; i < o.reports && i < 8; ++i) if (!o.reject[i]) assert(o.side[i] == side);
         }
+}
+
+// Seuils lus dans l'environnement (touch_controls.m et tools/backtap_replay.c) :
+// sensibilité, variables par seuil et leurs bornes basses.
+RT_CHECK(backtap_params_from_env_bounds) {
+    static const char *const names[] = {"P2_BACKTAP_SENSITIVITY", "P2_BACKTAP_ACCEL", "P2_BACKTAP_JERK", "P2_BACKTAP_ROT",
+        "P2_BACKTAP_GYRO_ROT", "P2_BACKTAP_FLAT", "P2_BACKTAP_LATERAL", "P2_BACKTAP_ZSIGN", "P2_BACKTAP_INVERT",
+        "P2_BACKTAP_TOUCH_GUARD"};
+    for (size_t i = 0; i < sizeof(names) / sizeof(*names); ++i) unsetenv(names[i]);
+    rt_backtap_params def, p;
+    rt_backtap_defaults(&def);
+    rt_backtap_params_from_env(&p);
+    assert(!memcmp(&p, &def, sizeof(p)));   // rien de défini : valeurs par défaut
+
+    setenv("P2_BACKTAP_SENSITIVITY", "2", 1);
+    rt_backtap_params_from_env(&p);
+    assert(fabsf(p.accel_min - def.accel_min / 2) < 1e-6f && fabsf(p.jerk_min - def.jerk_min / 2) < 1e-6f);
+    assert(fabsf(p.gyro_accel_min - def.gyro_accel_min / 2) < 1e-6f && fabsf(p.gyro_rot_min - def.gyro_rot_min / 2) < 1e-6f);
+    assert(p.rot_min == def.rot_min);   // la sensibilité ne touche pas le score de côté
+    setenv("P2_BACKTAP_SENSITIVITY", "0.05", 1);   // sous 0,1 : ignorée
+    rt_backtap_params_from_env(&p);
+    assert(p.accel_min == def.accel_min && p.jerk_min == def.jerk_min);
+    setenv("P2_BACKTAP_SENSITIVITY", "0.1", 1);    // la borne est acceptée
+    rt_backtap_params_from_env(&p);
+    assert(fabsf(p.accel_min - def.accel_min / 0.1f) < 1e-5f);
+    unsetenv("P2_BACKTAP_SENSITIVITY");
+
+    // Une variable par seuil prime sur la sensibilité ; sous sa borne, ignorée.
+    setenv("P2_BACKTAP_SENSITIVITY", "2", 1);
+    setenv("P2_BACKTAP_ACCEL", "0.3", 1);
+    setenv("P2_BACKTAP_JERK", "0", 1);        // borne 0 : acceptée
+    setenv("P2_BACKTAP_ROT", "0", 1);         // borne 0,001 : ignorée
+    setenv("P2_BACKTAP_GYRO_ROT", "-1", 1);   // négatif : ignoré
+    setenv("P2_BACKTAP_FLAT", "-3", 1);       // sous -2 : ignoré
+    setenv("P2_BACKTAP_TOUCH_GUARD", "", 1);  // vide : ignoré
+    rt_backtap_params_from_env(&p);
+    assert(fabsf(p.accel_min - 0.3f) < 1e-6f && p.jerk_min == 0);
+    assert(p.rot_min == def.rot_min && fabsf(p.gyro_rot_min - def.gyro_rot_min / 2) < 1e-6f);
+    assert(p.flat_z == def.flat_z && p.touch_guard == def.touch_guard);
+
+    // Signes : > 0, < 0 ou 0 ; absent : valeur par défaut.
+    setenv("P2_BACKTAP_LATERAL", "-3", 1);
+    setenv("P2_BACKTAP_ZSIGN", "2", 1);
+    setenv("P2_BACKTAP_INVERT", "1", 1);
+    rt_backtap_params_from_env(&p);
+    assert(p.lateral_sign == -1 && p.z_sign == 1 && p.invert == 1);
+    setenv("P2_BACKTAP_LATERAL", "0", 1);
+    setenv("P2_BACKTAP_INVERT", "-1", 1);
+    rt_backtap_params_from_env(&p);
+    assert(p.lateral_sign == 0 && p.invert == 0);
+    for (size_t i = 0; i < sizeof(names) / sizeof(*names); ++i) unsetenv(names[i]);
+    rt_backtap_params_from_env(&p);
+    assert(!memcmp(&p, &def, sizeof(p)));
 }

@@ -1,10 +1,11 @@
 // OpenGL hôte sur iOS : gl4es fournit l'OpenGL 2.1 de bureau qu'attend togl,
-// au-dessus d'OpenGL ES 2 (OpenGLES.framework). Inclus par runtime/host_gl.h.
+// au-dessus d'OpenGL ES 3 (OpenGLES.framework). Inclus par runtime/host_gl.h.
 //
 // - Les fonctions GL viennent de gl4es_GetProcAddress ; sous Darwin, les
 //   en-têtes de gl4es renomment aussi tout appel direct glX en gl4es_glX.
 // - CGL (contexte courant, groupe de partage) est remplacé par EAGL.
-// - SDL_GL_CreateContext force un contexte ES 2 puis initialise gl4es ;
+// - SDL_GL_CreateContext force un contexte ES 3 (16 unités de texture ; le
+//   GLSL ES 1.00 de gl4es est réécrit en 3.00, essl3.c) puis initialise gl4es ;
 //   SDL_GL_SwapWindow vide d'abord le tampon de gl4es (gl4es_pre_swap).
 #pragma once
 #include <GL/gl.h>

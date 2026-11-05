@@ -97,18 +97,15 @@ static float look_speed(void) {
 // (multiplicateur maximal) à P2_TOUCH_ACCEL_HIGH pt/s. P2_TOUCH_ACCEL=1 la coupe.
 // La vitesse du doigt est lissée par moyenne exponentielle (P2_TOUCH_ACCEL_SMOOTH,
 // poids du nouvel échantillon) pour qu'un échantillon isolé ne fasse pas sauter le gain.
-static float env_float(const char *name, float def, float min) {
-    const char *e = getenv(name); return e && atof(e) >= min ? (float)atof(e) : def;
-}
 static struct { float max, low, high, smooth; int log; } accel;
 static float trackpad_gain(double speed);
 static void accel_init(void) {
     if (accel.max) return;
-    accel.max = env_float("P2_TOUCH_ACCEL", 2.5f, 1);
-    accel.low = env_float("P2_TOUCH_ACCEL_LOW", 300, 0);
-    accel.high = env_float("P2_TOUCH_ACCEL_HIGH", 1500, accel.low + 1);
+    accel.max = rt_backtap_env_float("P2_TOUCH_ACCEL", 2.5f, 1);
+    accel.low = rt_backtap_env_float("P2_TOUCH_ACCEL_LOW", 300, 0);
+    accel.high = rt_backtap_env_float("P2_TOUCH_ACCEL_HIGH", 1500, accel.low + 1);
     if (accel.high <= accel.low) accel.high = accel.low + 1;
-    accel.smooth = fminf(1, env_float("P2_TOUCH_ACCEL_SMOOTH", 0.5f, 0.01f));
+    accel.smooth = fminf(1, rt_backtap_env_float("P2_TOUCH_ACCEL_SMOOTH", 0.5f, 0.01f));
     accel.log = getenv("P2_TOUCH_ACCEL_LOG") != NULL;
     fprintf(stderr, "[ios] trackpad : gain %.2f à %g pt/s, %.2f à %g, %.2f à %g, %.2f à 3000 pt/s\n",
         trackpad_gain(100), 100.0, trackpad_gain(600), 600.0, trackpad_gain(1000), 1000.0, trackpad_gain(3000));
@@ -147,11 +144,6 @@ static float backtap_hold;            // s : durée de l'appui
 static FILE *backtap_raw;
 // Journal, sur la file des capteurs seulement : origine des temps, bruit de fond.
 static struct { double origin, window, last_t, sq; float last_a[3], max_a, max_jerk, max_rot; long samples; } backtap_noise;
-
-static int env_sign(const char *name, int def) {
-    const char *e = getenv(name);
-    return !e || !*e ? def : atoi(e) > 0 ? 1 : atoi(e) < 0 ? -1 : 0;
-}
 
 static void backtap_log_report(const rt_backtap_report *r, double origin) {
     char touch[32], verdict[80];
@@ -200,30 +192,9 @@ static void backtap_start(void) {
         return;
     }
     rt_backtap_params p;
-    rt_backtap_defaults(&p);
-    // Sensibilité (Réglages : 0,75 / 1 / 1,33) : seuils de détection divisés
-    // d'autant ; les variables par seuil, ci-dessous, priment.
-    float k = env_float("P2_BACKTAP_SENSITIVITY", 1, 0.1f);
-    p.accel_min /= k; p.jerk_min /= k; p.gyro_accel_min /= k; p.gyro_rot_min /= k;
-    p.accel_min = env_float("P2_BACKTAP_ACCEL", p.accel_min, 0.001f);
-    p.jerk_min = env_float("P2_BACKTAP_JERK", p.jerk_min, 0);
-    p.rot_min = env_float("P2_BACKTAP_ROT", p.rot_min, 0.001f);
-    p.side_x_weight = env_float("P2_BACKTAP_SIDE_X", p.side_x_weight, 0);
-    p.gyro_accel_min = env_float("P2_BACKTAP_GYRO_ACCEL", p.gyro_accel_min, 0.001f);
-    p.gyro_rot_min = env_float("P2_BACKTAP_GYRO_ROT", p.gyro_rot_min, 0.001f);
-    p.gyro_jerk_min = env_float("P2_BACKTAP_GYRO_JERK", p.gyro_jerk_min, 0);
-    p.gyro_calm_max = env_float("P2_BACKTAP_GYRO_CALM", p.gyro_calm_max, 0);
-    p.refractory = env_float("P2_BACKTAP_REFRACTORY", p.refractory, 0);
-    p.touch_guard = env_float("P2_BACKTAP_TOUCH_GUARD", p.touch_guard, 0);
-    p.max_width = env_float("P2_BACKTAP_WIDTH", p.max_width, 0.001f);
-    p.flat_z = env_float("P2_BACKTAP_FLAT", p.flat_z, -2);
-    p.pre_rms_max = env_float("P2_BACKTAP_AGITATION", p.pre_rms_max, 0.001f);
-    p.gravity_max = env_float("P2_BACKTAP_GRAVITY", p.gravity_max, 0.001f);
-    p.lateral_sign = env_sign("P2_BACKTAP_LATERAL", p.lateral_sign);
-    p.z_sign = env_sign("P2_BACKTAP_ZSIGN", p.z_sign);
-    p.invert = env_sign("P2_BACKTAP_INVERT", 0) > 0;
+    rt_backtap_params_from_env(&p);   // valeurs par défaut, sensibilité, variables par seuil (back_tap.c)
     backtap_log = getenv("P2_BACKTAP_LOG") && *getenv("P2_BACKTAP_LOG") != '0';
-    backtap_hold = env_float("P2_BACKTAP_HOLD", 0.05f, 0);
+    backtap_hold = rt_backtap_env_float("P2_BACKTAP_HOLD", 0.05f, 0);
     const char *raw = getenv("P2_BACKTAP_RAW");
     if (raw && *raw) {
         char path[1024];
@@ -233,7 +204,7 @@ static void backtap_start(void) {
         if (backtap_raw) setvbuf(backtap_raw, NULL, _IOLBF, 0);   // tout est écrit si le jeu est tué
         if (backtap_raw) fprintf(backtap_raw, "# m t ax ay az wx wy wz gx gy gz orient active | t t_toucher\n");
     }
-    float hz = env_float("P2_BACKTAP_HZ", 200, 10);
+    float hz = rt_backtap_env_float("P2_BACKTAP_HZ", 200, 10);
     rt_backtap_init(&backtap_detector, &p);
 
     backtap_queue = [NSOperationQueue new];
@@ -480,10 +451,33 @@ static BOOL portal_buttons(void) {
     if (e && *e == '0') return NO;
     return backtap_motion == nil;
 }
+// Couleurs et icônes de la surcouche, créées une fois : buttons: et drawRect:
+// sont appelés à chaque mouvement de doigt (jusqu'à 120 fois par seconde).
+static UIColor *blue, *orange, *ink, *icon_tint, *stick_ink, *line_ink;
+static void palette_init(void) {
+    if (blue) return;
+    blue = [UIColor colorWithRed:.16 green:.55 blue:1 alpha:.6]; orange = [UIColor colorWithRed:1 green:.55 blue:.05 alpha:.6];
+    ink = [UIColor colorWithWhite:0 alpha:.35];   // fond sombre : icônes lisibles sur un mur clair
+    icon_tint = [UIColor colorWithWhite:1 alpha:.85];
+    stick_ink = [UIColor colorWithWhite:1 alpha:.3]; line_ink = [UIColor colorWithWhite:1 alpha:.45];
+}
+// Icône SF Symbols teintée, par (nom, taille en points) : au plus une par
+// bouton et par taille (deux pour le mode de la caméra).
+static UIImage *icon_image(NSString *symbol, CGFloat point_size) {
+    static struct { NSString *symbol; CGFloat size; UIImage *image; } cache[8];
+    static int count;
+    for (int i = 0; i < count; ++i)
+        if (cache[i].size == point_size && [cache[i].symbol isEqualToString:symbol]) return cache[i].image;
+    UIImageSymbolConfiguration *config = [UIImageSymbolConfiguration configurationWithPointSize:point_size
+                                                                                         weight:UIImageSymbolWeightBold];
+    UIImage *image = [[UIImage systemImageNamed:symbol withConfiguration:config]
+                      imageWithTintColor:icon_tint renderingMode:UIImageRenderingModeAlwaysOriginal];
+    if (count < (int)(sizeof(cache) / sizeof(*cache))) cache[count++] = (typeof(cache[0])){symbol, point_size, image};
+    return image;
+}
 - (int)buttons:(Button *)b {
     CGRect a = self.area; CGFloat x = CGRectGetMinX(a), y = CGRectGetMinY(a), w = a.size.width, h = a.size.height;
-    UIColor *blue = [UIColor colorWithRed:.16 green:.55 blue:1 alpha:.6], *orange = [UIColor colorWithRed:1 green:.55 blue:.05 alpha:.6];
-    UIColor *ink = [UIColor colorWithWhite:0 alpha:.35];   // fond sombre : icônes lisibles sur un mur clair
+    palette_init();
     CGFloat top = y + h * .19, gap = kPortalSize * 1.15;   // sous le compteur d'images
     Button all[] = {
         // Portails, en miroir : bleu à l'extérieur, orange à l'intérieur, des deux côtés.
@@ -681,9 +675,13 @@ static Sint16 axis_value(CGFloat speed, int response) {
 }
 - (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     (void)event;
+    BOOL changed = NO;   // la surcouche ne dessine que les sticks d'après la position des doigts
     for (UITouch *t in touches) {
         P2Finger *f = [fingers objectForKey:t];
         CGPoint p = [t locationInView:self];
+        // Stick gauche, ou droit hors mode trackpad : son bouton suit le doigt.
+        // Un doigt en trackpad ou sur un bouton ne change rien à l'écran.
+        if (f && (f.role == ROLE_MOVE || (f.role == ROLE_LOOK && !trackpad))) changed = YES;
         if (f && f.role == ROLE_LOOK && trackpad) {
             accel_init();
             double dx = p.x - f.at.x, dy = p.y - f.at.y, dt = t.timestamp - f.stamp;
@@ -696,7 +694,8 @@ static Sint16 axis_value(CGFloat speed, int response) {
         }
         f.at = p;
     }
-    [self updateMove]; redraw(self);
+    [self updateMove];
+    if (changed) redraw(self);
 }
 - (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     (void)event;
@@ -754,7 +753,7 @@ static const CGFloat kPixel = 2;   // points par pixel de la police (6 pixels d'
 static void draw_pixel_text(CGContextRef c, const char *text, CGPoint at) {
     for (int i = 0; text[i]; ++i) {
         const char *glyph = strchr(kPixelChars, text[i]);
-        if (!glyph || !text[i]) continue;   // espace
+        if (!glyph) continue;   // espace
         const uint8_t *rows = kPixelGlyphs[glyph - kPixelChars];
         for (int y = 0; y < 7; ++y)
             for (int x = 0; x < 5; ++x)
@@ -806,22 +805,19 @@ static void draw_pixel_text(CGContextRef c, const char *text, CGPoint at) {
     if (!concealed) [self drawFPS];   // aussi dans les menus
     if (concealed || menu || getenv("P2_TOUCH_TEST_MOVE")) return;   // essai : écran dégagé
     CGContextRef c = UIGraphicsGetCurrentContext();
-    UIColor *ink = [UIColor colorWithWhite:1 alpha:.3], *line = [UIColor colorWithWhite:1 alpha:.45];
+    palette_init();
     CGContextSetLineWidth(c, 2);
-    [self drawStick:c right:NO ink:ink];
-    if (!trackpad) [self drawStick:c right:YES ink:ink];
+    [self drawStick:c right:NO ink:stick_ink];
+    if (!trackpad) [self drawStick:c right:YES ink:stick_ink];
     Button b[MAX_BUTTONS]; int n = [self buttons:b];
     for (int i = 0; i < n; ++i) {
         CGFloat s = b[i].size;
         CGRect box = CGRectMake(b[i].at.x - s / 2, b[i].at.y - s / 2, s, s);
         UIColor *fill = held[b[i].action] ? [b[i].color colorWithAlphaComponent:.9] : b[i].color;
         CGContextSetFillColorWithColor(c, fill.CGColor); CGContextFillEllipseInRect(c, box);
-        CGContextSetStrokeColorWithColor(c, line.CGColor); CGContextStrokeEllipseInRect(c, box);
+        CGContextSetStrokeColorWithColor(c, line_ink.CGColor); CGContextStrokeEllipseInRect(c, box);
         if (!b[i].symbol) continue;
-        UIImageSymbolConfiguration *config = [UIImageSymbolConfiguration configurationWithPointSize:s * .38
-                                                                                             weight:UIImageSymbolWeightBold];
-        UIImage *icon = [[UIImage systemImageNamed:b[i].symbol withConfiguration:config]
-                         imageWithTintColor:[UIColor colorWithWhite:1 alpha:.85] renderingMode:UIImageRenderingModeAlwaysOriginal];
+        UIImage *icon = icon_image(b[i].symbol, s * .38);
         CGSize z = icon.size;
         [icon drawInRect:CGRectMake(b[i].at.x - z.width / 2, b[i].at.y - z.height / 2, z.width, z.height)];
     }

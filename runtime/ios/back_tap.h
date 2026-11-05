@@ -76,6 +76,17 @@ typedef struct {
 } rt_backtap;
 
 void rt_backtap_defaults(rt_backtap_params *p);
+// Valeurs par défaut, puis P2_BACKTAP_SENSITIVITY (seuils de détection divisés
+// par k, k >= 0,1) et les variables par seuil (P2_BACKTAP_ACCEL, _JERK, _ROT,
+// _SIDE_X, _GYRO_ACCEL, _GYRO_ROT, _GYRO_JERK, _GYRO_CALM, _REFRACTORY,
+// _TOUCH_GUARD, _WIDTH, _FLAT, _AGITATION, _GRAVITY, _LATERAL, _ZSIGN,
+// _INVERT ; docs/ios.md), qui priment. Une valeur sous la borne de chaque
+// seuil est ignorée. Partagé par touch_controls.m et tools/backtap_replay.c.
+void rt_backtap_params_from_env(rt_backtap_params *p);
+// Variable flottante : sa valeur si elle est définie, non vide et >= min, def sinon.
+float rt_backtap_env_float(const char *name, float def, float min);
+// Variable de signe : 1 (> 0), -1 (< 0) ou 0 ; def si absente ou vide.
+int rt_backtap_env_sign(const char *name, int def);
 void rt_backtap_init(rt_backtap *d, const rt_backtap_params *p);
 // Début ou fin d'un toucher à l'écran, même horloge que les échantillons.
 void rt_backtap_touch(rt_backtap *d, double t);

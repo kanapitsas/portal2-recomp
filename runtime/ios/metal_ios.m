@@ -11,7 +11,8 @@
 //   présente une image de la taille du tampon arrière du jeu, sans
 //   rééchantillonnage ; fréquence d'affichage demandée comme en OpenGL.
 // - À chaque Present : compteur d'images (rt_ios_frames), lu par le compteur
-//   affiché et par les tapes au dos (clic tenu au moins deux images).
+//   affiché et par les tapes au dos (clic tenu au moins deux images) ; la
+//   cadence P2_FRAME_LOG est comptée par runtime/d3d9.c lui-même.
 #include <TargetConditionals.h>
 #if TARGET_OS_IPHONE
 #import <Metal/Metal.h>
@@ -24,22 +25,29 @@
 #include "metal_ios.h"
 
 extern _Atomic unsigned long rt_ios_frames;   // gl_ios.m
-float rt_ios_render_scale(void);       // sdl_ios.m
+float rt_ios_render_scale(void);                    // sdl_ios.m
+void rt_ios_view_set_scale(void *uiview, float wanted); // sdl_ios.m
 void rt_ios_request_frame_rate(void);  // gl_ios.m
 
 int rt_renderer_request(const char *value);   // runtime/d3d9.c
-uint64_t rt_frame_log_tick(void);   // runtime/sdl_video.c : cadence P2_FRAME_LOG
 volatile int rt_ios_metal_active;   // une image présentée par Direct3D 9 (compteur : « METAL »)
-static void presented(void) { ++rt_ios_frames; rt_ios_metal_active = 1; rt_frame_log_tick(); }
+static void presented(void) { ++rt_ios_frames; rt_ios_metal_active = 1; }
+// libd3d9metal.a n'est liée dans l'exécutable qu'avec tools/build_ios.py
+// --d3d9metal, qui définit alors RT_D3D9METAL_STATIC pour ce fichier (et pour
+// runtime/d3d9.c). Sans elle, annoncer Metal ferait retomber src/main.c sur
+// OpenGL avec un message trompeur.
+#ifdef RT_D3D9METAL_STATIC
+static int d3d9metal_linked(void) { return 1; }
+#else
+static int d3d9metal_linked(void) { return 0; }
+#endif
 
 int rt_ios_metal_usable(char *why, size_t size) {
     id<MTLDevice> device = MTLCreateSystemDefaultDevice();
     if (!device) { snprintf(why, size, "no Metal device"); return 0; }
     // Textures BC (DXT1/3/5) : Source n'a pas d'autre format pour ses textures
     // compressées, et mtld3d les crée telles quelles.
-    BOOL bc = NO;
-    if (@available(iOS 16.4, *)) bc = device.supportsBCTextureCompression;
-    if (!bc) { snprintf(why, size, "%s: no BC texture compression", device.name.UTF8String); return 0; }
+    if (!device.supportsBCTextureCompression) { snprintf(why, size, "%s: no BC texture compression", device.name.UTF8String); return 0; }
     snprintf(why, size, "%s, BC textures, %.0f MiB recommended working set", device.name.UTF8String,
              (double)device.recommendedMaxWorkingSetSize / (1024.0 * 1024.0));
     return 1;
@@ -57,6 +65,11 @@ int rt_ios_metal_prepare(void) {
     // Metal par défaut ; le réglage ou P2_RENDERER=opengl gardent OpenGL.
     if (rt_renderer_request(getenv("P2_RENDERER")) < 0) return 0;
     char why[256];
+    if (!d3d9metal_linked()) {
+        fprintf(stderr, "[ios] renderer: libd3d9metal not linked in (build without --d3d9metal), staying on OpenGL\n");
+        setenv("P2_RENDERER", "opengl", 1);
+        return 0;
+    }
     if (!rt_ios_metal_usable(why, sizeof(why))) {
         fprintf(stderr, "[ios] renderer: Metal unusable (%s), staying on OpenGL\n", why);
         setenv("P2_RENDERER", "opengl", 1);   // src/main.c ne tente alors pas libd3d9metal
@@ -89,13 +102,8 @@ int rt_ios_metal_prepare(void) {
 
 void rt_ios_metal_view_created(void *metal_view) {
     UIView *view = (__bridge UIView *)metal_view;
-    CGFloat wanted = rt_ios_render_scale();
     // SDL : échelle native de l'écran si la fenêtre est haute résolution, 1 sinon.
-    if (view && fabs(view.contentScaleFactor - wanted) > 0.01) {
-        view.contentScaleFactor = wanted;   // contentsScale de la couche (et drawableSize par SDL)
-        [view setNeedsLayout];
-        [view layoutIfNeeded];
-    }
+    rt_ios_view_set_scale(metal_view, rt_ios_render_scale());
     CAMetalLayer *layer = (CAMetalLayer *)view.layer;
     fprintf(stderr, "[ios] Metal view: %.0fx%.0f points, scale %.2f, drawable %.0fx%.0f\n", view.bounds.size.width,
             view.bounds.size.height, layer.contentsScale, layer.drawableSize.width, layer.drawableSize.height);

@@ -513,6 +513,7 @@ EXPORT uint64_t SteamAPI_ISteamRemoteStorage_GetPublishedFileDetails(void *a0, u
 EXPORT uint64_t SteamAPI_ISteamRemoteStorage_GetPublishedItemVoteDetails(void *a0, uint64_t a1) { (void)a0; (void)a1; return 0; }
 EXPORT bool SteamAPI_ISteamRemoteStorage_GetQuota(void *a0, void *a1, void *a2) { (void)a0; (void)a1; (void)a2; return false; }
 EXPORT int32_t SteamAPI_ISteamRemoteStorage_GetSyncPlatforms(void *a0, const char *a1) { (void)a0; (void)a1; return 0; }
+EXPORT bool SteamAPI_ISteamRemoteStorage_GetUGCDetails(void *a0, uint64_t a1, void *a2, const char **a3, void *a4, void *a5) { (void)a0; (void)a1; (void)a2; (void)a3; (void)a4; (void)a5; return false; }
 EXPORT bool SteamAPI_ISteamRemoteStorage_GetUGCDownloadProgress(void *a0, uint64_t a1, void *a2, void *a3) { (void)a0; (void)a1; (void)a2; (void)a3; return false; }
 EXPORT uint64_t SteamAPI_ISteamRemoteStorage_GetUserPublishedItemVoteDetails(void *a0, uint64_t a1) { (void)a0; (void)a1; return 0; }
 EXPORT bool SteamAPI_ISteamRemoteStorage_IsCloudEnabledForAccount(void *a0) { (void)a0; return false; }
