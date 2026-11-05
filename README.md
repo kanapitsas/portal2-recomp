@@ -30,7 +30,11 @@ share them.
   at 2560×1440, MSAA 4×).
 - **iPhone**: fully playable on an iPhone 15 Pro Max at a steady 60 fps, with
   touch controls and portals fired by **tapping the back of the phone**.
-- **Co-op** over the local network: a Mac hosts, another Mac or an iPhone joins.
+- **Controllers**: physical controllers work on Mac and iPhone (tested with
+  an 8BitDo SN30 Pro). On Mac, turn Steam Input off for Portal 2.
+- **Co-op** over the local network: a Mac hosts, an iPhone or a second copy
+  on the same Mac joins. Connection and map load are checked; a full co-op
+  course has not been played yet.
 - **Install**: one command, `setup.sh`.
 
 ## How it works
@@ -124,9 +128,15 @@ jump, crouch, use and pause, and a tap on the back of the phone (left or
 right) to fire a portal. Everything is tunable in Settings > Portal 2. The
 iPhone version has no Steam, but it can join a Mac in LAN co-op.
 
-**Co-op** works over the local network: a Mac hosts, and another Mac or an
-iPhone joins by IP address ([how](docs/usage.md#lan-co-op)). Co-op through
-Steam invites or over the internet is not tested.
+**Controllers** work on both. On Mac, turn Steam Input off for Portal 2 in
+Steam (Properties > Controller), otherwise Steam keeps the controller to
+itself ([why](docs/usage.md#controllers)). On iPhone, the on-screen controls
+hide themselves when a controller connects.
+
+**Co-op** works over the local network: a Mac hosts, and an iPhone or a
+second copy on the same Mac joins by IP address
+([how](docs/usage.md#lan-co-op)). Two separate Macs, Steam invites and play
+over the internet are not tested.
 
 ## Renderer: Metal or OpenGL
 
@@ -144,7 +154,7 @@ an iPhone, and fixes the too-dark image of OpenGL on iPhone.
   use. The iPhone library is built separately and can still fall back to
   OpenGL.
 - `P2_RENDERER=opengl` forces OpenGL; on iPhone, use Settings > Portal 2 >
-  Rendu > Moteur de rendu (the settings page is still in French).
+  Rendering > Renderer.
 - **F3** on Mac shows the renderer and the frame rate; on iPhone, the counter
   in the top-left corner does.
 
@@ -196,14 +206,14 @@ profiles.
 | iPhone | Single player at a steady 60 fps, touch controls, Settings page | ✅ |
 | iPhone | Portals fired by tapping the back of the phone | ✅ |
 | Install | One-command install (`setup.sh`) and a standalone Mac app | ✅ |
-| Co-op | LAN co-op: a Mac hosts, a Mac or an iPhone joins by IP address | ✅ |
+| Co-op | LAN co-op: a Mac hosts, an iPhone or a second copy on the same Mac joins by IP address | ✅ |
 | Co-op | Find the host automatically on the local network (Bonjour), host/join in the iPhone settings | 🚧 |
 | Co-op | Play a full co-op course with two people (only the connection and the map load are checked so far) | 📅 |
 | Co-op | Co-op through Steam invites, over the internet and with Windows or Linux players | 📅 |
 | iPhone | Record raw back taps from the Settings page | 🚧 |
 | iPhone | Learn each player's back taps automatically from those recordings, instead of fixed thresholds | 📅 |
-| Controllers | Physical controller on Mac, menus tested with an 8BitDo in Switch mode (needs Steam Input off for Portal 2, [why](docs/usage.md#controllers)) | ✅ |
-| Controllers | Physical controller on iPhone, and a full playthrough with a controller on Mac | 📅 |
+| Controllers | Physical controller on Mac (needs Steam Input off for Portal 2, [why](docs/usage.md#controllers)) and iPhone, tested with an 8BitDo in Switch mode | ✅ |
+| Controllers | A full playthrough with a controller, and other controllers (Xbox, DualSense) | 📅 |
 | Controllers | Button prompts and default bindings that match the controller | 💡 |
 | Community | Community maps copied by hand, loaded with `+map` | 📅 |
 | Community | Steam Workshop on Mac (needs the UGC part of the Steam bridge) | 💡 |

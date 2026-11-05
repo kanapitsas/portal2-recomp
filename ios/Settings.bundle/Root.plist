@@ -6,9 +6,9 @@
 	<array>
 		<dict>
 			<key>FooterText</key>
-			<string>Les changements s'appliquent au prochain lancement du jeu (fermez-le depuis le sélecteur d'apps). Une résolution plus basse donne plus d'images par seconde.</string>
+			<string>Changes apply the next time the game starts (close it from the app switcher). A lower resolution gives more frames per second.</string>
 			<key>Title</key>
-			<string>Affichage</string>
+			<string>Display</string>
 			<key>Type</key>
 			<string>PSGroupSpecifier</string>
 		</dict>
@@ -18,12 +18,12 @@
 			<key>Key</key>
 			<string>P2ResolutionScale</string>
 			<key>Title</key>
-			<string>Résolution</string>
+			<string>Resolution</string>
 			<key>Titles</key>
 			<array>
 				<string>Native (×3)</string>
-				<string>×2 (recommandé)</string>
-				<string>×1,5</string>
+				<string>×2 (recommended)</string>
+				<string>×1.5</string>
 				<string>×1</string>
 			</array>
 			<key>Type</key>
@@ -42,10 +42,10 @@
 			<key>Key</key>
 			<string>P2MaxFPS</string>
 			<key>Title</key>
-			<string>Images par seconde</string>
+			<string>Frames per second</string>
 			<key>Titles</key>
 			<array>
-				<string>60 (recommandé)</string>
+				<string>60 (recommended)</string>
 				<string>120 (ProMotion)</string>
 			</array>
 			<key>Type</key>
@@ -62,15 +62,15 @@
 			<key>Key</key>
 			<string>P2ShowFPS</string>
 			<key>Title</key>
-			<string>Compteur d’images</string>
+			<string>FPS counter</string>
 			<key>Type</key>
 			<string>PSToggleSwitchSpecifier</string>
 		</dict>
 		<dict>
 			<key>FooterText</key>
-			<string>Metal : rendu Direct3D 9 natif du jeu (libd3d9metal), plus rapide et plus fidèle qu'OpenGL. Sans la bibliothèque dans l'app, ou si l'appareil ne la prend pas en charge, le jeu reste en OpenGL.</string>
+			<string>Metal: the game's native Direct3D 9 rendering (libd3d9metal), faster and more faithful than OpenGL. Without the library in the app, or if the device does not support it, the game stays on OpenGL.</string>
 			<key>Title</key>
-			<string>Rendu</string>
+			<string>Rendering</string>
 			<key>Type</key>
 			<string>PSGroupSpecifier</string>
 		</dict>
@@ -80,10 +80,10 @@
 			<key>Key</key>
 			<string>P2Renderer</string>
 			<key>Title</key>
-			<string>Moteur de rendu</string>
+			<string>Renderer</string>
 			<key>Titles</key>
 			<array>
-				<string>Metal (recommandé)</string>
+				<string>Metal (recommended)</string>
 				<string>OpenGL</string>
 			</array>
 			<key>Type</key>
@@ -96,9 +96,9 @@
 		</dict>
 		<dict>
 			<key>FooterText</key>
-			<string>Le mode trackpad fait tourner la caméra en glissant le doigt sur la moitié droite de l'écran ; le bouton en bas à gauche bascule aussi ce réglage en jeu.</string>
+			<string>Trackpad mode turns the camera as you slide a finger on the right half of the screen; the button at the bottom left also toggles this in game.</string>
 			<key>Title</key>
-			<string>Commandes tactiles</string>
+			<string>Touch controls</string>
 			<key>Type</key>
 			<string>PSGroupSpecifier</string>
 		</dict>
@@ -108,12 +108,12 @@
 			<key>Key</key>
 			<string>P2TouchControls</string>
 			<key>Title</key>
-			<string>Commandes à l’écran</string>
+			<string>On-screen controls</string>
 			<key>Titles</key>
 			<array>
-				<string>Automatique</string>
-				<string>Toujours</string>
-				<string>Jamais</string>
+				<string>Automatic</string>
+				<string>Always</string>
+				<string>Never</string>
 			</array>
 			<key>Type</key>
 			<string>PSMultiValueSpecifier</string>
@@ -130,7 +130,7 @@
 			<key>Key</key>
 			<string>P2TouchTrackpad</string>
 			<key>Title</key>
-			<string>Caméra en trackpad</string>
+			<string>Trackpad camera</string>
 			<key>Type</key>
 			<string>PSToggleSwitchSpecifier</string>
 		</dict>
@@ -140,15 +140,15 @@
 			<key>Key</key>
 			<string>P2TouchLook</string>
 			<key>Title</key>
-			<string>Vitesse de la caméra</string>
+			<string>Camera speed</string>
 			<key>Titles</key>
 			<array>
-				<string>Très lente (×0,5)</string>
-				<string>Lente (×0,75)</string>
-				<string>Normale</string>
-				<string>Rapide (×1,5)</string>
-				<string>Très rapide (×2)</string>
-				<string>Extrême (×3)</string>
+				<string>Very slow (×0.5)</string>
+				<string>Slow (×0.75)</string>
+				<string>Normal</string>
+				<string>Fast (×1.5)</string>
+				<string>Very fast (×2)</string>
+				<string>Extreme (×3)</string>
 			</array>
 			<key>Type</key>
 			<string>PSMultiValueSpecifier</string>
@@ -168,13 +168,13 @@
 			<key>Key</key>
 			<string>P2TouchAccel</string>
 			<key>Title</key>
-			<string>Accélération du trackpad</string>
+			<string>Trackpad acceleration</string>
 			<key>Titles</key>
 			<array>
-				<string>Aucune</string>
-				<string>Légère</string>
-				<string>Normale</string>
-				<string>Forte</string>
+				<string>None</string>
+				<string>Light</string>
+				<string>Normal</string>
+				<string>Strong</string>
 			</array>
 			<key>Type</key>
 			<string>PSMultiValueSpecifier</string>
@@ -188,9 +188,9 @@
 		</dict>
 		<dict>
 			<key>FooterText</key>
-			<string>Tapez le dos du téléphone près du bord gauche pour le portail bleu, près du bord droit pour l'orange. Sans tapes au dos, des boutons de portail s'affichent en haut de l'écran.</string>
+			<string>Tap the back of the phone near the left edge for the blue portal, near the right edge for the orange one. Without back taps, portal buttons appear at the top of the screen.</string>
 			<key>Title</key>
-			<string>Portails</string>
+			<string>Portals</string>
 			<key>Type</key>
 			<string>PSGroupSpecifier</string>
 		</dict>
@@ -200,7 +200,7 @@
 			<key>Key</key>
 			<string>P2BackTap</string>
 			<key>Title</key>
-			<string>Tapes au dos</string>
+			<string>Back taps</string>
 			<key>Type</key>
 			<string>PSToggleSwitchSpecifier</string>
 		</dict>
@@ -210,12 +210,12 @@
 			<key>Key</key>
 			<string>P2BackTapSensitivity</string>
 			<key>Title</key>
-			<string>Sensibilité des tapes</string>
+			<string>Tap sensitivity</string>
 			<key>Titles</key>
 			<array>
-				<string>Faible</string>
-				<string>Normale</string>
-				<string>Élevée</string>
+				<string>Low</string>
+				<string>Normal</string>
+				<string>High</string>
 			</array>
 			<key>Type</key>
 			<string>PSMultiValueSpecifier</string>
@@ -232,7 +232,7 @@
 			<key>Key</key>
 			<string>P2BackTapInvert</string>
 			<key>Title</key>
-			<string>Inverser gauche et droite</string>
+			<string>Swap left and right</string>
 			<key>Type</key>
 			<string>PSToggleSwitchSpecifier</string>
 		</dict>
@@ -242,12 +242,12 @@
 			<key>Key</key>
 			<string>P2PortalButtons</string>
 			<key>Title</key>
-			<string>Boutons de portail</string>
+			<string>Portal buttons</string>
 			<key>Titles</key>
 			<array>
-				<string>Automatique</string>
-				<string>Toujours</string>
-				<string>Jamais</string>
+				<string>Automatic</string>
+				<string>Always</string>
+				<string>Never</string>
 			</array>
 			<key>Type</key>
 			<string>PSMultiValueSpecifier</string>
@@ -260,9 +260,9 @@
 		</dict>
 		<dict>
 			<key>FooterText</key>
-			<string>Écrit le journal du jeu dans Documents/game.log (visible dans l'app Fichiers).</string>
+			<string>Writes the game log to Documents/game.log (visible in the Files app).</string>
 			<key>Title</key>
-			<string>Diagnostic</string>
+			<string>Diagnostics</string>
 			<key>Type</key>
 			<string>PSGroupSpecifier</string>
 		</dict>
@@ -272,10 +272,12 @@
 			<key>Key</key>
 			<string>P2Log</string>
 			<key>Title</key>
-			<string>Journal</string>
+			<string>Log</string>
 			<key>Type</key>
 			<string>PSToggleSwitchSpecifier</string>
 		</dict>
 	</array>
+	<key>StringsTable</key>
+	<string>Root</string>
 </dict>
 </plist>

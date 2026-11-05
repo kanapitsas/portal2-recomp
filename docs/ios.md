@@ -44,7 +44,7 @@ statically (iOS does not `dlopen` a dylib outside the signed app):
 `runtime/d3d9.c` is compiled with `RT_D3D9METAL_STATIC`. Without it the app is
 OpenGL only and the setting below falls back to OpenGL.
 
-On the phone: Settings > Portal 2 > Rendu chooses Metal (default) or OpenGL;
+On the phone: Settings > Portal 2 > Renderer chooses Metal (default) or OpenGL;
 `P2_RENDERER=opengl` or `=d3d9` in `tools/ios_device.sh run` overrides it. `Documents/game.log` (with the
 Journal setting) then shows `[ios] renderer: Metal (...)`,
 `d3d9: libd3d9metal (linked in) ready` and `[ios] Metal view: ...`.
@@ -129,23 +129,24 @@ changed setting into a `P2_*` variable; a variable that is already set (devicect
 simctl) takes precedence, and a setting that was never touched leaves the code's
 default in place. Changes take effect on the next launch.
 
-The setting titles below are the ones shown in the app, which is still in French.
+The page is in English, and in French on a device set to French
+(`ios/Settings.bundle/fr.lproj/Root.strings`).
 
 | Setting | Variable | Values |
 |---|---|---|
-| Résolution (Resolution) | `P2_IOS_RENDER_SCALE` (+ the game's `-w`/`-h`) | native, ×2 (default), ×1.5, ×1 |
-| Images par seconde (Frames per second) | `P2_IOS_MAX_FPS` | 60 (default), 120 |
-| Moteur de rendu (Renderer) | `P2_RENDERER` | Metal: `d3d9` (default), `opengl`; see "Metal renderer" |
-| Compteur d'images (FPS counter) | `P2_SHOW_FPS` | shown by default; tapping the top-left corner shows or hides it (choice is remembered) |
-| Commandes à l'écran (On-screen controls) | `P2_TOUCH_CONTROLS` | automatic (hidden when a controller is connected), always, never |
-| Caméra en trackpad (Trackpad camera) | key `P2TouchTrackpad` | also toggled by the button at the bottom left |
-| Vitesse de la caméra (Camera speed) | `P2_TOUCH_LOOK` | ×0.5 to ×3 |
-| Accélération du trackpad (Trackpad acceleration) | `P2_TOUCH_ACCEL` | none (1) to strong (4), normal 2.5 |
-| Tapes au dos (Back taps) | `P2_BACKTAP` | enabled by default |
-| Sensibilité des tapes (Tap sensitivity) | `P2_BACKTAP_SENSITIVITY` | 0.75 / 1 / 1.33: thresholds are divided by this value |
-| Inverser gauche et droite (Swap left and right) | `P2_BACKTAP_INVERT` | |
-| Boutons de portail (Portal buttons) | `P2_PORTAL_BUTTONS` | automatic (when back taps are off), always, never |
-| Journal (Log) | `P2_LOG_FILE=Documents/game.log` | |
+| Resolution | `P2_IOS_RENDER_SCALE` (+ the game's `-w`/`-h`) | native, ×2 (default), ×1.5, ×1 |
+| Frames per second | `P2_IOS_MAX_FPS` | 60 (default), 120 |
+| Renderer | `P2_RENDERER` | Metal: `d3d9` (default), `opengl`; see "Metal renderer" |
+| FPS counter | `P2_SHOW_FPS` | shown by default; tapping the top-left corner shows or hides it (choice is remembered) |
+| On-screen controls | `P2_TOUCH_CONTROLS` | automatic (hidden when a controller is connected), always, never |
+| Trackpad camera | key `P2TouchTrackpad` | also toggled by the button at the bottom left |
+| Camera speed | `P2_TOUCH_LOOK` | ×0.5 to ×3 |
+| Trackpad acceleration | `P2_TOUCH_ACCEL` | none (1) to strong (4), normal 2.5 |
+| Back taps | `P2_BACKTAP` | enabled by default |
+| Tap sensitivity | `P2_BACKTAP_SENSITIVITY` | 0.75 / 1 / 1.33: thresholds are divided by this value |
+| Swap left and right | `P2_BACKTAP_INVERT` | |
+| Portal buttons | `P2_PORTAL_BUTTONS` | automatic (when back taps are off), always, never |
+| Log | `P2_LOG_FILE=Documents/game.log` | |
 
 Simulator: `xcrun simctl spawn <device> defaults write <bundle id>
 P2ResolutionScale -string 1.5`. `tests/checks_ios_settings.c` checks the
@@ -157,14 +158,14 @@ translation and that the keys match between the code and the settings page.
 |---|---|
 | `P2_LOG_FILE=Documents/game.log` | log file (relative to the container) |
 | `P2_FRAME_LOG=1` | frame timing every 60 frames |
-| `P2_PROFILE=Documents/profile.txt` (+ `P2_PROFILE_DELAY=60`, `P2_PROFILE_RAW=1`) | built-in profiler; with `RAW`, `tools/ios_symbolize.py` resolves driver functions using the device's symbols (Xcode, iOS DeviceSupport) |
+| + `P2_PROFILE_DELAY=60`, `P2_PROFILE_RAW=1` | built-in profiler; with `RAW`, `tools/ios_symbolize.py` resolves driver functions using the device's symbols (Xcode, iOS DeviceSupport) |
 | `P2_TRACE_FILES=<text>` | fopen/open/unlink/rename calls whose path contains the text |
 | `P2_TOUCH_CONTROLS=0/1` | touch controls disabled / always shown |
-| `P2_TOUCH_ACCEL=2.5` (+ `_LOW=300`, `_HIGH=1500`, `_SMOOTH=0.5`, `_LOG=1`) | trackpad acceleration: gain of 1 below `_LOW` pt/s, ramping up to the `P2_TOUCH_ACCEL` multiplier at `_HIGH` pt/s; speed is smoothed (weight `_SMOOTH`); `=1` disables it, `_LOG` logs speed and gain |
+| + `_LOW=300`, `_HIGH=1500`, `_SMOOTH=0.5`, `_LOG=1` | trackpad acceleration: gain of 1 below `_LOW` pt/s, ramping up to the `P2_TOUCH_ACCEL` multiplier at `_HIGH` pt/s; speed is smoothed (weight `_SMOOTH`); `=1` disables it, `_LOG` logs speed and gain |
 | `P2_BACKTAP=0` | disables back taps (enabled by default if the sensor exists; see "Back taps") |
 | `P2_BACKTAP_LOG=1` | logs every candidate (from half the thresholds) and the background noise every 5 s |
 | `P2_TOUCH_TEST_CLICK=s,x,y` | left click at (x, y) points, s seconds after the first menu |
-| `P2_TOUCH_TEST_MOVE=0.5,1` (+ `_SECONDS`, `_DELAY`, `_ANGLE`, `P2_TOUCH_TEST_WASD`) | forced deflections of the movement stick |
+| + `_SECONDS`, `_DELAY`, `_ANGLE`, `P2_TOUCH_TEST_WASD` | forced deflections of the movement stick |
 | `P2_IOS_RENDER_SCALE=1/2/native` | render scale (points → pixels); `tools/ios_bench.py` compares antialiasing × scale (`--renderer opengl` by default, `--renderer d3d9` for Metal) |
 | `P2_IOS_NO_PRESENT=1` | frames rendered but never presented, so the display cap does not limit the measured rate (OpenGL only; under Metal the display caps at 60 fps) |
 | `P2_IOS_AUTOEXEC="cmd; convar=value; pause 5; …"` | console commands, convar settings and pauses (seconds) run in order once the menu is gone, starting 5 s later |
@@ -254,8 +255,8 @@ a_z < 0 at the peak, a tap on the screen a_z > 0.
 
 | Step | fps |
 |---|---|
-| starting point (-O1 with checks) | ~5 |
-| no more shader re-patching under a clip plane (gl4es) | 7-15 |
+| -O1 with checks | ~5 |
+| gl4es | 7-15 |
 | `--release` + optimizations from the Mac work | ~11 |
 | unsynchronized `glBufferSubData` | ~19 |
 | BGRA colors in the buffer, swizzled by the shader | ~47 |
