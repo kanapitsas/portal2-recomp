@@ -123,9 +123,6 @@ static int gl_shim(CPU *c, const char *name) {
     }
     return gl_execute(c, name, entry, fn);
 }
-// Résolution unique par adresse d'import : l'aiguillage rappelle ensuite
-// directement gl_call avec l'entrée, sans comparaison GLX ni recherche
-// dichotomique parmi ~180 noms à chaque appel (des millions par seconde).
 static int stream_enabled(void);
 // Rôle de chaque fonction GL pour le suivi des tampons, calculé une fois par
 // entrée (pas de comparaison de noms à chaque appel).
@@ -178,7 +175,6 @@ void rt_gl_timing_add(const char *label, uint64_t ticks) {   // échange d'image
     gl_ticks[rt_gl_entry_count] += ticks; ++gl_counts[rt_gl_entry_count];
     gl_timing_report();
 }
-static int gl_execute(CPU *c, const char *name, const RtGlEntry *entry, void *fn);
 static int gl_call(CPU *c, const char *name, void *data) {
     const RtGlEntry *entry = data;
     void *fn = host_function(entry);
@@ -205,6 +201,15 @@ static long *trace_counter(uint32_t object) {
     uint32_t kind = object >> 31, name = object & 0x7fffffff;
     return name < TRACE_FBS ? &trace_writes[kind][name] : NULL;
 }
+// Rang (0..) de l'argument « nom d'objet » des attaches de framebuffer :
+// glFramebufferTexture{1D,2D,3D}[EXT] et glFramebufferRenderbuffer[EXT] le
+// mettent après la cible de texture/renderbuffer (target, attachment,
+// textarget, nom, ...) ; glFramebufferTexture[EXT] et glFramebufferTextureLayer
+// n'ont pas cette cible (target, attachment, nom, ...).
+static uint32_t fb_object_slot(const char *name) {
+    if (!strncmp(name, "glFramebufferTexture", 20) && !(name[20] >= '1' && name[20] <= '3')) return 2;
+    return 3;
+}
 static void trace_gl(CPU *c, const char *name) {
     if (blit_trace_start == -2) { const char *e = getenv("P2_BLIT_TRACE"); blit_trace_start = e ? atol(e) : -1; }
     if (blit_trace_start < 0) return;
@@ -216,8 +221,7 @@ static void trace_gl(CPU *c, const char *name) {
     } else if (!strncmp(name, "glFramebufferRenderbuffer", 25) || !strncmp(name, "glFramebufferTexture", 20)) {
         uint32_t target = R32(a), attachment = R32(a + 4);
         int texture = name[13] == 'T';
-        uint32_t object = texture ? R32(a + 12) : R32(a + 12);   // (target, attachment, rbtarget|textarget, nom, ...)
-        if (!strcmp(name, "glFramebufferTexture") || !strcmp(name, "glFramebufferTextureEXT")) object = R32(a + 8);
+        uint32_t object = R32(a + 4 * fb_object_slot(name));
         uint32_t fb = target == GL_READ_FRAMEBUFFER ? trace_read_fb : trace_draw_fb;
         if (attachment == GL_COLOR_ATTACHMENT0 && fb < TRACE_FBS) trace_attach[fb] = object | (texture ? 0x80000000u : 0);
     } else if (is_draw_call(name) || !strcmp(name, "glClear")) {
@@ -290,8 +294,7 @@ static void pass_trace(CPU *c, const char *name) {
         uint32_t target = R32(a), fb = R32(a + 4);
         if (target != GL_READ_FRAMEBUFFER && fb != pass_fb) { pass_close(); pass_fb = fb; }
     } else if (!strncmp(name, "glFramebufferTexture", 20) || !strncmp(name, "glFramebufferRenderbuffer", 25)) {
-        pass_printf("  attache %s %#x -> objet %u\n", name + 13, R32(a + 4),
-                    !strncmp(name, "glFramebufferTexture2D", 22) || name[13] == 'R' ? R32(a + 12) : R32(a + 8));
+        pass_printf("  attache %s %#x -> objet %u\n", name + 13, R32(a + 4), R32(a + 4 * fb_object_slot(name)));
     } else if (!strcmp(name, "glViewport")) {
         pass_vw = R32(a + 8); pass_vh = R32(a + 12);
     } else if (!strcmp(name, "glClear")) {
@@ -326,19 +329,24 @@ static int gl_execute(CPU *c, const char *name, const RtGlEntry *entry, void *fn
                    ? GL_KIND_PACK_READ : GL_KIND_OTHER;
         if (kinds) kinds[index] = (uint8_t)kind;
     }
-    if (kind != GL_KIND_OTHER && stream_enabled() && stream_before(c, kind)) return 1;
+    // P2_GL_TIMING : le chrono couvre aussi le suivi des tampons (stream_*), y
+    // compris les glBufferSubData détournés qui ne passent pas par le thunk.
+    int timing = __builtin_expect(gl_timing(), 0);
+    uint64_t start = timing ? mach_absolute_time() : 0;
+    if (kind != GL_KIND_OTHER && stream_enabled() && stream_before(c, kind)) {
+        if (timing) { gl_ticks[index] += mach_absolute_time() - start; ++gl_counts[index]; }
+        return 1;
+    }
     if (__builtin_expect(blit_trace_start != -1, 0)) trace_gl(c, name);
     if (__builtin_expect(pass_state == 2, 0)) pass_trace(c, name);
-    int handled;
-    if (__builtin_expect(!gl_timing(), 1)) handled = entry->thunk(c, fn);
-    else {
-        uint64_t start = mach_absolute_time();
-        handled = entry->thunk(c, fn);
-        gl_ticks[index] += mach_absolute_time() - start; ++gl_counts[index];
-    }
+    int handled = entry->thunk(c, fn);
+    if (timing) { gl_ticks[index] += mach_absolute_time() - start; ++gl_counts[index]; }
     if (kind == GL_KIND_DATA && stream_enabled()) stream_after(c, kind);
     return handled;
 }
+// Résolution unique par adresse d'import : l'aiguillage rappelle ensuite
+// directement gl_call avec l'entrée, sans comparaison GLX ni recherche
+// dichotomique parmi ~180 noms à chaque appel (des millions par seconde).
 static int gl_resolve(const char *name, RtShimRoute *route) {
     if (is_glx(name)) return 0;
     const RtGlEntry *entry = find_entry(name);
@@ -799,12 +807,12 @@ int rt_gl_manual_glGetTexParameterPointervAPPLE(CPU *c, void *fn) {
 // tout chevauchement, projection, écriture possible du GPU (lecture de pixels
 // vers un tampon, copie), échec de glBufferData ou état inconnu rend le
 // stockage « entièrement écrit » : chemin synchronisé jusqu'à la réallocation.
-typedef struct { CGLShareGroupObj share; uint32_t name; uint32_t size, written_end; int known, serialized, used; } Stream;
+typedef struct { CGLShareGroupObj share; uint32_t name; uint32_t size, written_end; int known, serialized, used; } Stream;   // used : occupés + supprimés
 static Stream *streams; static uint32_t stream_capacity, stream_used;
 static uint64_t stream_unsync_writes;
 uint64_t rt_gl_stream_unsync_writes(void) { return stream_unsync_writes; }   // tests
 static Stream *stream_state(uint32_t name, int create);
-int rt_gl_stream_tracked(uint32_t name) { Stream *st = stream_state(name, 0); return st != NULL; }   // tests   // used : occupés + supprimés
+int rt_gl_stream_tracked(uint32_t name) { Stream *st = stream_state(name, 0); return st != NULL; }   // tests
 static uint32_t stream_hash(CGLShareGroupObj share, uint32_t name) {
     return (uint32_t)(((uintptr_t)share >> 4) * 0x9e3779b1u) ^ (name * 2654435761u);
 }
@@ -856,13 +864,13 @@ static void stream_unknown(uint32_t target) {   // stockage considéré entière
     if (st) st->written_end = st->size;
 }
 // Renvoie 1 si l'écriture a été faite sans synchronisation.
-static int stream_subdata(CPU *c, uint32_t target, uint32_t offset, uint32_t size, uint32_t data) {
+// name : tampon lié à target, lu une fois par l'appelant (glGetIntegerv).
+static int stream_subdata(CPU *c, uint32_t target, uint32_t name, uint32_t offset, uint32_t size, uint32_t data) {
     if (target != GL_ARRAY_BUFFER && target != GL_ELEMENT_ARRAY_BUFFER) return 0;
 #if TARGET_OS_IPHONE
     // gl4es copie dans son double en mémoire puis appelle glBufferSubData d'ES,
     // que ios/gl_ios.m fait passer par une projection non synchronisée.
     {
-        uint32_t name = bound_buffer(target);
         Stream *st = stream_state(name, 0);
         if (!st || !st->known || !size || !data || offset < st->written_end || (uint64_t)offset + size > st->size) return 0;
         Mirror *m = find_mirror(current_share(), name, 0);
@@ -875,7 +883,6 @@ static int stream_subdata(CPU *c, uint32_t target, uint32_t offset, uint32_t siz
         return 1;
     }
 #else
-    uint32_t name = bound_buffer(target);
     Stream *st = stream_state(name, 0);
     if (!st || !st->known || !size || !data || offset < st->written_end || (uint64_t)offset + size > st->size) return 0;
     Mirror *m = find_mirror(current_share(), name, 0);
@@ -928,8 +935,9 @@ static int stream_before(CPU *c, int kind) {
     uint32_t a = c->esp + 4;
     if (kind == GL_KIND_SUBDATA) {
         uint32_t target = R32(a), offset = R32(a + 4), size = R32(a + 8), data = R32(a + 12);
-        if (stream_subdata(c, target, offset, size, data)) return 1;
-        Stream *st = stream_state(bound_buffer(target), 0);
+        uint32_t name = bound_buffer(target);
+        if (stream_subdata(c, target, name, offset, size, data)) return 1;
+        Stream *st = stream_state(name, 0);
         if (st) { uint64_t end = (uint64_t)offset + size; if (end > st->written_end) st->written_end = end > st->size ? st->size : (uint32_t)end; }
     } else if (kind == GL_KIND_DATA) {
         stream_buffer_data_before(R32(a), R32(a + 4), R32(a + 12));

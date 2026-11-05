@@ -447,7 +447,10 @@ RT_CHECK(d3d9_bridge_against_fake_native_library) {
     // Present : attentes hôtes imbriquées autour du verrou invité ; chaque
     // Present réussi prévient rt_d3d9_on_present (compteur d'images iOS), par
     // la première résolution de l'import comme par la route mémorisée.
+    // Il avance aussi le compteur P2_FRAME_LOG (sdl_video.c), seule source de
+    // « [diag] frame » sur Mac avec le rendu Direct3D 9.
     presents = 0;
+    uint64_t frame0 = rt_frame_log_tick();
     rt_d3d9_on_present = count_present;
     assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0 && seen.blocking == 1);
     assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0 && presents == 2);
@@ -456,6 +459,7 @@ RT_CHECK(d3d9_bridge_against_fake_native_library) {
     // Méthode non pontée : E_NOTIMPL sans appel hôte.
     assert(CALL(dev, IDirect3DDevice9, DrawRectPatch, 0, 0, 0).eax == D3D9_E_NOTIMPL);
     assert(presents == 5);
+    assert(rt_frame_log_tick() == frame0 + 6);     // 5 Present réussis + cet appel
     rt_d3d9_on_present = NULL;
 
     // Release à 0 : mandataire libéré, objet suivant à la même adresse = nouveau mandataire.

@@ -31,7 +31,8 @@ static uint32_t argument(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
 static const char *guest_string(CPU *c, uint32_t address) { rt_string_length(c, address); return GPTR(address); }
 
 // Names read from / written to a guest ALuint array of n entries. A negative
-// or oversized n is passed to the host with no array so it sets the AL error.
+// n is passed to the host with no array so it sets the AL error; n above
+// MAX_NAMES is returned as is and the caller traps (bridge limit).
 static ALsizei name_count(CPU *c, uint32_t n, uint32_t array) {
     int32_t count = (int32_t)n;
     if (count <= 0 || count > MAX_NAMES) return count;
