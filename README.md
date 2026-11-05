@@ -131,7 +131,8 @@ the saves. It never touches the Steam game files or the Linux binaries.
 | Co-op | Co-op through Steam invites, over the internet and with Windows or Linux players | 📅 |
 | iPhone | Record raw back taps from the Settings page | 🚧 |
 | iPhone | Learn each player's back taps automatically from those recordings, instead of fixed thresholds | 📅 |
-| Controllers | Test physical controllers (Xbox, DualSense) on Mac and iPhone: the SDL bridge exists, only the iPhone's virtual controller has been tried | 📅 |
+| Controllers | Physical controller on Mac, menus tested with an 8BitDo in Switch mode (needs Steam Input off for Portal 2, [why](docs/usage.md#controllers)) | ✅ |
+| Controllers | Physical controller on iPhone, and a full playthrough with a controller on Mac | 📅 |
 | Controllers | Button prompts and default bindings that match the controller | 💡 |
 | Community | Community maps copied by hand, loaded with `+map` | 📅 |
 | Community | Steam Workshop on Mac (needs the UGC part of the Steam bridge) | 💡 |
