@@ -152,6 +152,31 @@ Simulator: `xcrun simctl spawn <device> defaults write <bundle id>
 P2ResolutionScale -string 1.5`. `tests/checks_ios_settings.c` checks the
 translation and that the keys match between the code and the settings page.
 
+## Leaving the app
+
+When the app stops being active (app switcher, home gesture, Control Center
+or Notification Center pulled down, incoming call, screen locked), the game
+pauses at its next frame (`runtime/ios/lifecycle_ios.m`): the main thread,
+which is the game's, stops in `SDL_PollEvent`, finishes pending OpenGL ES
+work (`glFinish`; iOS kills an app that uses the GPU through OpenGL ES in the
+background, and refuses Metal submissions), suspends and detaches the OpenAL
+context, then waits, serving UIKit's run loop, until the app is active again
+(`UIApplicationDidBecomeActive`). Other game threads keep running (the guest
+lock is released while it waits). Log lines: `[ios] app inactive : jeu en
+pause`, `[ios] app en arrière-plan`, `[ios] app active : reprise après N s`.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `P2_IOS_BACKGROUND_PAUSE` | 1 | `0`: no pause at all (the old behavior) |
+| `P2_IOS_BACKGROUND_AUDIO` | 1 | `0`: the pause leaves the OpenAL context alone |
+
+To check on the phone (with the Log setting on): in game, open the app
+switcher and come back; go to the home screen, wait 30 s, reopen; pull down
+Control Center over the game, then dismiss it; lock the screen and unlock.
+Each time the game must come back where it was (no restart: a restart means
+iOS killed it), with sound, and `game.log` must show the pause and resume
+lines. Also try during a level load, and with the OpenGL renderer once.
+
 ## Diagnostics
 
 | Variable | Effect |
