@@ -107,12 +107,13 @@ def generate_plugins(config_path, log=print):
     out = Path('build/game/gen/pe')
     out.mkdir(parents=True, exist_ok=True)
     config = json.loads(Path(config_path).read_text()) if Path(config_path).exists() else {}
-    root = Path(config.get('game_root', '')) / 'bin/linux32'
+    # Portal 2 : greffons de la copie du jeu ; Half-Life 2 : ceux du dépôt Linux (runtime/paths.c).
+    roots = [Path(config[key]) / 'bin/linux32' for key in ('game_root', 'linux_root') if config.get(key)]
     sources, stats = [], []
     for name in PE_PLUGINS:
-        path = root / name
-        if not config.get('game_root') or not path.is_file():
-            log(f'PE plugin {name} not found under {root}: Miles will not see it')
+        path = next((root / name for root in roots if (root / name).is_file()), None)
+        if not path:
+            log(f'PE plugin {name} not found under {" or ".join(map(str, roots)) or "(no game_root)"}: Miles will not see it')
             continue
         tag = name.split('.')[0].lower()
         target = out / f'pe_{tag}.c'

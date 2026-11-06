@@ -286,8 +286,11 @@ static int translated_plugin(const char *relative) {
     if(!*name || strchr(name,'/'))return 0;
     const RtPeImage *image=rt_pe_image_named(name);
     char host[PATH_MAX];
-    if(!image || !game_root[0] || join(host,game_root,relative))return 0;
-    return rt_pe_file_matches(image,host);
+    if(!image)return 0;
+    // Portal 2 : greffons de la copie du jeu ; Half-Life 2 : ceux du dépôt Linux.
+    if(game_root[0] && !join(host,game_root,relative) && !access(host,F_OK))return rt_pe_file_matches(image,host);
+    if(linux_root[0] && !join(host,linux_root,relative))return rt_pe_file_matches(image,host);
+    return 0;
 }
 // La copie du jeu est l'installation Windows : ses binaires (DLL, EXE, greffons
 // Miles .asi/.flt) n'existent pas dans une installation Linux et ne doivent pas
