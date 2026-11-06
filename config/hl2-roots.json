@@ -101,5 +101,6 @@
   "materialsystem.so:code:0x7cbf1",
   "GameUI.so:code:0x299470",
   "client.so:code:0x659d10",
-  "shaderapidx9.so:code:0x7384c"
+  "shaderapidx9.so:code:0x7384c",
+  "ServerBrowser.so:code:0x11e9e0"
 ]

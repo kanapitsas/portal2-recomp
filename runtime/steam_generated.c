@@ -9331,6 +9331,17 @@ static void m866(CPU *c, void *self, uint32_t args, uint32_t sret) {
     bool r = ((F)fn)(self, a0, a1);
     c->eax = r ? 1u : 0u;
 }
+/* SteamMatchMakingServers002::CancelQuery */
+static void m867(CPU *c, void *self, uint32_t args, uint32_t sret) {
+    (void)args; (void)sret;
+    typedef void (*F)(void *, void *);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmakingServers_CancelQuery"), __ATOMIC_RELAXED);
+    if (R32(args + 0u)) rt_trap(c, c->eip, "Steam: server list requests are not bridged");
+    void *a0 = NULL;
+    ((F)fn)(self, a0);
+}
 /* SteamMatchMakingServers002::CancelServerQuery */
 static void m868(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
@@ -9339,6 +9350,64 @@ static void m868(CPU *c, void *self, uint32_t args, uint32_t sret) {
     void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
     if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmakingServers_CancelServerQuery"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
+    ((F)fn)(self, a0);
+}
+/* SteamMatchMakingServers002::GetServerCount */
+static void m869(CPU *c, void *self, uint32_t args, uint32_t sret) {
+    (void)args; (void)sret;
+    typedef int32_t (*F)(void *, void *);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmakingServers_GetServerCount"), __ATOMIC_RELAXED);
+    if (R32(args + 0u)) rt_trap(c, c->eip, "Steam: server list requests are not bridged");
+    void *a0 = NULL;
+    int32_t r = ((F)fn)(self, a0);
+    c->eax = (uint32_t)r;
+}
+/* SteamMatchMakingServers002::IsRefreshing */
+static void m871(CPU *c, void *self, uint32_t args, uint32_t sret) {
+    (void)args; (void)sret;
+    typedef bool (*F)(void *, void *);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmakingServers_IsRefreshing"), __ATOMIC_RELAXED);
+    if (R32(args + 0u)) rt_trap(c, c->eip, "Steam: server list requests are not bridged");
+    void *a0 = NULL;
+    bool r = ((F)fn)(self, a0);
+    c->eax = r ? 1u : 0u;
+}
+/* SteamMatchMakingServers002::RefreshQuery */
+static void m874(CPU *c, void *self, uint32_t args, uint32_t sret) {
+    (void)args; (void)sret;
+    typedef void (*F)(void *, void *);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmakingServers_RefreshQuery"), __ATOMIC_RELAXED);
+    if (R32(args + 0u)) rt_trap(c, c->eip, "Steam: server list requests are not bridged");
+    void *a0 = NULL;
+    ((F)fn)(self, a0);
+}
+/* SteamMatchMakingServers002::RefreshServer */
+static void m875(CPU *c, void *self, uint32_t args, uint32_t sret) {
+    (void)args; (void)sret;
+    typedef void (*F)(void *, void *, int32_t);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmakingServers_RefreshServer"), __ATOMIC_RELAXED);
+    if (R32(args + 0u)) rt_trap(c, c->eip, "Steam: server list requests are not bridged");
+    void *a0 = NULL;
+    int32_t a1 = (int32_t)R32(args + 4u);
+    ((F)fn)(self, a0, a1);
+}
+/* SteamMatchMakingServers002::ReleaseRequest */
+static void m876(CPU *c, void *self, uint32_t args, uint32_t sret) {
+    (void)args; (void)sret;
+    typedef void (*F)(void *, void *);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmakingServers_ReleaseRequest"), __ATOMIC_RELAXED);
+    if (R32(args + 0u)) rt_trap(c, c->eip, "Steam: server list requests are not bridged");
+    void *a0 = NULL;
     ((F)fn)(self, a0);
 }
 /* SteamNetworking006::AcceptP2PSessionWithUser */
@@ -11804,16 +11873,16 @@ const SteamMethodInfo steam_methods[] = {
     {"SteamMatchMaking009::SetLobbyMemberLimit", 4u, 31u, 0, m864, NULL},
     {"SteamMatchMaking009::SetLobbyOwner", 4u, 36u, 0, m865, NULL},
     {"SteamMatchMaking009::SetLobbyType", 4u, 33u, 0, m866, NULL},
-    {"SteamMatchMakingServers002::CancelQuery", 6u, 8u, 0, NULL, "param\u00e8tre HServerListRequest hRequest"},
+    {"SteamMatchMakingServers002::CancelQuery", 6u, 8u, 0, m867, NULL},
     {"SteamMatchMakingServers002::CancelServerQuery", 6u, 16u, 0, m868, NULL},
-    {"SteamMatchMakingServers002::GetServerCount", 6u, 11u, 0, NULL, "param\u00e8tre HServerListRequest hRequest"},
-    {"SteamMatchMakingServers002::GetServerDetails", 6u, 7u, 0, NULL, "param\u00e8tre HServerListRequest hRequest"},
-    {"SteamMatchMakingServers002::IsRefreshing", 6u, 10u, 0, NULL, "param\u00e8tre HServerListRequest hRequest"},
+    {"SteamMatchMakingServers002::GetServerCount", 6u, 11u, 0, m869, NULL},
+    {"SteamMatchMakingServers002::GetServerDetails", 6u, 7u, 0, NULL, "retour IntPtr (gameserveritem_t)"},
+    {"SteamMatchMakingServers002::IsRefreshing", 6u, 10u, 0, m871, NULL},
     {"SteamMatchMakingServers002::PingServer", 6u, 13u, 0, NULL, "tampon IntPtr pRequestServersResponse sans taille"},
     {"SteamMatchMakingServers002::PlayerDetails", 6u, 14u, 0, NULL, "tampon IntPtr pRequestServersResponse sans taille"},
-    {"SteamMatchMakingServers002::RefreshQuery", 6u, 9u, 0, NULL, "param\u00e8tre HServerListRequest hRequest"},
-    {"SteamMatchMakingServers002::RefreshServer", 6u, 12u, 0, NULL, "param\u00e8tre HServerListRequest hRequest"},
-    {"SteamMatchMakingServers002::ReleaseRequest", 6u, 6u, 0, NULL, "param\u00e8tre HServerListRequest hServerListRequest"},
+    {"SteamMatchMakingServers002::RefreshQuery", 6u, 9u, 0, m874, NULL},
+    {"SteamMatchMakingServers002::RefreshServer", 6u, 12u, 0, m875, NULL},
+    {"SteamMatchMakingServers002::ReleaseRequest", 6u, 6u, 0, m876, NULL},
     {"SteamMatchMakingServers002::RequestFavoritesServerList", 6u, 3u, 0, NULL, "tampon IntPtr ppchFilters sans taille"},
     {"SteamMatchMakingServers002::RequestFriendsServerList", 6u, 2u, 0, NULL, "tampon IntPtr ppchFilters sans taille"},
     {"SteamMatchMakingServers002::RequestHistoryServerList", 6u, 4u, 0, NULL, "tampon IntPtr ppchFilters sans taille"},

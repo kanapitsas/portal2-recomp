@@ -209,6 +209,11 @@ def plan_method(flat, method, ret, params, wrapper, types, gprs, slot):
             proto.append(ctype); offset += size
         elif kind in ('CSteamID', 'CGameID'):
             lines.append(f'uint64_t {var} = R64({at});'); proto.append('uint64_t'); offset += 8
+        elif kind == 'HServerListRequest':
+            # Requêtes de liste de serveurs non pontées (rappels vers des objets invités) :
+            # l'invité ne peut détenir que le handle nul, que Steam traite comme invalide.
+            lines.append(f'if (R32({at})) rt_trap(c, c->eip, "Steam: server list requests are not bridged");')
+            lines.append(f'void *{var} = NULL;'); proto.append('void *'); offset += 4
         elif kind == 'InteropHelp.UTF8StringHandle':
             lines.append(f'const char *{var} = steam_in_string(c, R32({at}));'); proto.append('const char *'); offset += 4
         elif kind == 'out IntPtr' and name.startswith('ppch'):

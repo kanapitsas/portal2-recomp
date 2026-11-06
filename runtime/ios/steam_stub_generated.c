@@ -376,7 +376,13 @@ EXPORT uint64_t SteamAPI_ISteamInventory_StartUpdateProperties(void *a0) { (void
 EXPORT bool SteamAPI_ISteamInventory_SubmitUpdateProperties(void *a0, uint64_t a1, void *a2) { (void)a0; (void)a1; (void)a2; return false; }
 EXPORT bool SteamAPI_ISteamInventory_TransferItemQuantity(void *a0, void *a1, uint64_t a2, uint32_t a3, uint64_t a4) { (void)a0; (void)a1; (void)a2; (void)a3; (void)a4; return false; }
 EXPORT bool SteamAPI_ISteamInventory_TriggerItemDrop(void *a0, void *a1, int32_t a2) { (void)a0; (void)a1; (void)a2; return false; }
+EXPORT void SteamAPI_ISteamMatchmakingServers_CancelQuery(void *a0, void *a1) { (void)a0; (void)a1;  }
 EXPORT void SteamAPI_ISteamMatchmakingServers_CancelServerQuery(void *a0, int32_t a1) { (void)a0; (void)a1;  }
+EXPORT int32_t SteamAPI_ISteamMatchmakingServers_GetServerCount(void *a0, void *a1) { (void)a0; (void)a1; return 0; }
+EXPORT bool SteamAPI_ISteamMatchmakingServers_IsRefreshing(void *a0, void *a1) { (void)a0; (void)a1; return false; }
+EXPORT void SteamAPI_ISteamMatchmakingServers_RefreshQuery(void *a0, void *a1) { (void)a0; (void)a1;  }
+EXPORT void SteamAPI_ISteamMatchmakingServers_RefreshServer(void *a0, void *a1, int32_t a2) { (void)a0; (void)a1; (void)a2;  }
+EXPORT void SteamAPI_ISteamMatchmakingServers_ReleaseRequest(void *a0, void *a1) { (void)a0; (void)a1;  }
 EXPORT int32_t SteamAPI_ISteamMatchmaking_AddFavoriteGame(void *a0, uint32_t a1, uint32_t a2, uint16_t a3, uint16_t a4, uint32_t a5, uint32_t a6) { (void)a0; (void)a1; (void)a2; (void)a3; (void)a4; (void)a5; (void)a6; return 0; }
 EXPORT void SteamAPI_ISteamMatchmaking_AddRequestLobbyListCompatibleMembersFilter(void *a0, uint64_t a1) { (void)a0; (void)a1;  }
 EXPORT void SteamAPI_ISteamMatchmaking_AddRequestLobbyListDistanceFilter(void *a0, int32_t a1) { (void)a0; (void)a1;  }
