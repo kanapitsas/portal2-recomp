@@ -50,6 +50,7 @@
 #include <sys/stat.h>
 #include "back_tap.h"
 #include "backtap_dataset.h"
+#include "lifecycle_ios.h"
 
 int rt_ios_game_ui_visible(void);   // game_state.c
 extern _Atomic unsigned long rt_ios_frames;  // gl_ios.m : images présentées
@@ -188,6 +189,10 @@ static int backtap_dataset_on;
 static _Atomic long backtap_look;          // caméra : comptes de souris cumulés (|dx| + |dy|)
 static _Atomic long backtap_data_taps = -1, backtap_data_fixes, backtap_data_reported;   // pour l'affichage (-1 : rien)
 static double backtap_flag_at;             // appui sur ✗ pas encore transmis (sous backtap_lock ; 0 : aucun)
+static CMDeviceMotionHandler backtap_handler;   // traitement d'un échantillon (backtap_start)
+static int backtap_running;                 // capteurs en marche (backtap_run, thread principal)
+static _Atomic double backtap_resumed_until; // échantillons d'avant cet instant traités comme en menu
+static void backtap_run(int on);
 // Journal, sur la file des capteurs seulement : origine des temps, bruit de fond.
 static struct { double origin, window, last_t, sq; float last_a[3], max_a, max_jerk, max_rot; long samples; } backtap_noise;
 
@@ -303,21 +308,24 @@ static void backtap_start(void) {
             hz, p.accel_min, p.jerk_min, p.rot_min, p.gyro_accel_min, p.gyro_rot_min, p.gyro_jerk_min, p.refractory * 1e3, p.touch_guard * 1e3, p.flat_z, p.max_width * 1e3,
             p.pre_rms_max, p.gravity_max, p.lateral_sign, p.z_sign, p.invert, backtap_hold * 1e3,
             backtap_log ? ", journal" : "");
-    [motion startDeviceMotionUpdatesToQueue:backtap_queue withHandler:^(CMDeviceMotion *m, NSError *error) {
+    backtap_handler = ^(CMDeviceMotion *m, NSError *error) {
         if (!m) { if (error) fprintf(stderr, "[ios] tapes au dos : %s\n", error.localizedDescription.UTF8String); return; }
         CMAcceleration a = m.userAcceleration, g = m.gravity;
         CMRotationRate w = m.rotationRate;
         rt_backtap_sample s = {m.timestamp, {(float)a.x, (float)a.y, (float)a.z},
                                {(float)w.x, (float)w.y, (float)w.z}, {(float)g.x, (float)g.y, (float)g.z}};
         rt_backtap_report r;
+        // Juste après une reprise des capteurs : comme en menu (le toucher qui a
+        // fermé le menu, passé à SDL, échappe à la garde des touchers).
+        int active = atomic_load(&backtap_active) && s.t >= atomic_load(&backtap_resumed_until);
         os_unfair_lock_lock(&backtap_lock);
         if (backtap_raw)
             fprintf(backtap_raw, "m %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %d %d\n", s.t, s.a[0], s.a[1], s.a[2],
-                    s.w[0], s.w[1], s.w[2], s.g[0], s.g[1], s.g[2], atomic_load(&backtap_orient), atomic_load(&backtap_active));
-        int judged = rt_backtap_feed(&backtap_detector, &s, atomic_load(&backtap_orient), atomic_load(&backtap_active), &r);
+                    s.w[0], s.w[1], s.w[2], s.g[0], s.g[1], s.g[2], atomic_load(&backtap_orient), active);
+        int judged = rt_backtap_feed(&backtap_detector, &s, atomic_load(&backtap_orient), active, &r);
         rt_backtap_report rw;
         int wide = backtap_dataset_on &&
-                   rt_backtap_feed(&backtap_wide, &s, atomic_load(&backtap_orient), atomic_load(&backtap_active), &rw);
+                   rt_backtap_feed(&backtap_wide, &s, atomic_load(&backtap_orient), active, &rw);
         double flag = backtap_flag_at; backtap_flag_at = 0;
         // Touchers arrivés depuis le dernier échantillon (le jeu de données les
         // veut même après le bilan d'un candidat).
@@ -344,8 +352,22 @@ static void backtap_start(void) {
             atomic_store(&backtap_data_reported, backtap_dataset.reported);
         }
         if (backtap_log) backtap_log_sample(&s, judged ? &r : NULL);
-    }];
+    };
     backtap_motion = motion;
+    backtap_run(1);
+}
+// Capteurs en marche ou arrêtés (thread principal) : 200 Hz demandés en
+// permanence coûtent de l'énergie pour rien en menu ou avec une manette, où
+// aucune tape n'est acceptée (backTapStep décide). Mêmes réglages à la reprise.
+static void backtap_run(int on) {
+    if (!backtap_motion || on == backtap_running) return;
+    backtap_running = on;
+    if (on) {
+        atomic_store(&backtap_resumed_until, CACurrentMediaTime() + 0.15);   // horloge de CMLogItem.timestamp
+        [backtap_motion startDeviceMotionUpdatesToQueue:backtap_queue withHandler:backtap_handler];
+    } else [backtap_motion stopDeviceMotionUpdates];
+    static int logged;
+    if (logged++ < 20) fprintf(stderr, "[ios] tapes au dos : capteurs %s\n", on ? "en marche" : "arrêtés (menu ou surcouche cachée)");
 }
 // Bouton ✗ : le joueur signale une erreur des tapes au dos (backtap_dataset.c
 // en déduit laquelle). Même horloge que les capteurs (CACurrentMediaTime).
@@ -407,6 +429,7 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
     int backtapHeld;          // tape au dos : bouton enfoncé (Action), -1 aucun
     CFTimeInterval backtapAt; // tape au dos : instant de l'appui
     unsigned long backtapFrames; // tape au dos : images présentées à l'appui
+    CFTimeInterval backtapIdleSince; // tapes impossibles depuis cet instant (0 : en partie)
     BOOL needsRender;         // calques à mettre à jour (renderIfNeeded)
     CAShapeLayer *stickRing[2], *stickKnob[2];   // gauche, droit
     CGFloat ringRadius[2];
@@ -506,7 +529,14 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
     if (!backtap_motion) return;
     UIInterfaceOrientation o = self.window.windowScene.interfaceOrientation;
     atomic_store(&backtap_orient, o == UIInterfaceOrientationLandscapeLeft ? 1 : o == UIInterfaceOrientationLandscapeRight ? -1 : 0);
-    atomic_store(&backtap_active, !menu && !concealed);
+    BOOL playing = !menu && !concealed && !rt_ios_app_state();   // app quittée (lifecycle_ios.m) : comme en menu
+    atomic_store(&backtap_active, playing);
+    // Capteurs arrêtés après 2 s sans partie (menu, surcouche cachée pour une
+    // manette ou un clavier, app quittée), relancés dès le retour en partie.
+    CFTimeInterval now = CACurrentMediaTime();
+    if (playing) backtapIdleSince = 0;
+    else if (!backtapIdleSince) backtapIdleSince = now;
+    backtap_run(playing || now - backtapIdleSince < 2);
     int side = atomic_exchange(&backtap_pending, 0);
     if (side && !menu && !concealed && backtapHeld < 0) {
         backtapHeld = side < 0 ? MOUSE_LEFT : MOUSE_RIGHT;

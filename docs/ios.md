@@ -242,6 +242,15 @@ phone vibrate for more than 150 ms: rise-time criterion dropped, vibration exclu
 250 ms (measured: 0.03 to 0.04 g RMS beyond that). Known limitation: the first jolt of a sudden movement from rest
 looks like a tap (filtering it out would delay every shot).
 
+The motion sensors run only while a tap can be accepted: device motion
+updates stop after 2 s in a menu, with the overlay hidden for a controller or
+keyboard, or with the app inactive, and restart as soon as the game is back
+(log: `[ios] tapes au dos : capteurs arrêtés` / `en marche`). The first 150 ms
+after a restart count as menu time, so the touch that closed the menu (handled
+by SDL, not the overlay) cannot fire a portal. Recordings and the dataset
+therefore have gaps in menus; dataset labels still pending when the sensors
+stop are written when they restart.
+
 Raw recording for tuning the thresholds on the Mac:
 Settings > Portal 2 > Record taps (one dated file per launch in `Documents/backtap/`,
 visible in the Files app), or `P2_BACKTAP_RAW=Documents/backtap.raw` (samples and touches), then
