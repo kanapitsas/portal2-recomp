@@ -4,7 +4,7 @@
 // ici, rt_trap avec le même message. Les variantes printf (__sprintf_chk...)
 // vivent dans format.c, à côté du moteur de formatage.
 // SHIMS: __memcpy_chk __memmove_chk __memset_chk __strcpy_chk __strncpy_chk
-// SHIMS: __strcat_chk __strncat_chk __stack_chk_fail
+// SHIMS: __strcat_chk __strncat_chk __stack_chk_fail __fdelt_chk
 #include "rt.h"
 
 static uint32_t argument(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
@@ -16,6 +16,12 @@ __attribute__((noreturn)) static void chk_fail(CPU *c) {
 int rt_fortify_shim(CPU *c, const char *name) {
     if (!strcmp(name, "__stack_chk_fail"))
         rt_trap(c, c->eip, "*** stack smashing detected ***: terminated (__stack_chk_fail)");
+    if (!strcmp(name, "__fdelt_chk")) {   // FD_SET/FD_ISSET fortifiés : 0 <= d < FD_SETSIZE (1024)
+        int32_t d = (int32_t)argument(c, 0);
+        if (d < 0 || d >= 1024) chk_fail(c);
+        c->eax = (uint32_t)d / 32u;        // NFDBITS = 32 sur i386
+        return 1;
+    }
     if (!strcmp(name, "__memcpy_chk") || !strcmp(name, "__memmove_chk")) {
         uint32_t dst = argument(c, 0), src = argument(c, 1), n = argument(c, 2), dstlen = argument(c, 3);
         if (dstlen < n) chk_fail(c);

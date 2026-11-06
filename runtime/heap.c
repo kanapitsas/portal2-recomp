@@ -189,6 +189,41 @@ static int free_locked(uint32_t ptr) {
     return large_free(ptr, size);
 }
 
+// Bloc aligné sur une page (valloc) : une zone libre déjà alignée, sinon le sommet
+// du tas aligné ; les quelques octets de bourrage devant le bloc restent perdus
+// (valloc est rare : libMiles). Taille > SMALL_MAX pour que free le traite en grand bloc.
+uint32_t rt_alloc_page_aligned(uint32_t size) {
+    if (size > HEAP_END - HEAP_BEGIN - 2 * LARGE_ALIGN) return 0;
+    uint32_t rounded = (size + LARGE_ALIGN - 1) & ~(LARGE_ALIGN - 1), addr = 0;
+    if (rounded <= SMALL_MAX) rounded = SMALL_MAX + LARGE_ALIGN;
+    pthread_mutex_lock(&lock);
+    for (size_t i = 0; i < large_count && !addr; ++i) {
+        if ((free_large[i].addr & (LARGE_ALIGN - 1)) || free_large[i].size < rounded) continue;
+        addr = free_large[i].addr;
+        if (free_large[i].size == rounded) {
+            memmove(&free_large[i], &free_large[i + 1], (large_count - i - 1) * sizeof(*free_large));
+            --large_count;
+        } else { free_large[i].addr += rounded; free_large[i].size -= rounded; }
+    }
+    if (!addr) {
+        uint32_t pad = (0u - top) & (LARGE_ALIGN - 1);
+        if (!pad || bump(pad)) addr = bump(rounded);
+    }
+    if (addr && table_put(addr, rounded)) addr = 0;
+    if (addr) live_bytes += rounded;
+    pthread_mutex_unlock(&lock);
+    return addr;
+}
+
+// SHIMS: valloc
+static int heap_shim(CPU *c, const char *name) {
+    if (strcmp(name, "valloc")) return 0;
+    c->eax = rt_alloc_page_aligned(R32(c->esp + 4));
+    if (!c->eax) rt_set_errno(c, 12);   // ENOMEM
+    return 1;
+}
+RT_SHIM_PROVIDER(heap_shim)
+
 uint32_t rt_alloc(uint32_t size) {
     pthread_mutex_lock(&lock);
     uint32_t addr = alloc_locked(size);

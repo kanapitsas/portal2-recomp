@@ -8,7 +8,7 @@
 // SHIMS: scandir scandir64 alphasort alphasort64 readdir64 statfs statfs64 statvfs statvfs64
 // SHIMS: ftruncate fdopen freopen tmpfile tmpnam mkstemp mkfifo creat dup dup2 pipe
 // SHIMS: pathconf faccessat futimes utimes flock __xmknod setvbuf ungetc getwc ungetwc
-// SHIMS: putwc putchar writev ioctl
+// SHIMS: putwc putchar writev ioctl fcntl fcntl64
 #include "posix.h"
 int rt_trace_files(const char *path);   // libc.c
 #include "modules.h"
@@ -458,6 +458,36 @@ static int posix_shim(CPU *c, const char *name) {
             iov[i].iov_base = length ? rt_span(c, base, length) : NULL; iov[i].iov_len = length;
         }
         finish(c, (int)writev(fd, iov, count));
+    } else if (!strcmp(name, "fcntl") || !strcmp(name, "fcntl64")) {
+        // Commandes Linux i386 : F_DUPFD 0, F_GETFD 1, F_SETFD 2, F_GETFL 3, F_SETFL 4,
+        // F_DUPFD_CLOEXEC 1030. FD_CLOEXEC vaut 1 des deux côtés. Les verrous (F_*LK) et
+        // les autres commandes ne sont pas traduits : EINVAL plutôt qu'un faux succès.
+        int fd = (int32_t)arg(c, 0); uint32_t command = arg(c, 1), value = arg(c, 2);
+        if (command == 0 || command == 1030) {
+            finish(c, fcntl(fd, command == 0 ? F_DUPFD : F_DUPFD_CLOEXEC, (int32_t)value));
+        } else if (command == 1) {
+            finish(c, fcntl(fd, F_GETFD));
+        } else if (command == 2) {
+            finish(c, fcntl(fd, F_SETFD, value & 1 ? FD_CLOEXEC : 0));
+        } else if (command == 3) {
+            int native = fcntl(fd, F_GETFL);
+            if (native < 0) { finish(c, native); return 1; }
+            uint32_t flags = (uint32_t)(native & O_ACCMODE);
+            if (native & O_APPEND) flags |= 0x400;
+            if (native & O_NONBLOCK) flags |= 0x800;
+            if (native & O_SYNC) flags |= 0x101000;
+            c->eax = flags;
+        } else if (command == 4) {
+            if (value & ~(3u | 0x400u | 0x800u | 0x8000u)) { fail(c, 22); return 1; }  // O_ASYNC, O_DIRECT...
+            int native = fcntl(fd, F_GETFL);
+            if (native < 0) { finish(c, native); return 1; }
+            native &= ~(O_APPEND | O_NONBLOCK);
+            if (value & 0x400) native |= O_APPEND;
+            if (value & 0x800) native |= O_NONBLOCK;
+            finish(c, fcntl(fd, F_SETFL, native));
+        } else {
+            fail(c, 22);
+        }
     } else if (!strcmp(name, "ioctl")) {
         finish(c, linux_ioctl(c, (int32_t)arg(c, 0), arg(c, 1), arg(c, 2)));
     } else if (!strcmp(name, "fdopen")) {

@@ -1,6 +1,7 @@
 // Fonctions de chaînes glibc restantes, avec les adresses invitées comme
 // résultats, et les variantes GNU de strerror_r et fortify de realpath.
 // SHIMS: memchr strncmp strspn strcspn strtok strtok_r strerror_r __realpath_chk
+// SHIMS: __rawmemchr __strtok_r __xpg_basename __xpg_strerror_r
 #include "rt.h"
 #include "posix.h"
 #include <pthread.h>
@@ -66,11 +67,12 @@ uint32_t rt_strerror_message(int code) {
 }
 
 static uint32_t strtok_state;  // glibc : état de strtok global au processus
+static uint32_t dot, slash;    // chaînes « . » et « / » de __xpg_basename
 // Les adresses invitées gardées ici ne survivent pas à rt_destroy (tas remis
 // à zéro, mémoire démappée) : appelé par rt_shims_destroy.
 void rt_strings_extra_destroy(void) {
     pthread_mutex_lock(&lock);
-    memset(messages, 0, sizeof(messages)); unknown_message = 0; strtok_state = 0;
+    memset(messages, 0, sizeof(messages)); unknown_message = 0; strtok_state = 0; dot = slash = 0;
     pthread_mutex_unlock(&lock);
 }
 
@@ -89,7 +91,43 @@ static int strings_extra(CPU *c, const char *name) {
         c->eax = (uint32_t)strcspn(text(c, arg(c, 0)), text(c, arg(c, 1)));
     } else if (!strcmp(name, "strtok")) {
         c->eax = token(c, arg(c, 0), arg(c, 1), &strtok_state);
-    } else if (!strcmp(name, "strtok_r")) {
+    } else if (!strcmp(name, "__rawmemchr")) {
+        // Sans borne : l'octet doit exister ; chaque page parcourue doit être lisible.
+        uint32_t s = arg(c, 0), at = s; uint8_t wanted = (uint8_t)arg(c, 1);
+        for (;;) {
+            uint32_t chunk = 0x1000u - (at & 0xfffu);
+            const uint8_t *p = rt_span(c, at, chunk), *hit = memchr(p, wanted, chunk);
+            if (hit) { c->eax = at + (uint32_t)(hit - p); break; }
+            at += chunk;
+        }
+    } else if (!strcmp(name, "__xpg_basename")) {
+        // basename POSIX de la glibc : retire les '/' finaux en écrivant un NUL dans la chaîne.
+        uint32_t path = arg(c, 0);
+        if (!dot) { dot = rt_alloc(4); slash = rt_alloc(4); if (!dot || !slash) rt_trap(c, c->eip, "cannot allocate basename strings");
+                    W8(dot, '.'); W8(dot + 1, 0); W8(slash, '/'); W8(slash + 1, 0); }
+        uint32_t length = path ? rt_string_length(c, path) : 0;
+        if (!length) { c->eax = dot; return 1; }
+        uint32_t end = length;
+        while (end > 0 && R8(path + end - 1) == '/') --end;
+        if (!end) { c->eax = slash; return 1; }
+        if (end < length) W8(path + end, 0);
+        uint32_t start = end;
+        while (start > 0 && R8(path + start - 1) != '/') --start;
+        c->eax = path + start;
+    } else if (!strcmp(name, "__xpg_strerror_r")) {
+        // strerror_r XSI : renvoie 0, EINVAL (numéro inconnu, message quand même écrit) ou ERANGE.
+        int code = (int32_t)arg(c, 0);
+        uint32_t buffer = arg(c, 1), size = arg(c, 2), message = known_message(code);
+        char unknown[64];
+        const char *source = message ? (const char *)GPTR(message) : unknown;
+        if (!message) snprintf(unknown, sizeof(unknown), "Unknown error %d", code);
+        size_t length = strlen(source);
+        if (!size) { c->eax = 34; return 1; }
+        uint32_t n = length + 1 <= size ? (uint32_t)length + 1 : size;
+        uint8_t *to = rt_write_span(c, buffer, n);
+        memcpy(to, source, n - 1); to[n - 1] = 0;
+        c->eax = length + 1 > size ? 34u : message ? 0u : 22u;
+    } else if (!strcmp(name, "strtok_r") || !strcmp(name, "__strtok_r")) {
         uint32_t save_address = arg(c, 2), save = R32(save_address);
         rt_write_span(c, save_address, 4);
         c->eax = token(c, arg(c, 0), arg(c, 1), &save);

@@ -1,7 +1,7 @@
 // POSIX semaphores, Linux scheduling priority ranges and process signal state.
 // SHIMS: sem_init sem_destroy sem_post sem_wait sem_trywait sem_timedwait
 // SHIMS: sched_get_priority_max sched_get_priority_min
-// SHIMS: sigaction sigemptyset sigaddset sigprocmask
+// SHIMS: sigaction sigemptyset sigaddset sigprocmask signal
 //
 // i386 glibc sem_t is 16 guest bytes. As for mutexes, the native state lives in
 // a registry keyed by the guest address and is never cast onto guest memory;
@@ -151,6 +151,11 @@ static int host_signal(uint32_t signal) {
     }
 }
 static uint64_t kernel_set(const uint8_t *set) { uint64_t v; memcpy(&v, set, 8); return v; }
+// Masque du thread invité courant, pour __sigsetjmp/siglongjmp (nonlocal.c).
+uint64_t rt_signal_blocked_mask(void) { return blocked; }
+void rt_signal_set_blocked_mask(uint64_t mask) {
+    blocked = mask & ~((UINT64_C(1) << 8) | (UINT64_C(1) << 18) | (UINT64_C(3) << 31));
+}
 
 static int signal_shim(CPU *c, const char *name) {
     if (!strcmp(name, "sigemptyset")) {
@@ -172,6 +177,25 @@ static int signal_shim(CPU *c, const char *name) {
         }
         if (old) memcpy(rt_write_span(c, old, 8), &previous, 8);
         c->eax = 0;
+    } else if (!strcmp(name, "signal")) {
+        // glibc : sémantique BSD (SA_RESTART), renvoie l'ancien gestionnaire ou SIG_ERR (-1).
+        uint32_t signal = argument(c, 0), handler = argument(c, 1);
+        if (!valid_signal(signal) || signal == 9 || signal == 19) { fail(c, LINUX_EINVAL); c->eax = UINT32_MAX; return 1; }
+        if (handler > 1 && signal != 17)
+            rt_trap(c, c->eip, "guest signal handler cannot be delivered by this runtime");
+        pthread_mutex_lock(&signal_lock);
+        int host = host_signal(signal);
+        if (host && handler <= 1) {
+            struct sigaction native; memset(&native, 0, sizeof(native));
+            native.sa_handler = handler ? SIG_IGN : SIG_DFL;
+            if (sigaction(host, &native, NULL)) { pthread_mutex_unlock(&signal_lock); rt_save_errno(c); c->eax = UINT32_MAX; return 1; }
+        }
+        uint32_t previous = dispositions[signal].handler;
+        dispositions[signal] = (Disposition){0};
+        dispositions[signal].handler = handler;
+        dispositions[signal].flags = 0x10000000u;   // SA_RESTART (Linux)
+        pthread_mutex_unlock(&signal_lock);
+        c->eax = previous;
     } else if (!strcmp(name, "sigaction")) {
         uint32_t signal = argument(c, 0), act = argument(c, 1), old = argument(c, 2);
         if (!valid_signal(signal) || (act && (signal == 9 || signal == 19))) { fail(c, LINUX_EINVAL); return 1; }

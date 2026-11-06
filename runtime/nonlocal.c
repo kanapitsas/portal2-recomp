@@ -1,5 +1,5 @@
 // setjmp/longjmp for recompiled guest code.
-// SHIMS: _setjmp longjmp
+// SHIMS: _setjmp longjmp __sigsetjmp siglongjmp __longjmp_chk
 //
 // glibc i386 jmp_buf: __jmpbuf = {EBX, ESI, EDI, EBP, ESP, PC} at 0..20,
 // __mask_was_saved at 24, then the saved signal mask. glibc mangles ESP, EBP
@@ -10,21 +10,31 @@
 // site a resume point of its function (tools/lift.py).
 #include "rt.h"
 
+// __sigsetjmp(env, savemask) : le masque de signaux invité (sync.c) n'est jamais
+// livré à du code invité ; il est enregistré seulement si savemask le demande,
+// et siglongjmp le rétablit.
+uint64_t rt_signal_blocked_mask(void);
+void rt_signal_set_blocked_mask(uint64_t mask);
+
 static int nonlocal_shim(CPU *c, const char *name) {
-    if (!strcmp(name, "_setjmp")) {
+    if (!strcmp(name, "_setjmp") || !strcmp(name, "__sigsetjmp")) {
         uint32_t env = R32(c->esp + 4);
-        rt_write_span(c, env, 28);
+        int save = !strcmp(name, "__sigsetjmp") && R32(c->esp + 8);
+        rt_write_span(c, env, save ? 36 : 28);
         W32(env, c->ebx); W32(env + 4, c->esi); W32(env + 8, c->edi); W32(env + 12, c->ebp);
         W32(env + 16, c->esp + 4);       // caller's ESP once this call has returned
         W32(env + 20, R32(c->esp));      // return address: where longjmp resumes
-        W32(env + 24, 0);                // _setjmp never saves the signal mask
+        W32(env + 24, (uint32_t)save);   // __mask_was_saved
+        if (save) W64(env + 28, rt_signal_blocked_mask());   // début de __saved_mask
         c->eax = 0;
         return 1;
     }
-    if (!strcmp(name, "longjmp")) {
+    // glibc i386 : longjmp et siglongjmp sont la même fonction ; __longjmp_chk vérifie
+    // en plus que la pile cible est au-dessus de la pile courante (fait ci-dessous).
+    if (!strcmp(name, "longjmp") || !strcmp(name, "siglongjmp") || !strcmp(name, "__longjmp_chk")) {
         uint32_t env = R32(c->esp + 4), value = R32(c->esp + 8);
         rt_span(c, env, 28);
-        if (R32(env + 24)) rt_trap(c, c->eip, "longjmp: saved signal masks are not implemented");
+        if (R32(env + 24)) { rt_span(c, env + 28, 8); rt_signal_set_blocked_mask(R64(env + 28)); }
         uint32_t sp = R32(env + 16), pc = R32(env + 20);
         // The target frame must still be active: it lies above this call.
         if (sp < c->esp + 4) rt_trap(c, c->eip, "longjmp to a frame that has already returned");

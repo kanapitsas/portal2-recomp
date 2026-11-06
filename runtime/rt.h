@@ -426,6 +426,7 @@ int rt_format_shim(CPU *c, const char *name);
 int rt_pthread_shim(CPU *c, const char *name);
 void rt_pthreads_destroy(void);
 uint32_t rt_alloc(uint32_t size);
+uint32_t rt_alloc_page_aligned(uint32_t size);   // valloc : adresse multiple de 4 Kio
 uint32_t rt_realloc(uint32_t ptr, uint32_t size);
 int rt_free(uint32_t ptr);
 uint32_t rt_heap_usable_size(uint32_t ptr);   // 0 si ptr ne vient pas du tas invité

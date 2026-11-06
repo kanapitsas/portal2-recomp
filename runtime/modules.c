@@ -1,6 +1,7 @@
 // Guest dynamic loader: module initialisation, dlopen/dlsym/dlclose and the
 // loader services the statically linked runtime pieces of each module use.
 // SHIMS: dl_iterate_phdr dlclose dlmopen __cxa_finalize _Jv_RegisterClasses __libc_start_main
+// SHIMS: dladdr backtrace
 //
 // Every prepared image is mapped at startup at its fixed address; "loading" a
 // module means running its initialisers once. dlclose keeps the image and its
@@ -195,8 +196,58 @@ static void open_module(CPU *c, uint32_t path, uint32_t mode) {
     c->eax = HANDLE_BASE + module->id * 0x100;
 }
 
+// Étendue [base, fin) d'un module : la fin du plus haut de ses PT_LOAD.
+static uint32_t module_end(CPU *c, const GuestModule *module) {
+    Headers h = program_headers(c, module);
+    uint32_t end = module->base;
+    for (uint16_t i = 0; i < h.count; ++i) {
+        uint32_t at = h.address + 32u * i;
+        if (R32(at) != PT_LOAD) continue;
+        uint32_t top = module->base + R32(at + 8) + R32(at + 20);
+        if (top > end) end = top;
+    }
+    return end;
+}
+
+// dladdr(addr, Dl_info *) : Dl_info i386 = {dli_fname, dli_fbase, dli_sname, dli_saddr}.
+// Symbole : l'export le plus proche en dessous de l'adresse (comme glibc, qui ne voit
+// que la table dynamique) ; 0 si l'adresse n'est dans aucun module.
+static int guest_dladdr(CPU *c, uint32_t address, uint32_t info) {
+    if (ensure_tables()) return 0;
+    for (size_t i = 0; i < rt_module_count; ++i) {
+        const GuestModule *module = &rt_modules[i];
+        if (address < module->base || address >= module_end(c, module)) continue;
+        const GuestSymbol *best = NULL;
+        for (size_t s = 0; s < module->symbol_count; ++s) {
+            const GuestSymbol *symbol = &module->symbols[s];
+            if (symbol->address <= address && (!best || symbol->address > best->address)) best = symbol;
+        }
+        uint32_t sname = 0;
+        if (best) {
+            size_t size = strlen(best->name) + 1;
+            sname = rt_alloc((uint32_t)size);   // copie invitée, gardée (glibc pointe dans .dynstr)
+            if (sname) memcpy(GPTR(sname), best->name, size);
+        }
+        rt_write_span(c, info, 16);
+        W32(info, module_name(module, i)); W32(info + 4, module->base);
+        W32(info + 8, sname); W32(info + 12, best ? best->address : 0);
+        return 1;
+    }
+    return 0;
+}
+
 int rt_loader_shim(CPU *c, const char *name) {
-    if (!strcmp(name, "dlopen")) {
+    if (!strcmp(name, "dladdr")) {
+        c->eax = (uint32_t)guest_dladdr(c, R32(c->esp + 4), R32(c->esp + 8));
+    } else if (!strcmp(name, "backtrace")) {
+        // Le code invité recompilé n'a pas de pile d'appels déroulable de façon sûre
+        // (pointeurs de cadre optionnels) : seul l'appelant direct est rapporté.
+        uint32_t buffer = R32(c->esp + 4); int32_t size = (int32_t)R32(c->esp + 8);
+        if (size <= 0) { c->eax = 0; return 1; }
+        rt_write_span(c, buffer, 4);
+        W32(buffer, R32(c->esp));
+        c->eax = 1;
+    } else if (!strcmp(name, "dlopen")) {
         open_module(c, R32(c->esp + 4), R32(c->esp + 8));
     } else if (!strcmp(name, "dlmopen")) {
         int32_t namespace = (int32_t)R32(c->esp + 4);
