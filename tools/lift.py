@@ -230,6 +230,14 @@ def translate(pc, insn, entries=frozenset(), callees=None, cases=None, rebase=Fa
     here, after = code_address(pc, rebase), code_address(nxt, rebase)
     if op in ('int3', 'ud2', 'hlt'):
         return f'rt_trap(c, {here}, "{op}");', []
+    if op == 'push' and args in ('ds', 'es', 'ss', 'cs'):
+        # Mémoire plate : sélecteurs utilisateur Linux i386 (__USER_DS 0x7b, __USER_CS 0x73).
+        return f'c->esp -= 4; W32(c->esp, {0x73 if args == "cs" else 0x7b}u); {end}', [nxt]
+    if op == 'pop' and args in ('ds', 'es'):
+        # Recharger DS/ES avec un sélecteur plat ne change rien ; un autre sélecteur ne serait
+        # pas émulé : arrêt explicite.
+        return (f'if ((R32(c->esp) & 0xffffu) != 0x7bu) rt_trap(c, {here}, "pop {args}: non-flat selector"); '
+                f'c->esp += 4; {end}'), [nxt]
     if op in CPUID_GATED:
         # Extension que rt_cpuid (runtime/cpu.c) n'annonce pas : le code qui la choisit
         # selon CPUID (OpenSSL, Crypto++, libvpx) ne l'atteint pas ; sinon, arrêt explicite.

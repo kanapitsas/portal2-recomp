@@ -94,6 +94,7 @@ RT_CHECK(glibc_extra_signal_and_valloc) {
     assert(call("signal", 2, 9, 1) == UINT32_MAX);   // SIGKILL : SIG_ERR
     assert(call("signal", 2, 4, 0x12345678u) == 0);  // SIGILL des sondes Crypto++ : enregistré
     assert(call("signal", 2, 4, 0) == 0x12345678u);
+    assert(call("signal", 2, 11, 0x12345678u) == 0 && call("signal", 2, 11, 0) == 0x12345678u);   // vaudio_miles
     uint32_t small = call("valloc", 1, 100), large = call("valloc", 1, 0x12345);
     assert(small && !(small & 0xfff) && large && !(large & 0xfff) && small != large);
     assert(rt_heap_usable_size(small) >= 100 && rt_heap_usable_size(large) >= 0x12345);

@@ -41,7 +41,8 @@ PE_TOOLS = GEN_TOOLS + ['tools/peprep.py']
 # Greffons Windows que libMiles charge lui-même depuis bin/linux32 de la copie
 # du jeu (runtime/pe.c) : mssmp3 décode les voix MP3, mssvoice le chat vocal,
 # binkawin l'audio des vidéos Bink.
-PE_PLUGINS = ('mssmp3.asi', 'mssvoice.asi', 'binkawin.asi')
+# mssmixer.mix : mélangeur que le libMiles de Half-Life 2 charge (absent de Portal 2).
+PE_PLUGINS = ('mssmp3.asi', 'mssvoice.asi', 'binkawin.asi', 'mssmixer.mix')
 KEEP_CONFIGURATIONS = 2   # objets conservés pour les deux derniers jeux d'options
 
 

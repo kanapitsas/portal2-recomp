@@ -308,7 +308,7 @@ int rt_path_windows_binary(const char *relative) {
     if(!strcasecmp(base,"client.dll") && base-relative>=4 && !strncasecmp(base-4,"bin/",4))return 0;
     const char *dot=strrchr(base,'.');
     if(!dot)return 0;
-    static const char *const ext[]={".dll",".exe",".asi",".flt",".pdb",".sys"};
+    static const char *const ext[]={".dll",".exe",".asi",".flt",".mix",".pdb",".sys"};
     for(size_t i=0;i<sizeof(ext)/sizeof(*ext);++i)
         if(!strcasecmp(dot,ext[i]))return !translated_plugin(relative);
     return 0;

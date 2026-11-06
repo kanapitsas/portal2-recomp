@@ -698,8 +698,10 @@ static void log_once(int *done, const char *what) {
 // toujours la possession. Pris dans config/local.json s'il manque.
 static void set_app_id(void) {
     char appid[32];
-    if (!getenv("SteamAppId") && config_value("steam_appid", appid, sizeof(appid))) {
-        setenv("SteamAppId", appid, 0); setenv("SteamGameId", appid, 0);
+    // Le lanceur de Half-Life 2 laisse SteamAppId défini mais vide : traité comme absent.
+    const char *current = getenv("SteamAppId");
+    if ((!current || !*current) && config_value("steam_appid", appid, sizeof(appid))) {
+        setenv("SteamAppId", appid, 1); setenv("SteamGameId", appid, 1);
         fprintf(stderr, "steam: SteamAppId=%s from config/local.json\n", appid);
     }
 }
@@ -733,7 +735,12 @@ static int steam_shim(CPU *c, const char *name) {
         Capture capture; capture_begin(&capture);
         int32_t result = init(versions, message);
         capture_end(&capture);
-        if (result) fprintf(stderr, "steam: SteamAPI_InitEx failed (%d): %s\n", result, message ? message : "");
+        if (result) {
+            fprintf(stderr, "steam: SteamAPI_InitEx failed (%d): %s (SteamAppId=%s, versions:", result,
+                    message ? message : "", getenv("SteamAppId") ? getenv("SteamAppId") : "unset");
+            for (const char *v = versions; v && *v; v += strlen(v) + 1) fprintf(stderr, " %s", v);
+            fputs(")\n", stderr);
+        }
         else enable_manual_dispatch(c);
         c->eax = (uint32_t)result;
     } else if (!strcmp(name, "SteamInternal_GameServer_Init_V2")) {

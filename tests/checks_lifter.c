@@ -156,6 +156,14 @@ RT_CHECK(lifter_jecxz) {
     W32(IN + 0xff0, 0x10000); run_named("lf_jecxz"); assert(R32(OUT + 0xff0) == 2);   // ECX entier, pas CX
 }
 
+RT_CHECK(lifter_flat_segments) {
+    clear();
+    CPU c = run_named("lf_segments");
+    assert(R32(OUT + 0xfe0) == 0x7bu);                          // __USER_DS
+    assert(R32(OUT + 0xfe4) == 0x20010000u - 4);                // pile équilibrée (adresse de retour)
+    (void)c;
+}
+
 RT_CHECK(lifter_mmx) {
     clear();
     W64(IN + 0x400, UINT64_C(0x0000800000010001)); W64(IN + 0x408, 4);

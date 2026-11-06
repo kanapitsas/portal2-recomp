@@ -487,3 +487,17 @@ lf_jecxz:                                   # JECXZ: branch on ECX == 0, flags u
 1:
     mov dword ptr [0x20019ff0], eax
     ret
+
+.globl lf_segments
+lf_segments:                                # PUSH/POP DS, ES in a flat model (Miles mixer)
+    push ds
+    push es
+    pop eax
+    pop ecx
+    mov dword ptr [0x20019fe0], eax
+    push es
+    pop es
+    push ds
+    pop ds
+    mov dword ptr [0x20019fe4], esp
+    ret
