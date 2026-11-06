@@ -112,6 +112,18 @@ RT_CHECK(posix_errno_table_is_linux) {
     assert(rt_darwin_errno(115) == EINPROGRESS && rt_darwin_errno(11) == EAGAIN && rt_darwin_errno(4095) == 0);
 }
 
+// getcwd comme glibc : tampon de taille 0 → EINVAL, trop petit → ERANGE,
+// NULL → tampon alloué (de la taille demandée, ou de la longueur exacte).
+RT_CHECK(posix_getcwd_size_errors_match_glibc) {
+    uint32_t buffer = STACK - 0x1000;
+    assert(call("getcwd", 2, buffer, 0) == 0 && guest_errno() == 22);
+    assert(call("getcwd", 2, buffer, 2) == 0 && guest_errno() == 34);
+    assert(call("getcwd", 2, 0, 2) == 0 && guest_errno() == 34);
+    assert(call("getcwd", 2, buffer, 0x800) == buffer);
+    uint32_t allocated = call("getcwd", 2, 0, 0);
+    assert(allocated && !strcmp(GPTR(allocated), GPTR(buffer)) && !rt_free(allocated));
+}
+
 RT_CHECK(posix_directory_listing_merges_sources) {
     setup();
     char names[512];

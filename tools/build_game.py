@@ -30,6 +30,11 @@ HOST_LIBS = ['-L/opt/homebrew/lib', '-lSDL2', '-lfreetype', '-lfontconfig', '-li
              '-framework', 'OpenGL', '-framework', 'OpenAL', '-lobjc']
 WARNINGS = ['-Wall', '-Wextra', '-Werror']
 DEBUG = {'full': '-g', 'lines': '-gline-tables-only', 'none': '-g0'}
+# Generated functions name `CPU *restrict c` hundreds of times; past LLVM's
+# default capture-tracking budget clang assumes guest stores may alias *c and
+# reloads c->esp & co. after each one (client_so.036.c: 454 kB -> 397 kB of
+# __text at -O2 -DRT_FAST_MEMORY).
+GENERATED_TUNING = ['-mllvm', '-capture-tracking-max-uses-to-explore=100000']
 # Scripts whose content enters the generation keys (a change regenerates the C).
 GEN_TOOLS = ['tools/lift.py', 'tools/float_lift.py', 'tools/registry.py']
 PE_TOOLS = GEN_TOOLS + ['tools/peprep.py']
@@ -292,7 +297,7 @@ def main():
         profile = [f'-fprofile-instr-use={args.pgo_use.resolve()}', '-Wno-profile-instr-unprofiled',
                    '-Wno-profile-instr-out-of-date', '-Wno-profile-instr-missing']
     runtime_flags = [f'-O{args.runtime_opt or args.opt}', '-g', *WARNINGS, *memory, *profile, '-Iruntime', *HOST_CFLAGS]
-    generated_flags = [f'-O{args.opt}', DEBUG[args.debug], *WARNINGS, *memory, *profile, '-Iruntime']
+    generated_flags = [f'-O{args.opt}', DEBUG[args.debug], *GENERATED_TUNING, *WARNINGS, *memory, *profile, '-Iruntime']
     sources = Path('build/game/gen/src')
     units = [(str(p), runtime_flags) for p in sorted(Path('runtime').glob('*.c'))]
     units.append(('src/main.c', runtime_flags))

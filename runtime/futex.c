@@ -32,7 +32,10 @@ int rt_futex(CPU *c,uint32_t address,uint32_t operation,uint32_t value,uint32_t 
         struct timespec deadline={0},relative;
         if(timeout){
             if(rt_read_timespec(c,timeout,&relative) || relative.tv_sec<0)error=EINVAL;
-            else {clock_gettime(CLOCK_REALTIME,&deadline);deadline.tv_sec+=relative.tv_sec;deadline.tv_nsec+=relative.tv_nsec;
+            // FUTEX_WAIT relatif : horloge monotone sous Linux (un réglage de
+            // l'heure ne l'allonge ni ne l'écourte), d'où l'échéance monotone
+            // et pthread_cond_timedwait_relative_np sur le temps restant.
+            else {clock_gettime(CLOCK_MONOTONIC,&deadline);deadline.tv_sec+=relative.tv_sec;deadline.tv_nsec+=relative.tv_nsec;
                 if(deadline.tv_nsec>=1000000000){++deadline.tv_sec;deadline.tv_nsec-=1000000000;}}
         }
         if(!error){
@@ -40,8 +43,14 @@ int rt_futex(CPU *c,uint32_t address,uint32_t operation,uint32_t value,uint32_t 
             if(!error){
                 waiter.next=f->waiters;f->waiters=&waiter;
                 unsigned saved=rt_guest_suspend();
-                while(!waiter.awoken && !error)
-                    error=timeout?pthread_cond_timedwait(&waiter.condition,&f->mutex,&deadline):pthread_cond_wait(&waiter.condition,&f->mutex);
+                while(!waiter.awoken && !error){
+                    if(!timeout){error=pthread_cond_wait(&waiter.condition,&f->mutex);continue;}
+                    struct timespec now,left;clock_gettime(CLOCK_MONOTONIC,&now);
+                    left.tv_sec=deadline.tv_sec-now.tv_sec;left.tv_nsec=deadline.tv_nsec-now.tv_nsec;
+                    if(left.tv_nsec<0){--left.tv_sec;left.tv_nsec+=1000000000;}
+                    if(left.tv_sec<0 || (left.tv_sec==0 && left.tv_nsec==0))error=ETIMEDOUT;
+                    else error=pthread_cond_timedwait_relative_np(&waiter.condition,&f->mutex,&left);
+                }
                 // Réveil compté par FUTEX_WAKE pendant l'expiration : succès, sinon
                 // ce réveil serait perdu pour les autres attendeurs.
                 if(waiter.awoken)error=0;

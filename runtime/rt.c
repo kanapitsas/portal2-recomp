@@ -343,36 +343,6 @@ void rt_call(CPU *c, uint32_t target, uint32_t expected_return) {
     rt_guest_leave();
 }
 
-uint32_t rt_exchange32(CPU *c, uint32_t address, uint32_t value) {
-    if (address & 3) rt_trap(c, c->eip, "unaligned atomic exchange is unsupported");
-    return __atomic_exchange_n((uint32_t *)(void *)(M + address), value, __ATOMIC_SEQ_CST);
-}
-uint32_t rt_compare_exchange32(CPU *c, uint32_t address, uint32_t expected, uint32_t value) {
-    if (address & 3) rt_trap(c, c->eip, "unaligned atomic compare-exchange is unsupported");
-    __atomic_compare_exchange_n((uint32_t *)(void *)(M + address), &expected, value,
-                                0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
-    return expected;
-}
-
-uint32_t rt_atomic32(CPU *c, uint32_t address, uint32_t value, int operation) {
-    if (address & 3) rt_trap(c, c->eip, "unaligned atomic arithmetic is unsupported");
-    uint32_t *pointer = (uint32_t *)(void *)(M + address);
-    switch (operation) {
-    case 0: return __atomic_fetch_add(pointer, value, __ATOMIC_SEQ_CST);
-    case 1: return __atomic_fetch_sub(pointer, value, __ATOMIC_SEQ_CST);
-    case 2: return __atomic_fetch_and(pointer, value, __ATOMIC_SEQ_CST);
-    case 3: return __atomic_fetch_or(pointer, value, __ATOMIC_SEQ_CST);
-    case 4: return __atomic_fetch_xor(pointer, value, __ATOMIC_SEQ_CST);
-    default: rt_trap(c, c->eip, "unknown atomic arithmetic operation");
-    }
-}
-
-uint64_t rt_compare_exchange64(CPU *c, uint32_t address, uint64_t expected, uint64_t value) {
-    if (address & 7) rt_trap(c, c->eip, "unaligned 64-bit atomic compare-exchange is unsupported");
-    __atomic_compare_exchange_n((uint64_t *)(void *)(M + address), &expected, value,
-                                0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
-    return expected;
-}
 
 __attribute__((noreturn)) void rt_memory_trap(uint32_t address, uint64_t length, int mode) {
     fprintf(stderr, "guest memory fault at %#x length=%llu access=%s\n", address,

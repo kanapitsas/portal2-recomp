@@ -271,10 +271,46 @@ int rt_time_data_import(const char *name, uint32_t address);  // time.c
 int rt_load_images(const char *directory);  // généré par lift.py
 uint32_t rt_export(const char *name);       // 0 si export non recompilé
 gfn rt_lookup(uint32_t target);
-uint32_t rt_atomic32(RT_NOESCAPE CPU *c, uint32_t address, uint32_t value, int operation);
-uint32_t rt_exchange32(RT_NOESCAPE CPU *c, uint32_t address, uint32_t value);
-uint32_t rt_compare_exchange32(RT_NOESCAPE CPU *c, uint32_t address, uint32_t expected, uint32_t value);
-uint64_t rt_compare_exchange64(RT_NOESCAPE CPU *c, uint32_t address, uint64_t expected, uint64_t value);
+// Opérations atomiques invitées (lock, xchg, cmpxchg) : intégrées au code
+// généré. `pc` est l'adresse de l'instruction, pour le message du piège.
+// Accès non aligné : piège (pas d'atomique hôte sur une adresse non alignée).
+// Base mémoire passée comme pour rt_call_fn (macros en fin de bloc).
+RT_ALWAYS_INLINE uint32_t *rt_atomic_pointer(uint8_t *mem, CPU *c, uint32_t address, unsigned size, uint32_t pc, const char *why) {
+    if (__builtin_expect(address & (size - 1), 0)) rt_trap(c, pc, why);
+    return (uint32_t *)(void *)(mem + address);
+}
+RT_ALWAYS_INLINE uint32_t rt_atomic32_mem(uint8_t *mem, CPU *c, uint32_t address, uint32_t value, int operation, uint32_t pc) {
+    uint32_t *pointer = rt_atomic_pointer(mem, c, address, 4, pc, "unaligned atomic arithmetic is unsupported");
+    switch (operation) {
+    case 0: return __atomic_fetch_add(pointer, value, __ATOMIC_SEQ_CST);
+    case 1: return __atomic_fetch_sub(pointer, value, __ATOMIC_SEQ_CST);
+    case 2: return __atomic_fetch_and(pointer, value, __ATOMIC_SEQ_CST);
+    case 3: return __atomic_fetch_or(pointer, value, __ATOMIC_SEQ_CST);
+    case 4: return __atomic_fetch_xor(pointer, value, __ATOMIC_SEQ_CST);
+    default: rt_trap(c, pc, "unknown atomic arithmetic operation");
+    }
+}
+RT_ALWAYS_INLINE uint32_t rt_exchange32_mem(uint8_t *mem, CPU *c, uint32_t address, uint32_t value, uint32_t pc) {
+    return __atomic_exchange_n(rt_atomic_pointer(mem, c, address, 4, pc, "unaligned atomic exchange is unsupported"),
+                               value, __ATOMIC_SEQ_CST);
+}
+RT_ALWAYS_INLINE uint32_t rt_compare_exchange32_mem(uint8_t *mem, CPU *c, uint32_t address, uint32_t expected, uint32_t value, uint32_t pc) {
+    __atomic_compare_exchange_n(rt_atomic_pointer(mem, c, address, 4, pc, "unaligned atomic compare-exchange is unsupported"),
+                                &expected, value, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    return expected;
+}
+RT_ALWAYS_INLINE uint64_t rt_compare_exchange64_mem(uint8_t *mem, CPU *c, uint32_t address, uint64_t expected, uint64_t value, uint32_t pc) {
+    uint64_t *pointer = (uint64_t *)(void *)rt_atomic_pointer(mem, c, address, 8, pc,
+                                                              "unaligned 64-bit atomic compare-exchange is unsupported");
+    __atomic_compare_exchange_n(pointer, &expected, value, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    return expected;
+}
+#define rt_atomic32(c, address, value, operation, pc) rt_atomic32_mem(RT_MEM, (c), (address), (value), (operation), (pc))
+#define rt_exchange32(c, address, value, pc) rt_exchange32_mem(RT_MEM, (c), (address), (value), (pc))
+#define rt_compare_exchange32(c, address, expected, value, pc) \
+    rt_compare_exchange32_mem(RT_MEM, (c), (address), (expected), (value), (pc))
+#define rt_compare_exchange64(c, address, expected, value, pc) \
+    rt_compare_exchange64_mem(RT_MEM, (c), (address), (expected), (value), (pc))
 // Retour d'une fonction traduite : macro (pas d'appel par retour, base
 // mémoire locale du code généré).
 #define rt_return(cpu) ((void)((cpu)->eip = POP(cpu)))
@@ -295,13 +331,17 @@ RT_ALWAYS_INLINE void rt_poll(void) {
 // adresse de retour. Chaque chemin rapide cède le verrou comme rt_dispatch
 // (rt_poll) : un cycle d'appels ou de sauts terminaux entre fonctions, sans
 // branche arrière, ne doit pas affamer les autres threads invités.
-RT_ALWAYS_INLINE void rt_call_fn(CPU *c, gfn fn, uint32_t target, uint32_t expected_return) {
+// Base mémoire passée par les macros ci-dessous : RT_MEM s'y développe au
+// site d'appel (`mem_` dans le code généré) et non à la définition (M, global
+// relu après chaque appel opaque).
+RT_ALWAYS_INLINE void rt_call_fn_mem(uint8_t *mem, CPU *c, gfn fn, uint32_t target, uint32_t expected_return) {
 #ifdef RT_TRACED_CALLS
-    (void)fn; rt_call(c, target, expected_return);
+    (void)mem; (void)fn; rt_call(c, target, expected_return);
 #else
-    rt_poll(); PUSH(c, expected_return); c->eip = target; fn(c);
+    rt_poll(); c->esp -= 4; rt_w32(mem, c->esp, expected_return); c->eip = target; fn(c);
 #endif
 }
+#define rt_call_fn(c, fn, target, expected_return) rt_call_fn_mem(RT_MEM, (c), (fn), (target), (expected_return))
 // Appels et sauts indirects (fonctions virtuelles, pointeurs de fonction) :
 // une cible traduite est appelée directement ; toute autre (import, adresse
 // dynamique, cible inconnue) prend le chemin complet de rt_call/rt_dispatch.
@@ -315,12 +355,12 @@ RT_ALWAYS_INLINE gfn rt_site_lookup(RtSiteCache *site, uint32_t target) {
     if (fn) { site->target = target; site->fn = fn; }
     return fn;
 }
-static inline void rt_call_any_site(CPU *c, uint32_t target, uint32_t expected_return, RtSiteCache *site) {
+static inline void rt_call_any_site(uint8_t *mem, CPU *c, uint32_t target, uint32_t expected_return, RtSiteCache *site) {
 #ifndef RT_TRACED_CALLS
     gfn fn = rt_site_lookup(site, target);
-    if (fn) { rt_poll(); PUSH(c, expected_return); c->eip = target; fn(c); return; }
+    if (fn) { rt_poll(); c->esp -= 4; rt_w32(mem, c->esp, expected_return); c->eip = target; fn(c); return; }
 #else
-    (void)site;
+    (void)mem; (void)site;
 #endif
     rt_call(c, target, expected_return);
 }
@@ -334,7 +374,7 @@ static inline void rt_jump_any_site(CPU *c, uint32_t target, RtSiteCache *site) 
     rt_dispatch(c, target);
 }
 #define rt_call_any(c, target, expected_return) \
-    do { static RtSiteCache rt_site_; rt_call_any_site((c), (target), (expected_return), &rt_site_); } while (0)
+    do { static RtSiteCache rt_site_; rt_call_any_site(RT_MEM, (c), (target), (expected_return), &rt_site_); } while (0)
 #define rt_jump_any(c, target) \
     do { static RtSiteCache rt_site_; rt_jump_any_site((c), (target), &rt_site_); } while (0)
 // Appel direct d'un import (shim) depuis le code généré, qui tient déjà le

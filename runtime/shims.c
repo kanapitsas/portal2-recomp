@@ -61,10 +61,35 @@ int rt_read_timespec(CPU *c, uint32_t pointer, struct timespec *out) {
 }
 uint32_t rt_string_length(CPU *c, uint32_t address) {
     if (!address) rt_trap(c, c->eip, "null guest string");
-    uint64_t pos = address;
-    while (pos < (UINT64_C(1) << 32)) {
-        if (!R8((uint32_t)pos)) return (uint32_t)(pos - address);
-        ++pos;
+    // memchr par page invitée de 4 Kio, chacune contrôlée avant d'être lue :
+    // jamais au-delà de la page qui contient le NUL.
+    for (uint64_t pos = address; pos < (UINT64_C(1) << 32);) {
+        uint64_t chunk = ((pos | 4095) + 1) - pos;
+        const uint8_t *page = rt_span(c, (uint32_t)pos, chunk), *nul = memchr(page, 0, (size_t)chunk);
+        if (nul) return (uint32_t)(pos - address) + (uint32_t)(nul - page);
+        pos += chunk;
+    }
+    rt_trap(c, c->eip, "unterminated guest string");
+}
+// strcmp sans lire les deux chaînes en entier : morceaux bornés par la fin de
+// page de chacune, comparés jusqu'au premier écart ou NUL. Résultat de
+// strcmp hôte (Darwin) : différence des octets non signés au premier écart.
+static int32_t guest_strcmp(CPU *c, uint32_t a, uint32_t b) {
+    if (!a || !b) rt_trap(c, c->eip, "null guest string");
+    for (uint64_t done = 0; done < (UINT64_C(1) << 32);) {
+        uint64_t at = a + done, bt = b + done;
+        if (at >= (UINT64_C(1) << 32) || bt >= (UINT64_C(1) << 32)) break;
+        uint64_t ka = ((at | 4095) + 1) - at, kb = ((bt | 4095) + 1) - bt, k = ka < kb ? ka : kb;
+        const uint8_t *pa = rt_span(c, (uint32_t)at, k), *pb = rt_span(c, (uint32_t)bt, k);
+        const uint8_t *nul = memchr(pa, 0, (size_t)k);
+        size_t n = nul ? (size_t)(nul - pa) + 1 : (size_t)k;
+        if (memcmp(pa, pb, n)) {
+            size_t i = 0;
+            while (pa[i] == pb[i]) ++i;
+            return (int32_t)pa[i] - (int32_t)pb[i];
+        }
+        if (nul) return 0;
+        done += k;
     }
     rt_trap(c, c->eip, "unterminated guest string");
 }
@@ -95,9 +120,7 @@ static void core_memcmp(CPU *c) {
 }
 static void core_strlen(CPU *c) { c->eax = rt_string_length(c, arg(c, 0)); }
 static void core_strcmp(CPU *c) {
-    uint32_t a = arg(c, 0), b = arg(c, 1);
-    rt_string_length(c, a); rt_string_length(c, b);
-    c->eax = (uint32_t)strcmp(GPTR(a), GPTR(b));
+    c->eax = (uint32_t)guest_strcmp(c, arg(c, 0), arg(c, 1));
 }
 static void core_malloc(CPU *c) { c->eax = rt_alloc(arg(c, 0)); }
 static void core_free(CPU *c) { if (rt_free(arg(c, 0))) rt_trap(c, c->eip, "invalid guest free"); }
