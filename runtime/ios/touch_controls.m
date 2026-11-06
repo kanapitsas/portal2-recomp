@@ -50,6 +50,7 @@
 #include <sys/stat.h>
 #include "back_tap.h"
 #include "backtap_dataset.h"
+#include "env_ios.h"
 #include "lifecycle_ios.h"
 
 int rt_ios_game_ui_visible(void);   // game_state.c
@@ -389,6 +390,28 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
     os_unfair_lock_unlock(&backtap_lock);
 }
 
+// Vibration légère du Taptic Engine à chaque portail tiré depuis la surcouche
+// (bouton ou tape au dos ; une vraie manette ne passe pas par ici).
+// P2_HAPTICS=0 (Réglages > Vibrer au tir) la coupe. Générateur préparé
+// d'avance (en partie, au plus une fois par seconde, et après chaque tir) :
+// sans cela, la première vibration part avec un retard.
+static UIImpactFeedbackGenerator *haptic;
+static void haptic_prepare(void) {
+    static int wanted = -1;
+    if (wanted < 0) {
+        wanted = rt_ios_env_flag("P2_HAPTICS", 1);
+        fprintf(stderr, "[ios] vibration au tir : %s\n", wanted ? "oui" : "non");
+    }
+    if (!wanted) return;
+    if (!haptic) haptic = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
+    [haptic prepare];
+}
+static void haptic_fire(void) {
+    if (!haptic) return;
+    [haptic impactOccurred];
+    [haptic prepare];
+}
+
 // Doigt suivi : rôle, action (bouton), point de départ, dernier point.
 @interface P2Finger : NSObject
 @property Role role; @property Action action; @property CGPoint start, at;
@@ -430,6 +453,7 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
     CFTimeInterval backtapAt; // tape au dos : instant de l'appui
     unsigned long backtapFrames; // tape au dos : images présentées à l'appui
     CFTimeInterval backtapIdleSince; // tapes impossibles depuis cet instant (0 : en partie)
+    CFTimeInterval hapticPreparedAt; // dernière préparation de la vibration au tir
     BOOL needsRender;         // calques à mettre à jour (renderIfNeeded)
     CAShapeLayer *stickRing[2], *stickKnob[2];   // gauche, droit
     CGFloat ringRadius[2];
@@ -498,6 +522,10 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
     if (pad && rt_ios_move_response() != padResponse) { padResponse = rt_ios_move_response(); [self updateMove]; }
     [self testStep];
     [self backTapStep];
+    if (!menu && !concealed && CACurrentMediaTime() - hapticPreparedAt > 1) {
+        hapticPreparedAt = CACurrentMediaTime();
+        haptic_prepare();
+    }
     if (host.subviews.lastObject != self) [host bringSubviewToFront:self];
     if (!CGRectEqualToRect(self.frame, host.bounds)) { self.frame = host.bounds; [self setNeedsRender]; }
     [self renderIfNeeded];
@@ -597,8 +625,8 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
     case KEY_CTRL: [self key:SDL_SCANCODE_LCTRL down:down]; break;
     case KEY_E: [self key:SDL_SCANCODE_E down:down]; break;
     case KEY_ESCAPE: [self key:SDL_SCANCODE_ESCAPE down:down]; break;
-    case MOUSE_LEFT: [self mouseButton:SDL_BUTTON_LEFT down:down at:centre]; break;
-    case MOUSE_RIGHT: [self mouseButton:SDL_BUTTON_RIGHT down:down at:centre]; break;
+    case MOUSE_LEFT: [self mouseButton:SDL_BUTTON_LEFT down:down at:centre]; if (down) haptic_fire(); break;
+    case MOUSE_RIGHT: [self mouseButton:SDL_BUTTON_RIGHT down:down at:centre]; if (down) haptic_fire(); break;
     case LOOK_MODE: if (down) [self toggleLookMode]; break;
     case FLAG_ERROR: if (down) { backtap_flag(); flagAt = CACurrentMediaTime(); flagLit = YES; [self setNeedsRender]; } break;
     default: break;

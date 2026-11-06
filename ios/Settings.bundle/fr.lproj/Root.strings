@@ -33,6 +33,7 @@
 "Tap the back of the phone near the left edge for the blue portal, near the right edge for the orange one. Without back taps, portal buttons appear at the top of the screen. “Record taps” writes the sensor readings of each game to Portal 2’s backtap folder (Files app) and shows a ✗ button to report a wrong shot or a missed tap." = "Tapez le dos du téléphone près du bord gauche pour le portail bleu, près du bord droit pour l'orange. Sans tapes au dos, des boutons de portail s'affichent en haut de l'écran. « Enregistrer les tapes » écrit les mesures des capteurs de chaque partie dans le dossier backtap de Portal 2 (app Fichiers) et affiche un bouton ✗ pour signaler un mauvais tir ou une tape manquée.";
 "Record taps" = "Enregistrer les tapes";
 "Back taps" = "Tapes au dos";
+"Vibrate when firing" = "Vibrer au tir";
 "Tap sensitivity" = "Sensibilité des tapes";
 "Low" = "Faible";
 "High" = "Élevée";

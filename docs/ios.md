@@ -143,6 +143,7 @@ The page is in English, and in French on a device set to French
 | Camera speed | `P2_TOUCH_LOOK` | ×0.5 to ×3 |
 | Trackpad acceleration | `P2_TOUCH_ACCEL` | none (1) to strong (4), normal 2.5 |
 | Back taps | `P2_BACKTAP` | enabled by default |
+| Vibrate when firing | `P2_HAPTICS` | on by default: a light Taptic Engine tap for each portal fired from the overlay (button or back tap) |
 | Tap sensitivity | `P2_BACKTAP_SENSITIVITY` | 0.75 / 1 / 1.33: thresholds are divided by this value |
 | Swap left and right | `P2_BACKTAP_INVERT` | |
 | Portal buttons | `P2_PORTAL_BUTTONS` | automatic (when back taps are off), always, never |
