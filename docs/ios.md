@@ -56,8 +56,9 @@ Journal setting) then shows `[ios] renderer: Metal (...)`,
 - Resolution: the Metal view takes the app's render scale (Résolution
   setting), like the GL view, so the drawable is the game's back buffer
   size and mtld3d does not resample.
-- Frame rate: `present.maxFps` follows `P2_IOS_MAX_FPS` (60 by default);
-  the 120 Hz display request is the same as on OpenGL. The FPS counter and
+- Frame rate: `present.maxFps` follows `P2_IOS_MAX_FPS` (60 by default) and
+  auto power saving, see "Frame rate cap"; the 120 Hz display request is the
+  same as on OpenGL. The FPS counter and
   back taps count frames on `Present` (`rt_d3d9_on_present`).
 - Shader/pipeline cache: `Library/Caches/d3d9metal` (`P2_D3D9_CACHE` to
   move it). Memory caps: the same `MTLD3D_CONFIG` defaults as on macOS.
@@ -135,7 +136,8 @@ The page is in English, and in French on a device set to French
 | Setting | Variable | Values |
 |---|---|---|
 | Resolution | `P2_IOS_RENDER_SCALE` (+ the game's `-w`/`-h`) | native, ×2 (default), ×1.5, ×1 |
-| Frames per second | `P2_IOS_MAX_FPS` | 60 (default), 120 |
+| Frames per second | `P2_IOS_MAX_FPS` | 30, 40, 60 (default), 120; see "Frame rate cap" |
+| Auto power saving | `P2_IOS_POWER_SAVE` | on by default: at most 30 fps in Low Power Mode or when the phone is hot |
 | Renderer | `P2_RENDERER` | Metal: `d3d9` (default), `opengl`; see "Metal renderer" |
 | FPS counter | `P2_SHOW_FPS` | shown by default; tapping the top-left corner shows or hides it (choice is remembered) |
 | On-screen controls | `P2_TOUCH_CONTROLS` | automatic (hidden when a controller is connected), always, never |
@@ -148,6 +150,26 @@ The page is in English, and in French on a device set to French
 | Swap left and right | `P2_BACKTAP_INVERT` | |
 | Portal buttons | `P2_PORTAL_BUTTONS` | automatic (when back taps are off), always, never |
 | Log | `P2_LOG_FILE=Documents/game.log` | |
+
+### Frame rate cap
+
+`P2_IOS_MAX_FPS` (Frames per second) is the ceiling, read at launch by
+`runtime/ios/power_ios.m`:
+
+- Metal: `present.maxFps=<cap>` in `MTLD3D_CONFIG`; mtld3d holds presents to it.
+- OpenGL: 60 and 120 are paced by the display; under 60 the runtime waits
+  before each present (`gl_ios.m`, `limit_frame_rate`).
+- Display: 120 asks the ProMotion panel for 120 Hz, as before; so does 40,
+  which then lands on every third refresh (on a 60 Hz panel 40 fps would
+  alternate one and two refreshes; on a phone without ProMotion choose 30).
+
+Auto power saving (on by default, `P2_IOS_POWER_SAVE=0` turns it off) lowers
+the cap to 30 when Low Power Mode is on or the thermal state is serious or
+critical, and logs `[ios] économie d'énergie (<reason>) : 30 i/s au lieu de
+<cap>`. mtld3d reads its configuration once, at initialization, and has no way
+to change `present.maxFps` afterwards: with Metal the check happens at launch
+only (a later change is logged as applying at the next launch); with OpenGL
+the cap follows thermal and power changes during play.
 
 Simulator: `xcrun simctl spawn <device> defaults write <bundle id>
 P2ResolutionScale -string 1.5`. `tests/checks_ios_settings.c` checks the

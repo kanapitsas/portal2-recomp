@@ -4,7 +4,8 @@
 // - Au lancement (ios/main_ios.c) : appareil Metal capable (textures BC, que
 //   Source utilise partout et que mtld3d crée sans solution de repli), sinon
 //   retour à OpenGL ; cache des nuanceurs dans Library/Caches ; cadence
-//   plafonnée comme en OpenGL (P2_IOS_MAX_FPS, 60 par défaut).
+//   plafonnée comme en OpenGL (P2_IOS_MAX_FPS, 60 par défaut, et économie
+//   d'énergie : power_ios.m).
 // - À la création de la vue Metal (runtime/sdl_video.c) : échelle de rendu de
 //   l'app (P2_IOS_RENDER_SCALE) au lieu de l'échelle native que SDL donne à la
 //   couche, pour que mtld3d (taille du drawable = bounds × contentsScale)
@@ -23,6 +24,7 @@
 #include <string.h>
 #include "d3d9_bridge.h"
 #include "metal_ios.h"
+#include "power_ios.h"
 
 extern _Atomic unsigned long rt_ios_frames;   // gl_ios.m
 float rt_ios_render_scale(void);                    // sdl_ios.m
@@ -55,10 +57,10 @@ int rt_ios_metal_usable(char *why, size_t size) {
 
 // Clés MTLD3D_CONFIG propres à iOS, devant celles de l'utilisateur (la
 // dernière gagne ; runtime/d3d9.c ajoute ensuite ses plafonds mémoire devant).
+// present.maxFps : lu une fois par mtld3d à son initialisation (sa config est
+// figée ensuite), d'où l'économie d'énergie appliquée au lancement seulement.
 void rt_ios_metal_config(char *out, size_t size) {
-    const char *e = getenv("P2_IOS_MAX_FPS");
-    int fps = e && atoi(e) > 0 ? atoi(e) : 60;
-    snprintf(out, size, "present.maxFps=%d", fps);
+    snprintf(out, size, "present.maxFps=%d", rt_ios_max_fps());
 }
 
 int rt_ios_metal_prepare(void) {

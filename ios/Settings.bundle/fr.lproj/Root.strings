@@ -1,11 +1,13 @@
 /* French for the Settings page; keys are the English strings of Root.plist. */
 "Display" = "Affichage";
-"Changes apply the next time the game starts (close it from the app switcher). A lower resolution gives more frames per second." = "Les changements s'appliquent au prochain lancement du jeu (fermez-le depuis le sélecteur d'apps). Une résolution plus basse donne plus d'images par seconde.";
+"Changes apply the next time the game starts (close it from the app switcher). A lower resolution gives more frames per second. Auto power saving caps the game at 30 frames per second in Low Power Mode or when the phone is hot (checked at launch with Metal, at any time with OpenGL)." = "Les changements s'appliquent au prochain lancement du jeu (fermez-le depuis le sélecteur d'apps). Une résolution plus basse donne plus d'images par seconde. L'économie d'énergie automatique limite le jeu à 30 images par seconde en mode économie d'énergie ou quand le téléphone chauffe (vérifié au lancement avec Metal, à tout moment avec OpenGL).";
 "Resolution" = "Résolution";
 "×2 (recommended)" = "×2 (recommandé)";
 "×1.5" = "×1,5";
 "Frames per second" = "Images par seconde";
+"30 (battery saver)" = "30 (économie de batterie)";
 "60 (recommended)" = "60 (recommandé)";
+"Auto power saving" = "Économie d'énergie auto";
 "FPS counter" = "Compteur d’images";
 "Rendering" = "Rendu";
 "Metal: the game's native Direct3D 9 rendering (libd3d9metal), faster and more faithful than OpenGL. Without the library in the app, or if the device does not support it, the game stays on OpenGL." = "Metal : rendu Direct3D 9 natif du jeu (libd3d9metal), plus rapide et plus fidèle qu'OpenGL. Sans la bibliothèque dans l'app, ou si l'appareil ne la prend pas en charge, le jeu reste en OpenGL.";

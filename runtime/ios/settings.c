@@ -15,7 +15,8 @@
 // « auto » : variable laissée absente (défaut du code).
 const rt_ios_setting rt_ios_settings[] = {
     {"P2ResolutionScale", "P2_IOS_RENDER_SCALE", NULL, NULL},   // native, 2, 1.5, 1
-    {"P2MaxFPS", "P2_IOS_MAX_FPS", NULL, NULL},                 // 60, 120
+    {"P2MaxFPS", "P2_IOS_MAX_FPS", NULL, NULL},                 // 30, 40, 60, 120
+    {"P2PowerSave", "P2_IOS_POWER_SAVE", "1", "0"},             // 30 i/s au plus si économie d'énergie ou chaleur (power_ios.m)
     {"P2ShowFPS", "P2_SHOW_FPS", "1", "0"},
     {"P2Renderer", "P2_RENDERER", NULL, NULL},                 // opengl, d3d9 (src/main.c)
     {"P2TouchControls", "P2_TOUCH_CONTROLS", NULL, NULL},       // auto, 1, 0
