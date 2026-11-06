@@ -406,11 +406,16 @@ int rt_sdl_notch_height(int height, int frame_h, int visible_top, double safe_to
 // que la fenêtre ne reçoit pas. Sans encoche (écrans externes, Mac plus anciens),
 // ou hors Cocoa (tests sur le pilote dummy) : rien ne change.
 static int fullscreen_height(int display, int height) {
-    static int cached[8][2];   // {hauteur de l'écran entier, hauteur annoncée}
-    if (display_scale_forced || display < 0 || display >= 8 || !pthread_main_np()) return height;
+    // {hauteur de l'écran entier, hauteur annoncée} : écrite par le thread
+    // principal ([1] puis [0] en release), lue par tous. Hors thread principal
+    // (AppKit interdit), seule la mesure déjà faite sert.
+    static int cached[8][2];
+    if (display_scale_forced || display < 0 || display >= 8) return height;
+    int full = __atomic_load_n(&cached[display][0], __ATOMIC_ACQUIRE);
+    if (full) return height == full ? __atomic_load_n(&cached[display][1], __ATOMIC_RELAXED) : height;
+    if (!pthread_main_np()) return height;
     const char *driver = SDL_GetCurrentVideoDriver();
     if (!driver || strcmp(driver, "cocoa")) return height;
-    if (cached[display][0]) return height == cached[display][0] ? cached[display][1] : height;
     SDL_Rect bounds;
     if (SDL_GetDisplayBounds(display, &bounds)) return height;
     typedef struct { double x, y, w, h; } Rect;
@@ -427,12 +432,13 @@ static int fullscreen_height(int display, int height) {
                                                    sel_registerName("safeAreaInsets")))
             safe = ((Insets (*)(id, SEL))objc_msgSend)(screen, sel_registerName("safeAreaInsets"));
         int top = (int)(visible.y + visible.h - frame.y);
-        cached[display][0] = bounds.h;
-        cached[display][1] = rt_sdl_notch_height(bounds.h, bounds.h, top, safe.top);
-        if (cached[display][1] != bounds.h)
+        int announced = rt_sdl_notch_height(bounds.h, bounds.h, top, safe.top);
+        __atomic_store_n(&cached[display][1], announced, __ATOMIC_RELAXED);
+        __atomic_store_n(&cached[display][0], bounds.h, __ATOMIC_RELEASE);
+        if (announced != bounds.h)
             fprintf(stderr, "[sdl] encoche : écran %d annoncé en %dx%d points (plein écran sous la barre des menus) au lieu de %dx%d\n",
-                    display, bounds.w, cached[display][1], bounds.w, bounds.h);
-        return height == cached[display][0] ? cached[display][1] : height;
+                    display, bounds.w, announced, bounds.w, bounds.h);
+        return height == bounds.h ? announced : height;
     }
     return height;
 }
