@@ -511,7 +511,9 @@ static void haptic_fire(void) {
 // fenêtre), suivre la taille de la fenêtre, tourner la caméra.
 - (void)step {
     UIView *host = self.superview;
-    BOOL ui = rt_ios_game_ui_visible() != 0;
+    // App inactive (lifecycle_ios.m, pause servant la boucle d'UIKit) : comme en
+    // menu, doigts relâchés et plus aucune entrée envoyée au jeu.
+    BOOL ui = rt_ios_game_ui_visible() != 0 || rt_ios_app_state();
     if (ui != menu) {
         menu = ui;
         if (menu) [self releaseAll];
@@ -557,14 +559,15 @@ static void haptic_fire(void) {
     if (!backtap_motion) return;
     UIInterfaceOrientation o = self.window.windowScene.interfaceOrientation;
     atomic_store(&backtap_orient, o == UIInterfaceOrientationLandscapeLeft ? 1 : o == UIInterfaceOrientationLandscapeRight ? -1 : 0);
-    BOOL playing = !menu && !concealed && !rt_ios_app_state();   // app quittée (lifecycle_ios.m) : comme en menu
+    BOOL playing = !menu && !concealed;   // menu vaut aussi pour l'app quittée (step)
     atomic_store(&backtap_active, playing);
     // Capteurs arrêtés après 2 s sans partie (menu, surcouche cachée pour une
-    // manette ou un clavier, app quittée), relancés dès le retour en partie.
+    // manette ou un clavier), aussitôt si l'app est quittée (iOS peut la
+    // suspendre avant 2 s), relancés dès le retour en partie.
     CFTimeInterval now = CACurrentMediaTime();
     if (playing) backtapIdleSince = 0;
     else if (!backtapIdleSince) backtapIdleSince = now;
-    backtap_run(playing || now - backtapIdleSince < 2);
+    backtap_run(playing || (now - backtapIdleSince < 2 && !rt_ios_app_state()));   // app quittée : tout de suite
     int side = atomic_exchange(&backtap_pending, 0);
     if (side && !menu && !concealed && backtapHeld < 0) {
         backtapHeld = side < 0 ? MOUSE_LEFT : MOUSE_RIGHT;

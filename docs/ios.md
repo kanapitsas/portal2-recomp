@@ -200,7 +200,10 @@ work (`glFinish`; iOS kills an app that uses the GPU through OpenGL ES in the
 background, and refuses Metal submissions), suspends and detaches the OpenAL
 context, then waits, serving UIKit's run loop, until the app is active again
 (`UIApplicationDidBecomeActive`). Other game threads keep running (the guest
-lock is released while it waits). Log lines: `[ios] app inactive : jeu en
+lock is released while it waits). The touch overlay treats the pause like a
+menu (held fingers released, no input sent) and the back-tap sensors stop at
+once. A frame presented by another thread while in the background is
+dropped without any OpenGL call. Log lines: `[ios] app inactive : jeu en
 pause`, `[ios] app en arrière-plan`, `[ios] app active : reprise après N s`.
 
 | Variable | Default | Purpose |
@@ -281,8 +284,8 @@ phone vibrate for more than 150 ms: rise-time criterion dropped, vibration exclu
 looks like a tap (filtering it out would delay every shot).
 
 The motion sensors run only while a tap can be accepted: device motion
-updates stop after 2 s in a menu, with the overlay hidden for a controller or
-keyboard, or with the app inactive, and restart as soon as the game is back
+updates stop after 2 s in a menu or with the overlay hidden for a controller
+or keyboard, at once when the app becomes inactive, and restart as soon as the game is back
 (log: `[ios] tapes au dos : capteurs arrêtés` / `en marche`). The first 150 ms
 after a restart count as menu time, so the touch that closed the menu (handled
 by SDL, not the overlay) cannot fire a portal. Recordings and the dataset

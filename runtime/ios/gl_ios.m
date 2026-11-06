@@ -885,6 +885,9 @@ static void limit_frame_rate(void) {
 void rt_ios_draws_frame_end(void);
 _Atomic unsigned long rt_ios_frames;   // images présentées (thread du jeu ; lues par touch_controls.m, thread principal)
 void rt_ios_gl_swap_window(SDL_Window *window) {
+    // En arrière-plan (image d'un autre thread que le principal, arrêté par
+    // lifecycle_ios.m) : aucun appel GL, pas même un vidage : iOS tuerait l'app.
+    if (rt_ios_app_state() == 2) return;
     ++rt_ios_frames;
     rt_ios_draws_frame_end();
     gl4es_pre_swap();
@@ -898,9 +901,7 @@ void rt_ios_gl_swap_window(SDL_Window *window) {
     // P2_IOS_NO_PRESENT=1 (banc) : images rendues mais jamais présentées, donc
     // sans plafond de l'écran (qui arrondit à 120, 60, 40… i/s) ; l'écran reste
     // figé, la cadence du journal (P2_FRAME_LOG) est la vraie.
-    // En arrière-plan (une image d'un autre thread que le principal, arrêté par
-    // lifecycle_ios.m) : rien n'est présenté, iOS tuerait l'app.
-    if (RT_IOS_ENV_FLAG("P2_IOS_NO_PRESENT", 0) || rt_ios_app_state() == 2) {
+    if (RT_IOS_ENV_FLAG("P2_IOS_NO_PRESENT", 0)) {
         static void (*flush)(void);
         if (!flush) flush = dlsym(gles, "glFlush");
         flush();
