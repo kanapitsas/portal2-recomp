@@ -32,6 +32,7 @@ REGS.update({r[1:]: (r, 16, 0) for r in ['esp', 'ebp', 'esi', 'edi']})
 _MEMORY_OPERAND = re.compile(r'(?:(byte|word|dword|qword|xmmword) ptr )?(?:(gs|fs):)?\[(.*)\]')
 _RELOCATED_IMMEDIATE = re.compile(r'@c?0x[0-9a-f]+')
 _HEX_LITERAL = re.compile(r'0x[0-9a-f]+')
+_PIC_TABLE_LOAD = re.compile(r'dword ptr \[(\w+) \+ 4\*(\w+) ([+-]) (0x[0-9a-f]+)\]')
 _SWITCH_TABLE = re.compile(r'(?:dword ptr )?\[(?:4\*(\w+) \+ (0x[0-9a-f]+)|(0x[0-9a-f]+) \+ 4\*(\w+))\]')
 CC = dict(o='O', no='NO', b='B', c='B', nae='B', ae='AE', nb='AE', nc='AE',
           e='E', z='E', ne='NE', nz='NE', be='BE', na='BE', a='A', nbe='A',
@@ -675,6 +676,8 @@ class JumpTables:
     Recognised forms (GCC, i386):
       jmp dword ptr [4*I + T]                          absolute table (relocated)
       mov R, dword ptr [B + 4*I + D]; add R, B; jmp R  PIC table of GOT offsets, B = GOT
+      add R, dword ptr [R + 4*I + D]; jmp R            same, fused (R = GOT)
+    with up to MAX_NEUTRAL unrelated moves scheduled between the PIC steps.
     The bound comes from a preceding `cmp I, N; ja/jae`; otherwise entries are
     read while they remain plausible code addresses. Candidates are only an
     optimisation: the generated code compares the real computed target with
@@ -719,6 +722,26 @@ class JumpTables:
             out.append((pc,) + tuple(self.insns[pc]))
         return out
 
+    MAX_NEUTRAL = 3
+    NEUTRAL_OPS = frozenset({'mov', 'lea', 'movzx', 'movsx'})
+
+    def skip_neutral(self, history, start, protected):
+        """Index of the first instruction from `start` that is not a plain move
+        into a register outside `protected` (or a store to memory); None if
+        anything else, or more than MAX_NEUTRAL moves, comes first."""
+        families = {REGS[r][0] for r in protected if r in REGS}
+        for i in range(start, min(len(history), start + self.MAX_NEUTRAL + 1)):
+            _, _, op, args = history[i]
+            destination = args.split(',', 1)[0].strip()
+            if op not in self.NEUTRAL_OPS or ',' not in args:
+                return i
+            if destination in REGS:
+                if REGS[destination][0] in families:
+                    return i
+            elif not (op == 'mov' and destination.startswith(('dword ptr [', 'word ptr [', 'byte ptr ['))):
+                return i
+        return None
+
     def bound(self, history, index):
         """Number of table entries implied by `cmp index, N; ja` (None if unknown)."""
         aliases = {index}
@@ -751,22 +774,40 @@ class JumpTables:
         nxt, op, args = self.insns[pc]
         if op != 'jmp':
             return None
-        history = self.before(pc, 8)
+        history = self.before(pc, 12)
         m = _SWITCH_TABLE.fullmatch(args)
         if m:
             index = m[1] or m[4]; table = int(m[2] or m[3], 16); base = 0; rest = history
         elif args in REGS and REGS[args][1] == 32 and len(history) >= 2:
-            (_, _, add_op, add_args), (_, _, mov_op, mov_args) = history[0], history[1]
-            add = [x.strip() for x in add_args.split(',')]
-            m = re.fullmatch(r'dword ptr \[(\w+) \+ 4\*(\w+) ([+-]) (0x[0-9a-f]+)\]',
-                             mov_args.split(',', 1)[-1].strip())
-            if not (add_op == 'add' and add[0] == args and mov_op == 'mov' and m
-                    and mov_args.split(',')[0].strip() == args and add[1] == m[1]):
+            # GCC may schedule unrelated moves between the three instructions
+            # (`mov R, [B + 4*I - D]; mov ecx, [ebp - 0x2c]; add R, B; jmp R`).
+            at = self.skip_neutral(history, 0, {args})
+            if at is None:
                 return None
+            _, _, add_op, add_args = history[at]
+            add = [x.strip() for x in add_args.split(',', 1)]
+            if not (add_op == 'add' and len(add) == 2 and add[0] == args):
+                return None
+            fused = _PIC_TABLE_LOAD.fullmatch(add[1])
+            if fused:
+                # `add R, [R + 4*I - D]; jmp R`: R already holds the GOT.
+                if fused[1] != args:
+                    return None
+                m = fused
+            else:
+                if add[1] not in REGS:
+                    return None
+                at = self.skip_neutral(history, at + 1, {args, add[1]})
+                if at is None:
+                    return None
+                _, _, mov_op, mov_args = history[at]
+                m = _PIC_TABLE_LOAD.fullmatch(mov_args.split(',', 1)[-1].strip())
+                if not (mov_op == 'mov' and m and mov_args.split(',')[0].strip() == args and add[1] == m[1]):
+                    return None
             mod = self.module(pc)
             base = mod['gotplt'] if mod else 0
             displacement = int(m[4], 16) * (-1 if m[3] == '-' else 1)
-            table, index, rest = (base + displacement) & 0xffffffff, m[2], history[2:]
+            table, index, rest = (base + displacement) & 0xffffffff, m[2], history[at + 1:]
         else:
             return None
         if index not in REGS:
