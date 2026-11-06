@@ -205,6 +205,7 @@ profiles.
 | Rendering | Metal renderer through mtld3d (about +50 % fps on Mac), OpenGL fallback | ✅ |
 | iPhone | Single player at a steady 60 fps, touch controls, Settings page | ✅ |
 | iPhone | Portals fired by tapping the back of the phone | ✅ |
+| iPhone | Pause in the background, haptic feedback, 30/40 fps caps with auto power saving, MetalFX upscaling | 🚧 |
 | Install | One-command install (`setup.sh`) and a standalone Mac app | ✅ |
 | Co-op | LAN co-op: a Mac hosts, an iPhone or a second copy on the same Mac joins by IP address | ✅ |
 | Co-op | Find the host automatically on the local network (Bonjour), host/join in the iPhone settings | 🚧 |

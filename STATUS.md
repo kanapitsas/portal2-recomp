@@ -20,6 +20,14 @@ run and diagnostics instructions that used to live here are in
 [docs/usage.md](docs/usage.md#run); the conventions for native bridges are in
 [CLAUDE.md](CLAUDE.md).
 
+## 6 November 2026 — iPhone polish (branch feat/ios-polish, not yet tested on the phone)
+
+- 2026-11-06: iPhone: game data kept out of iCloud backups, game paused while
+  the app is inactive or in the background, touch overlay drawn with fixed
+  layers, back-tap sensors stopped outside gameplay, haptic tap on each portal
+  shot, 30/40 fps caps and auto power saving, MetalFX upscaling setting
+  ([docs/ios.md](docs/ios.md)).
+
 ## 30 October – 4 November 2026 — fixes, LAN co-op, roadmap (branches fix/audit-oct30, fix/lan-coop, merged)
 
 - 2026-11-04: `setup.sh`'s final summary also says which renderer the iPhone app uses.

@@ -425,5 +425,8 @@ Profile with `P2_PROFILE_RAW=1` before guessing.
   `runtime/ios/case_path.c` recover the actual case.
 - SDL never sees the game "capture" the mouse: the menu/gameplay state comes from the
   engine (`IEngineVGui::IsGameUIVisible`, `runtime/ios/game_state.c`).
-- Touch controls: a UIKit view placed on top of the window and force-drawn
-  (SDL's loop never commits UIKit transactions).
+- Touch controls: a UIKit view placed on top of the window, made of fixed
+  layers (one `CAShapeLayer` per stick and button, a small bitmap for the FPS
+  counter) moved without animation and flushed once per run-loop pass (SDL's
+  loop never commits UIKit transactions). It used to be a full-screen
+  `drawRect` at the native ×3 scale, redrawn on every finger move.
