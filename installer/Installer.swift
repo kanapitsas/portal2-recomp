@@ -289,6 +289,8 @@ nonisolated func unpackSource() throws {
         try? fm.removeItem(at: staging)
         throw installerError("could not unpack the source (tar exit \(r.status))")
     }
+    // tar copies the downloaded app's quarantine onto every file it extracts.
+    run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", staging.path])
     try fm.createDirectory(at: sourceDir, withIntermediateDirectories: true)
     fm.createFile(atPath: marker.path, contents: nil)
     // What survives: generated files and the local configuration.

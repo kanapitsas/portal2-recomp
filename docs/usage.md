@@ -214,8 +214,18 @@ Maintainer steps; users never need them.
    `HOST_DEPS_URL` and `HOST_DEPS_SHA256` in `setup.sh`. The script checks
    that every library is relocatable (`@rpath`), targets macOS 13 and holds
    no path of the build machine. Sources and checksums are Homebrew's.
-2. **Installer**: tag the release, run `tools/build_installer.sh` (the app
+2. **Signing, once per Mac**: a "Developer ID Application" certificate in
+   the keychain (Xcode > Settings > Accounts > your team > Manage
+   Certificates > + > Developer ID Application; the team's Account Holder
+   creates it) and a notarytool profile with an app-specific password from
+   account.apple.com:
+   `xcrun notarytool store-credentials p2-notary --apple-id <Apple ID> --team-id <team ID>`.
+3. **Installer**: tag the release, run `tools/build_installer.sh` (the app
    embeds `git archive HEAD`, so commit first) and upload
-   `build/installer/Portal-2-Installer-<tag>.zip`. It is ad hoc signed, not
-   notarized: users go through System Settings > Privacy & Security >
-   Open Anyway once.
+   `build/installer/Portal-2-Installer-<tag>.zip`. With the certificate and
+   the profile, the script signs with the hardened runtime, notarizes, staples
+   and checks the result with `spctl`; it prints which of these it did.
+   Without the certificate the app is ad hoc signed and users go through
+   System Settings > Privacy & Security > Open Anyway once.
+   `P2_SIGN_IDENTITY` picks another certificate, `P2_NOTARY_PROFILE` another
+   profile.

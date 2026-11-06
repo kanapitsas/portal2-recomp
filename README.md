@@ -88,9 +88,9 @@ share them.
 
 **Without Terminal**: download `Portal-2-Installer-<version>.zip` from the
 [latest release](https://github.com/kanapitsas/portal2-recomp/releases/latest),
-unzip it and open **Portal 2 Installer**. It is not notarized by Apple: the
-first time, macOS refuses to open it; go to System Settings > Privacy &
-Security and click **Open Anyway**. The installer checks the Xcode command
+unzip it and open **Portal 2 Installer** (signed and notarized by Apple; if
+macOS still refuses to open it, go to System Settings > Privacy & Security
+and click **Open Anyway**). The installer checks the Xcode command
 line tools (and offers to install them), finds the game and the Linux
 binaries (with the Steam console commands to paste when they are missing),
 then runs `setup.sh` for you. Its copy of the code and the build (about 5 GB)
