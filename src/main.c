@@ -4,6 +4,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+// Programme principal du jeu (tools/games.py) ; build_game.py le définit.
+#ifndef RT_GAME_PROGRAM
+#define RT_GAME_PROGRAM "portal2_linux"
+#endif
+
 static uint32_t guest_string(const char *value) {
     size_t length = strlen(value) + 1;
     uint32_t address = rt_alloc((uint32_t)length);
@@ -59,7 +64,7 @@ int main(int argc, char **argv) {
     int renderer = wants_d3d9(first, argc, argv);
     uint32_t count = 1, vector = rt_alloc(((uint32_t)(argc - first) + 3) * 4);
     if (!vector) { rt_destroy(); return 2; }
-    W32(vector, guest_string("portal2_linux"));
+    W32(vector, guest_string(RT_GAME_PROGRAM));
     for (int i = first; i < argc; ++i)
         if (renderer >= 0 || strcmp(argv[i], "-vulkan")) W32(vector + count++ * 4, guest_string(argv[i]));
     if (renderer > 0) W32(vector + count++ * 4, guest_string("-vulkan"));
@@ -75,14 +80,14 @@ int main(int argc, char **argv) {
         if (joined) { rt_procfs_set_cmdline(joined, total); free(joined); }
     }
     rt_loader_set_arguments(count, vector, 0);
-    const GuestModule *program = rt_find_module("portal2_linux");
+    const GuestModule *program = rt_find_module(RT_GAME_PROGRAM);
     uint32_t entry = program ? rt_module_symbol(program, "main") : 0;
-    if (!entry) { fputs("real portal2_linux main is absent\n", stderr); rt_destroy(); return 2; }
+    if (!entry) { fputs("real " RT_GAME_PROGRAM " main is absent\n", stderr); rt_destroy(); return 2; }
     if (rt_initialize_module(&cpu, program)) { rt_destroy(); return 2; }
     uint32_t args[] = {count, vector, 0};
-    fprintf(stderr, "entering recompiled portal2_linux main at %#x\n", entry);
+    fprintf(stderr, "entering recompiled " RT_GAME_PROGRAM " main at %#x\n", entry);
     int result = (int32_t)rt_invoke(&cpu, entry, args, 3);
-    fprintf(stderr, "portal2_linux main returned %d\n", result);
+    fprintf(stderr, RT_GAME_PROGRAM " main returned %d\n", result);
     rt_destroy();
     return result;
 }

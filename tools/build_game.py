@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 import time
+import games
 import lift
 import localconfig
 import peprep
@@ -44,13 +45,14 @@ PE_PLUGINS = ('mssmp3.asi', 'mssvoice.asi', 'binkawin.asi')
 KEEP_CONFIGURATIONS = 2   # objets conservés pour les deux derniers jeux d'options
 
 
-def roots(layout):
-    result = ['portal2_linux:symbol:main']
+def roots(layout, roots_file='config/game-roots.json'):
+    program = layout.get('program', 'portal2_linux')
+    result = [f'{program}:symbol:main']
     for module in layout['modules']:
-        if module['name'] in ('libtier0.so', 'libvstdlib.so', 'portal2_linux'):
+        if module['name'] in ('libtier0.so', 'libvstdlib.so', program):
             if module['init']: result.append(f'{module["name"]}:init:dt')
             result += [f'{module["name"]}:init:{i}' for i in range(len(module['init_array']))]
-    extra = Path('config/game-roots.json')
+    extra = Path(roots_file)
     if extra.exists(): result += json.loads(extra.read_text())
     return list(dict.fromkeys(result))
 
@@ -280,7 +282,8 @@ def main():
     started = time.time()
     layout = json.loads(args.layout.read_text())
     try:
-        manifest, generation_time = generate(args, layout, roots(layout))
+        game = games.profile(localconfig.load(args.config))
+        manifest, generation_time = generate(args, layout, roots(layout, game['roots']))
     except lift.Unsupported as exc:
         parser.exit(1, f'game lift: {exc}\n')
     plugin_sources, plugin_stats = generate_plugins(args.config)
@@ -303,7 +306,8 @@ def main():
     generated_flags = [f'-O{args.opt}', DEBUG[args.debug], *GENERATED_TUNING, *WARNINGS, *memory, *profile, '-Iruntime']
     sources = Path('build/game/gen/src')
     units = [(str(p), runtime_flags) for p in sorted(Path('runtime').glob('*.c'))]
-    units.append(('src/main.c', runtime_flags))
+    program = layout.get('program', 'portal2_linux')
+    units.append(('src/main.c', [*runtime_flags, f'-DRT_GAME_PROGRAM="{program}"']))
     units += [(str(sources / name), generated_flags) for name in sorted(manifest['shards'])]
     units.append((str(sources / 'dispatch.c'), generated_flags))
     units += [(str(p), generated_flags) for p in plugin_sources]

@@ -140,6 +140,7 @@ def main():
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', required=True)
+    ap.add_argument('--program', default='portal2_linux', help='main executable of the game')
     ap.add_argument('mods', nargs='+', help='path.so@0xBASE, in load order')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
@@ -154,7 +155,7 @@ def main():
     # la portée globale puis dans sa portée locale (lui-même et ses DT_NEEDED).
     # Ainsi server.so utilise sa propre copie statique de libprotobuf et non
     # celle de client.so (sinon : « File already exists in database »).
-    scopes = lookup_scopes(mods)
+    scopes = lookup_scopes(mods, a.program)
 
     def definition_for(module, name):
         for candidate in scopes[module.name]:
@@ -194,7 +195,7 @@ def main():
             return 0, None
         return thunk(name), 'libc'
 
-    meta_all = dict(imports=None, modules=[])
+    meta_all = dict(imports=None, modules=[], program=a.program)
     for m in mods:
         tls_sym_off = {}
         n_by_type = {}
@@ -225,8 +226,12 @@ def main():
                     m.put32(off, A + tls_symbol['value'])
                 continue
             symbolic = 16 in m.dyn or (m.dyn.get(30, 0) & 2)
-            local = sym['bind'] == 0 or (sym['shndx'] != 0 and (symbolic or sym.get('visibility', 0) in (1, 2, 3)))
-            if local:
+            if sym is None:   # relocation sans symbole (STN_UNDEF) : S = 0
+                S = 0
+            local = sym is None or sym['bind'] == 0 or (sym['shndx'] != 0 and (symbolic or sym.get('visibility', 0) in (1, 2, 3)))
+            if sym is None:
+                pass
+            elif local:
                 S = sym['value'] if sym['shndx'] == 0xfff1 else m.base + sym['value']
             else:
                 S, _ = lookup(m, sym['name'], sym['bind'] == 2, sym['type'], sym['size'])
