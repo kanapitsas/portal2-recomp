@@ -3,8 +3,12 @@
 # libsteam_api.dylib (inside Steamworks.NET 20.1.0), writes config/local.json,
 # recompiles the game and creates "Portal 2 Natif.app" in ~/Applications.
 # With --ios, also builds, signs and installs the iPhone app.
-# If Rust is installed (https://rustup.rs), it also builds libd3d9metal for the
-# Metal renderer; without it the game uses OpenGL. P2_NO_METAL=1 skips it.
+# Host libraries (SDL2, FreeType, Fontconfig) come from Homebrew when it has
+# them all, else from a prebuilt bundle downloaded from this project's GitHub
+# releases (SHA-256 checked; tools/build_host_deps.sh makes it).
+# P2_HOST_DEPS=homebrew or bundle forces one (P2_HOST_DEPS_URL: another copy). The Metal renderer's libd3d9metal
+# is built when Rust (https://rustup.rs) is installed, else taken prebuilt from
+# the same bundle. P2_NO_METAL=1 skips it: the game then uses OpenGL.
 #
 # usage: ./setup.sh [--ios] ["/path/to/Portal 2" ["/path/to/depot_661"]]
 #
@@ -12,6 +16,7 @@
 # looks where Steam puts them on this Mac (a Portal 2 install, or depots
 # fetched with the Steam console's download_depot command).
 #
+# P2_APP_DIR puts the app elsewhere than ~/Applications.
 # Re-running is safe: finished steps are skipped and unchanged code is not
 # recompiled. Downloads and iOS libraries go to ./deps (P2_DEPS overrides it).
 # Saves go to ~/Library/Application Support/Portal 2 Natif/userdata (config key
@@ -40,6 +45,11 @@ STEAM_SUPPORT="$HOME/Library/Application Support/Steam"
 # Metal renderer: libd3d9metal, built from mtld3d's native host branch (zlib).
 MTLD3D_URL="https://github.com/kanapitsas/mtld3d.git"
 MTLD3D_REV="101f37d3d45c760e95e20176f758b9d309c23885"   # feat/native-host, pinned
+# Prebuilt host libraries and libd3d9metal (built from MTLD3D_REV); see
+# tools/build_host_deps.sh, whose BUNDLE_VERSION this matches.
+HOST_DEPS_NAME="p2-host-deps-1-macos-arm64"
+HOST_DEPS_URL="${P2_HOST_DEPS_URL:-https://github.com/kanapitsas/portal2-recomp/releases/download/host-deps-1/$HOST_DEPS_NAME.tar.xz}"
+HOST_DEPS_SHA256="f5454da33fce938b70df1b7523df0a6884eba4249d5c9092898079964bb75b61"
 
 step() { printf '\n==> %s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
@@ -58,14 +68,25 @@ find_depot() {  # depot id -> folder written by the Steam console's download_dep
 [ "$(uname -s)" = Darwin ] && [ "$(uname -m)" = arm64 ] || die "this builds for Apple silicon: run it on an arm64 Mac"
 step "Checking tools"
 xcode-select -p >/dev/null 2>&1 || die "Xcode command line tools missing: xcode-select --install"
-need python3 "Install Python 3, e.g. brew install python"
+need python3 "It comes with the Xcode command line tools: xcode-select --install"
 python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' || die "Python 3.9 or newer is required"
 need objdump "It comes with the Xcode command line tools: xcode-select --install"
 need curl ""
 BREW_PREFIX=/opt/homebrew
-for lib in SDL2 freetype fontconfig; do
-    ls "$BREW_PREFIX/lib/lib$lib".* >/dev/null 2>&1 || die "lib$lib not found in $BREW_PREFIX/lib: brew install sdl2 freetype fontconfig"
-done
+brew_has_libs() {
+    local lib
+    for lib in SDL2 freetype fontconfig; do
+        ls "$BREW_PREFIX/lib/lib$lib".* >/dev/null 2>&1 || return 1
+    done
+    [ -f "$BREW_PREFIX/include/SDL2/SDL.h" ] && [ -d "$BREW_PREFIX/include/freetype2" ]
+}
+case "${P2_HOST_DEPS:-auto}" in
+    homebrew) brew_has_libs || die "P2_HOST_DEPS=homebrew but Homebrew lacks them: brew install sdl2 freetype fontconfig"
+              HOST_LIBS_FROM=homebrew ;;
+    bundle)   HOST_LIBS_FROM=bundle ;;
+    auto)     if brew_has_libs; then HOST_LIBS_FROM=homebrew; else HOST_LIBS_FROM=bundle; fi ;;
+    *) die "P2_HOST_DEPS must be homebrew or bundle, not $P2_HOST_DEPS" ;;
+esac
 if [ $IOS = 1 ]; then
     need xcodebuild "Install Xcode from the App Store, open it once, then: sudo xcode-select -s /Applications/Xcode.app"
     xcrun --sdk iphoneos --show-sdk-path >/dev/null 2>&1 || die "no iOS SDK: install Xcode (not only the command line tools) and select it with xcode-select -s"
@@ -144,9 +165,48 @@ if [ -z "$DYLIB" ] || [ ! -f "$DYLIB" ]; then
     fi
 fi
 
+# --- Prebuilt host libraries (when Homebrew's or Rust are missing) --------
+HOST_DEPS="$DEPS/$HOST_DEPS_NAME"
+METAL_WANTED=1
+[ -n "${P2_NO_METAL:-}" ] && [ "$P2_NO_METAL" != 0 ] && METAL_WANTED=0
+fetch_host_deps() {
+    [ -f "$HOST_DEPS/manifest.json" ] && return 0
+    step "Downloading prebuilt host libraries ($HOST_DEPS_NAME, about 4 MB)"
+    mkdir -p "$DEPS"
+    local archive="$DEPS/$HOST_DEPS_NAME.tar.xz" got tmp
+    if [ ! -f "$archive" ]; then
+        curl -fsSL --retry 3 -o "$archive.part" "$HOST_DEPS_URL" && mv "$archive.part" "$archive" \
+            || { rm -f "$archive.part"; return 1; }
+    fi
+    got=$(shasum -a 256 "$archive" | cut -d' ' -f1)
+    [ "$got" = "$HOST_DEPS_SHA256" ] || { warn "$archive: SHA-256 $got, expected $HOST_DEPS_SHA256"; rm -f "$archive"; return 1; }
+    tmp=$(mktemp -d "$DEPS/.host-deps.XXXXXX")
+    tar -xJf "$archive" -C "$tmp" && [ -f "$tmp/$HOST_DEPS_NAME/manifest.json" ] || { rm -rf "$tmp"; return 1; }
+    rm -rf "$HOST_DEPS" && mv "$tmp/$HOST_DEPS_NAME" "$HOST_DEPS" && rm -rf "$tmp" "$archive"
+}
+HOST_PREFIX=""   # empty: Homebrew
+if [ $HOST_LIBS_FROM = bundle ]; then
+    python3 -c 'import platform, sys; sys.exit(tuple(map(int, platform.mac_ver()[0].split(".")[:2])) < (13, 0))' \
+        || die "the prebuilt libraries need macOS 13 or newer; on older macOS: brew install sdl2 freetype fontconfig"
+    fetch_host_deps || die "could not get the prebuilt host libraries from $HOST_DEPS_URL.
+  Check the connection and re-run, or install Homebrew's: brew install sdl2 freetype fontconfig"
+    HOST_PREFIX="$HOST_DEPS"
+    echo "host libraries: prebuilt ($HOST_DEPS)"
+else
+    echo "host libraries: Homebrew ($BREW_PREFIX)"
+fi
+# The bundle's libd3d9metal, when built from the same mtld3d commit as ours.
+prebuilt_d3d9metal() {
+    [ -f "$HOST_DEPS/lib/libd3d9metal.dylib" ] || fetch_host_deps || return 1
+    python3 -c 'import json,sys; sys.exit(json.load(open(sys.argv[1])).get("mtld3d_rev") != sys.argv[2])' \
+        "$HOST_DEPS/manifest.json" "$MTLD3D_REV" || return 1
+    D3D9METAL="$HOST_DEPS/lib/libd3d9metal.dylib"
+}
+
 # --- Metal renderer: libd3d9metal (optional) -----------------------------
-# Built from a pinned commit of mtld3d's native host branch. Any problem here
-# only costs the Metal renderer: the game then uses OpenGL.
+# Built from a pinned commit of mtld3d's native host branch, or prebuilt from
+# the same commit without Rust. Any problem here only costs the Metal renderer:
+# the game then uses OpenGL.
 D3D9METAL=""
 D3D9METAL_IOS=""
 METAL_SRC="$DEPS/mtld3d-native"        # owned by setup.sh (marker file); never a checkout of yours
@@ -161,8 +221,13 @@ fetch_mtld3d() {
 }
 build_d3d9metal() {
     if ! command -v cargo >/dev/null 2>&1; then
-        warn "Rust not found: the game will use OpenGL. For the faster Metal renderer,
-  install Rust (https://rustup.rs) and re-run ./setup.sh."
+        if prebuilt_d3d9metal; then
+            echo "Metal renderer: prebuilt libd3d9metal (Rust not found)"
+        else
+            warn "Rust not found and no prebuilt libd3d9metal: the game will use OpenGL. For the
+  faster Metal renderer, install Rust (https://rustup.rs) and re-run ./setup.sh."
+        fi
+        [ $IOS = 1 ] && warn "the iPhone app needs Rust for Metal (https://rustup.rs): it will use OpenGL"
         return 0
     fi
     step "Building libd3d9metal for the Metal renderer (a few minutes the first time)"
@@ -187,7 +252,7 @@ build_d3d9metal() {
     fi
 }
 METAL_OFF=0
-if [ -n "${P2_NO_METAL:-}" ] && [ "$P2_NO_METAL" != 0 ]; then
+if [ $METAL_WANTED = 0 ]; then
     echo "P2_NO_METAL set: OpenGL renderer only"
     METAL_OFF=1
 else
@@ -211,14 +276,17 @@ fi
 # --- config/local.json ----------------------------------------------------
 step "Writing config/local.json"
 mkdir -p "$REPO/config"
-python3 - "$CONFIG" "$GAME" "$LINUX" "$DYLIB" "$TEAM" "$D3D9METAL" "$D3D9METAL_IOS" "$METAL_OFF" <<'EOF'
+python3 - "$CONFIG" "$GAME" "$LINUX" "$DYLIB" "$TEAM" "$D3D9METAL" "$D3D9METAL_IOS" "$METAL_OFF" "$HOST_PREFIX" <<'EOF'
 import json, os, sys
 from pathlib import Path
-path, game, linux, dylib, team, metal, metal_ios, metal_off = sys.argv[1:]
+path, game, linux, dylib, team, metal, metal_ios, metal_off, host_prefix = sys.argv[1:]
 p = Path(path)
 config = json.loads(p.read_text()) if p.exists() else {}
 fresh = not config
 config.update(game_root=os.path.normpath(game), linux_root=os.path.normpath(linux), steam_api_dylib=os.path.normpath(dylib))
+# Host libraries: the prebuilt bundle's prefix, or none for Homebrew (tools/localconfig.py).
+if host_prefix: config['host_prefix'] = host_prefix
+else: config.pop('host_prefix', None)
 # Metal renderer: recorded when built here; P2_NO_METAL=1 removes it; a path
 # that still exists (set by hand, or by an earlier run) is otherwise kept, and
 # a stale one is dropped (tools/build_ios.py refuses a missing library instead
@@ -254,8 +322,9 @@ step "Preparing the Linux modules"
 python3 tools/gameprep.py
 step "Recompiling the game (about 10 minutes the first time, seconds afterwards)"
 python3 tools/build_game.py --release
-step "Creating ~/Applications/Portal 2 Natif.app"
-python3 tools/make_app.py
+APP_DIR="${P2_APP_DIR:-$HOME/Applications}"
+step "Creating $APP_DIR/Portal 2 Natif.app"
+python3 tools/make_app.py --dest "$APP_DIR"
 
 # --- iOS ------------------------------------------------------------------
 if [ $IOS = 1 ]; then
@@ -297,15 +366,16 @@ SAVES_DIR="$(config_get user_dir)"
 SAVES_DIR="${SAVES_DIR:-$HOME/Library/Application Support/Portal 2 Natif/userdata}"
 D3D9METAL="${D3D9METAL:-$(config_get d3d9metal_dylib)}"
 if [ -n "$D3D9METAL" ]; then RENDERER="Metal (libd3d9metal); P2_RENDERER=opengl forces OpenGL"
-else RENDERER="OpenGL (install Rust from https://rustup.rs and re-run for Metal)"; fi
+elif [ $METAL_OFF = 1 ]; then RENDERER="OpenGL (P2_NO_METAL set)"
+else RENDERER="OpenGL (libd3d9metal unavailable: see the warning above)"; fi
 cat <<EOF
 
-Done: ~/Applications/Portal 2 Natif.app
+Done: $APP_DIR/Portal 2 Natif.app
 - Renderer: ${RENDERER}
 - Start Steam and sign in with the account that owns Portal 2, then open the app
   (it starts Steam itself if needed). Log: ~/Library/Logs/Portal2Natif.log
-- The app carries its own copy of the game binary and libraries: Homebrew is only
-  needed to rebuild. After a rebuild, run python3 tools/make_app.py to update it.
+- The app carries its own copy of the game binary and libraries; after a rebuild,
+  run python3 tools/make_app.py to update it.
 - Keep the build to yourself: it is made from Valve's game.
 - The app carries its own prepared modules; saves and settings are in
   ${SAVES_DIR}. The game files stay where Steam put them.
