@@ -95,9 +95,15 @@ def macho_deps(path):
     return [d for d in deps if d not in ident]
 
 
+def parse_rpaths(otool_l):
+    """LC_RPATH paths of `otool -l` output; a path may contain spaces."""
+    out = otool_l.splitlines()
+    return [out[i + 2].strip()[len('path '):].rsplit(' (offset', 1)[0]
+            for i, line in enumerate(out) if line.strip() == 'cmd LC_RPATH']
+
+
 def macho_rpaths(path):
-    out = run('otool', '-l', str(path)).splitlines()
-    return [out[i + 2].split()[1] for i, line in enumerate(out) if line.strip() == 'cmd LC_RPATH']
+    return parse_rpaths(run('otool', '-l', str(path)))
 
 
 def resolve_dep(dep, loader, executable):

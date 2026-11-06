@@ -132,6 +132,20 @@ class BundleLibrariesTests(unittest.TestCase):
             make_app.bundle_libraries(app, binary, tmp / 'no-prefix')
             self.assertEqual(make_app.macho_rpaths(app / 'Contents/MacOS/portal2-native'), [make_app.FRAMEWORKS_RPATH])
 
+    def test_rpaths_with_spaces(self):
+        # The installer builds in ~/Library/Application Support/Portal 2 Natif Build.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'main.c').write_text('int main(void) { return 0; }\n')
+            binary = tmp / 'a.out'
+            prefix = '/Users/me/Library/Application Support/Portal 2 Natif Build/deps/lib'
+            subprocess.run(['clang', str(tmp / 'main.c'), f'-Wl,-rpath,{prefix}', '-o', str(binary)], check=True)
+            self.assertEqual(make_app.macho_rpaths(binary), [prefix])
+            app = tmp / 'Test.app'
+            (app / 'Contents/MacOS').mkdir(parents=True)
+            make_app.bundle_libraries(app, binary, tmp / 'no-prefix')
+            self.assertEqual(make_app.macho_rpaths(app / 'Contents/MacOS/portal2-native'), [make_app.FRAMEWORKS_RPATH])
+
     def test_sdl3_found_in_homebrew_keg_or_bundle_lib(self):
         with tempfile.TemporaryDirectory() as tmp:
             prefix = Path(tmp)

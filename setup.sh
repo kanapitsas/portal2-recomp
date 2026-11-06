@@ -169,8 +169,15 @@ fi
 HOST_DEPS="$DEPS/$HOST_DEPS_NAME"
 METAL_WANTED=1
 [ -n "${P2_NO_METAL:-}" ] && [ "$P2_NO_METAL" != 0 ] && METAL_WANTED=0
+host_deps_complete() {
+    local f
+    for f in manifest.json etc/fonts/fonts.conf include/SDL2/SDL.h include/freetype2/ft2build.h \
+             lib/libSDL2.dylib lib/libSDL3.dylib lib/libfreetype.dylib lib/libfontconfig.dylib lib/libd3d9metal.dylib; do
+        [ -e "$HOST_DEPS/$f" ] || return 1
+    done
+}
 fetch_host_deps() {
-    [ -f "$HOST_DEPS/manifest.json" ] && return 0
+    host_deps_complete && return 0
     step "Downloading prebuilt host libraries ($HOST_DEPS_NAME, about 4 MB)"
     mkdir -p "$DEPS"
     local archive="$DEPS/$HOST_DEPS_NAME.tar.xz" got tmp
@@ -183,6 +190,7 @@ fetch_host_deps() {
     tmp=$(mktemp -d "$DEPS/.host-deps.XXXXXX")
     tar -xJf "$archive" -C "$tmp" && [ -f "$tmp/$HOST_DEPS_NAME/manifest.json" ] || { rm -rf "$tmp"; return 1; }
     rm -rf "$HOST_DEPS" && mv "$tmp/$HOST_DEPS_NAME" "$HOST_DEPS" && rm -rf "$tmp" "$archive"
+    host_deps_complete || { warn "$HOST_DEPS is incomplete"; rm -rf "$HOST_DEPS"; return 1; }
 }
 HOST_PREFIX=""   # empty: Homebrew
 step "Host libraries (SDL2, FreeType, Fontconfig)"
@@ -198,7 +206,7 @@ else
 fi
 # The bundle's libd3d9metal, when built from the same mtld3d commit as ours.
 prebuilt_d3d9metal() {
-    [ -f "$HOST_DEPS/lib/libd3d9metal.dylib" ] || fetch_host_deps || return 1
+    fetch_host_deps || return 1
     python3 -c 'import json,sys; sys.exit(json.load(open(sys.argv[1])).get("mtld3d_rev") != sys.argv[2])' \
         "$HOST_DEPS/manifest.json" "$MTLD3D_REV" || return 1
     D3D9METAL="$HOST_DEPS/lib/libd3d9metal.dylib"

@@ -10,7 +10,9 @@ import AppKit
 import SwiftUI
 
 let appName = "Portal 2 Natif"
-let home = FileManager.default.homeDirectoryForCurrentUser
+// $HOME first (the same folder for a Finder app), so tests can point elsewhere.
+let home = ProcessInfo.processInfo.environment["HOME"].map { URL(fileURLWithPath: $0) }
+    ?? FileManager.default.homeDirectoryForCurrentUser
 let support = home.appendingPathComponent("Library/Application Support/\(appName)")
 // Source and build (~5 GB), apart from the saves in `support`: uninstall.sh
 // trashes it with the app.
@@ -174,21 +176,27 @@ final class Installer: ObservableObject {
         FileManager.default.createFile(atPath: logFile.path, contents: nil)
         let logHandle = try? FileHandle(forWritingTo: logFile)
         let buffer = LineBuffer()
+        // Everything happens on the handler's serial queue: the last bytes are
+        // read and logged before the exit status is looked at (end of file).
         pipe.fileHandleForReading.readabilityHandler = { handle in
             let chunk = handle.availableData
-            guard !chunk.isEmpty else { return }
-            logHandle?.write(chunk)
-            let lines = buffer.append(chunk)
-            if !lines.isEmpty { Task { @MainActor in self.consume(lines) } }
-        }
-        p.terminationHandler = { proc in
-            pipe.fileHandleForReading.readabilityHandler = nil
+            if !chunk.isEmpty {
+                logHandle?.write(chunk)
+                let lines = buffer.append(chunk)
+                if !lines.isEmpty { Task { @MainActor in self.consume(lines) } }
+                return
+            }
+            handle.readabilityHandler = nil
             try? logHandle?.close()
+            let rest = buffer.flush()
+            p.waitUntilExit()
+            let status = p.terminationStatus
             Task { @MainActor in
-                if proc.terminationStatus == 0 {
+                self.consume(rest)
+                if status == 0 {
                     self.phase = .done
                 } else {
-                    let error = self.log.last { $0.hasPrefix("error:") } ?? "setup.sh stopped (exit \(proc.terminationStatus))."
+                    let error = self.log.last { $0.hasPrefix("error:") } ?? "setup.sh stopped (exit \(status))."
                     self.phase = .failed(error.replacingOccurrences(of: "error: ", with: ""))
                     self.showLog = true
                 }
@@ -246,17 +254,45 @@ final class LineBuffer: @unchecked Sendable {
         }
         return lines
     }
+    /// The unterminated last line, if any.
+    func flush() -> [String] {
+        defer { pending = Data() }
+        return pending.isEmpty ? [] : [String(decoding: pending, as: UTF8.self)]
+    }
 }
 
 /// Replaces the source in Application Support by the bundled snapshot. build/,
 /// deps/ and config/local.json survive, so a new version rebuilds incrementally.
+/// The snapshot is unpacked beside the folder first (a failure leaves the old
+/// source), and a folder without the installer's marker is never touched.
+let ownerMarker = ".portal2-installer"
+
+func installerError(_ message: String) -> NSError {
+    NSError(domain: "installer", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+}
+
 nonisolated func unpackSource() throws {
     guard let archive = Bundle.main.url(forResource: "source", withExtension: "tar.gz") else {
-        throw NSError(domain: "installer", code: 1, userInfo: [NSLocalizedDescriptionKey: "source.tar.gz missing from the app"])
+        throw installerError("source.tar.gz is missing from the app")
     }
     let fm = FileManager.default
+    let marker = sourceDir.appendingPathComponent(ownerMarker)
+    if fm.fileExists(atPath: sourceDir.path), !fm.fileExists(atPath: marker.path),
+       !(try fm.contentsOfDirectory(atPath: sourceDir.path)).isEmpty {
+        throw installerError("\(sourceDir.path) exists and was not made by this installer: move it away and try again")
+    }
+    let staging = sourceDir.deletingLastPathComponent().appendingPathComponent(".\(sourceDir.lastPathComponent).staging")
+    try? fm.removeItem(at: staging)
+    try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+    let r = run("/usr/bin/tar", ["-xzf", archive.path, "-C", staging.path])
+    guard r.status == 0 else {
+        try? fm.removeItem(at: staging)
+        throw installerError("could not unpack the source (tar exit \(r.status))")
+    }
     try fm.createDirectory(at: sourceDir, withIntermediateDirectories: true)
-    let keep: Set<String> = ["build", "deps", "config"]
+    fm.createFile(atPath: marker.path, contents: nil)
+    // What survives: generated files and the local configuration.
+    let keep: Set<String> = ["build", "deps", "config", ownerMarker]
     for name in try fm.contentsOfDirectory(atPath: sourceDir.path) where !keep.contains(name) {
         try fm.removeItem(at: sourceDir.appendingPathComponent(name))
     }
@@ -266,10 +302,17 @@ nonisolated func unpackSource() throws {
             try fm.removeItem(at: config.appendingPathComponent(name))
         }
     }
-    let r = run("/usr/bin/tar", ["-xzf", archive.path, "-C", sourceDir.path])
-    guard r.status == 0 else {
-        throw NSError(domain: "installer", code: 2, userInfo: [NSLocalizedDescriptionKey: "tar failed (\(r.status))"])
+    for name in try fm.contentsOfDirectory(atPath: staging.path) {
+        let from = staging.appendingPathComponent(name), to = sourceDir.appendingPathComponent(name)
+        if name == "config", isDir(to) {
+            for item in try fm.contentsOfDirectory(atPath: from.path) {
+                try fm.moveItem(at: from.appendingPathComponent(item), to: to.appendingPathComponent(item))
+            }
+        } else {
+            try fm.moveItem(at: from, to: to)
+        }
     }
+    try fm.removeItem(at: staging)
 }
 
 // MARK: - Views
@@ -477,6 +520,10 @@ enum Main {
                 p = Installer.progress(after: line, from: p)
                 print(String(format: "%.3f", p), line)
             }
+            return
+        }
+        if args.contains("--unpack") {   // tests: unpack into sourceDir and exit
+            do { try unpackSource(); print("unpacked into", sourceDir.path) } catch { print("error:", error.localizedDescription); exit(1) }
             return
         }
         if args.contains("--detect") {
