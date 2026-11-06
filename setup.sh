@@ -185,6 +185,7 @@ fetch_host_deps() {
     rm -rf "$HOST_DEPS" && mv "$tmp/$HOST_DEPS_NAME" "$HOST_DEPS" && rm -rf "$tmp" "$archive"
 }
 HOST_PREFIX=""   # empty: Homebrew
+step "Host libraries (SDL2, FreeType, Fontconfig)"
 if [ $HOST_LIBS_FROM = bundle ]; then
     python3 -c 'import platform, sys; sys.exit(tuple(map(int, platform.mac_ver()[0].split(".")[:2])) < (13, 0))' \
         || die "the prebuilt libraries need macOS 13 or newer; on older macOS: brew install sdl2 freetype fontconfig"

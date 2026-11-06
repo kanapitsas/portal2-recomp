@@ -198,11 +198,15 @@ def compile_units(units, cache, jobs, compiler_identity):
         return source, None, time.time() - started
 
     seconds, failures = 0.0, []
+    started = time.time()
+    step = max(1, len(planned) // 10)   # une ligne par dixième, comme « lifted » (lue par l'installeur)
     with ThreadPoolExecutor(max_workers=jobs) as pool:
-        for source, error, elapsed in pool.map(run, planned):
+        for done, (source, error, elapsed) in enumerate(pool.map(run, planned), 1):
             seconds += elapsed
             if error:
                 failures.append(f'{source}:\n{error[:4000]}')
+            if len(planned) >= 20 and (done % step == 0 or done == len(planned)):
+                print(f'  compiled {done}/{len(planned)} files, {time.time() - started:.0f} s', flush=True)
     if failures:
         raise SystemExit('compilation failed:\n' + '\n'.join(failures[:5]))
     return objects, len(planned), seconds
