@@ -9,7 +9,7 @@
 // SHIMS: ftruncate fdopen freopen tmpfile tmpnam mkstemp mkfifo creat dup dup2 pipe
 // SHIMS: pathconf faccessat futimes utimes flock __xmknod setvbuf ungetc getwc ungetwc
 // SHIMS: putwc putchar writev ioctl fcntl fcntl64
-// SHIMS: __assert_fail ctermid isatty setbuf freopen64 tcgetattr tcsetattr shm_open
+// SHIMS: __assert_fail ctermid isatty setbuf freopen64 shm_open
 #include "posix.h"
 int rt_trace_files(const char *path);   // libc.c
 #include "modules.h"
@@ -475,13 +475,6 @@ static int posix_shim(CPU *c, const char *name) {
         int result = isatty((int32_t)arg(c, 0));
         if (!result) rt_save_errno(c);
         c->eax = (uint32_t)result;
-    } else if (!strcmp(name, "tcgetattr") || !strcmp(name, "tcsetattr")) {
-        // La struct termios Linux n'a ni la taille ni les bits de celle de Darwin : seuls les
-        // descripteurs qui ne sont pas des terminaux (ENOTTY, le cas du jeu) sont traités.
-        int fd = (int32_t)arg(c, 0);
-        if (fcntl(fd, F_GETFD) < 0) { rt_save_errno(c); c->eax = UINT32_MAX; return 1; }
-        if (!isatty(fd)) { fail(c, 25); return 1; }
-        rt_trap(c, c->eip, "terminal attributes (struct termios) are not translated");
     } else if (!strcmp(name, "setbuf")) {   // setvbuf(fp, buf, buf ? _IOFBF : _IONBF, BUFSIZ = 8192)
         FILE *file = rt_stream_file(c, arg(c, 0));
         uint32_t buffer = arg(c, 1);
