@@ -103,8 +103,14 @@ in the environment.)
   `D3DLOCKED_BOX` (12 → 16). Offsets are `_Static_assert`ed in `d3d9.c`.
 - Not bridged (logged once, `E_NOTIMPL` or 0): `RegisterSoftwareDevice`,
   `GetAdapterMonitor`, `DrawRectPatch`, `DrawTriPatch`, `GetDC`, `ReleaseDC`,
-  `SetPrivateData` with `D3DSPD_IUNKNOWN`, `QueryInterface` for interfaces
-  outside d3d9 (e.g. `IDirect3DDevice9Ex`). `pSharedHandle` is ignored.
+  `SetPrivateData` with `D3DSPD_IUNKNOWN`, `CheckResourceResidency`,
+  `GetPresentStats` (`D3DPRESENTSTATS` holds 64-bit counters aligned
+  differently on i386), `QueryInterface` for interfaces outside d3d9.
+  `pSharedHandle` is ignored.
+- D3D9Ex: `Direct3DCreate9Ex` calls the export of the same name in the native
+  library (optional: without it, `D3DERR_NOTAVAILABLE`). `IDirect3D9Ex`,
+  `IDirect3DDevice9Ex` and `IDirect3DSwapChain9Ex` are bridged; Half-Life 2
+  needs them (Portal 2 only uses `Direct3DCreate9`).
 
 ## What the native library must do (beyond `runtime/d3d9/d3d9metal.h`)
 

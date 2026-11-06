@@ -38,6 +38,8 @@ share them.
 - **Install**: the Portal 2 Installer app from the
   [releases](https://github.com/kanapitsas/portal2-recomp/releases), or one
   command, `setup.sh`. Only the Xcode command line tools are required.
+- **Half-Life 2** (experimental): a save loads and plays on Mac; see
+  [docs/hl2.md](docs/hl2.md).
 
 ## How it works
 
