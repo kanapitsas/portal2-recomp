@@ -85,6 +85,12 @@ RT_CHECK(glibc_extra_signal_and_valloc) {
     assert(small && !(small & 0xfff) && large && !(large & 0xfff) && small != large);
     assert(rt_heap_usable_size(small) >= 100 && rt_heap_usable_size(large) >= 0x12345);
     assert(!rt_free(small) && !rt_free(large));
+    uint32_t m16 = call("memalign", 2, 16, 40), m256 = call("memalign", 2, 256, 40);
+    assert(m16 && !(m16 & 15) && m256 && !(m256 & 255) && !rt_free(m16) && !rt_free(m256));
+    assert(call("memalign", 2, 24, 40) == 0);                                 // pas une puissance de 2
+    next_data = DATA; uint32_t out = put("\0\0\0\0", 4);
+    assert(call("posix_memalign", 3, out, 64, 100) == 0 && R32(out) && !(R32(out) & 63) && !rt_free(R32(out)));
+    assert(call("posix_memalign", 3, out, 2, 100) == 22);                     // < sizeof(void *)
     uint32_t again = call("valloc", 1, 0x1000);
     assert(again && !(again & 0xfff) && !rt_free(again));
 }
@@ -96,4 +102,54 @@ RT_CHECK(glibc_extra_dladdr_outside_modules) {
     assert(call("backtrace", 2, info, 0) == 0);
     W32(STACK + 8, 0);
     assert(call("backtrace", 2, info, 4) == 1 && R32(info) == RT_RETURN_SENTINEL);
+}
+
+static double st0(CPU *c) { return c->st[c->ftop & 7]; }
+RT_CHECK(glibc_extra_math_and_wide) {
+    next_data = DATA;
+    W32(STACK, 0); WD(STACK, 2.25);
+    CPU c; rt_cpu_reset(&c); c.esp = STACK; rt_call(&c, rt_dynamic_import("sqrt"), RT_RETURN_SENTINEL);
+    assert(st0(&c) == 1.5);
+    WF(STACK, 3.0f); rt_cpu_reset(&c); c.esp = STACK; rt_call(&c, rt_dynamic_import("exp2f"), RT_RETURN_SENTINEL);
+    assert(st0(&c) == 8.0);
+    WF(STACK, -1.0f); WF(STACK + 4, 2.0f);
+    rt_cpu_reset(&c); c.esp = STACK; rt_call(&c, rt_dynamic_import("fmaxf"), RT_RETURN_SENTINEL); assert(st0(&c) == 2.0);
+    rt_cpu_reset(&c); c.esp = STACK; rt_call(&c, rt_dynamic_import("fminf"), RT_RETURN_SENTINEL); assert(st0(&c) == -1.0);
+
+    uint32_t number = put("1\0\0\0" "2\0\0\0" "3\0\0\0" "4\0\0\0" "5\0\0\0" "6\0\0\0" "7\0\0\0" "8\0\0\0" "9\0\0\0" "0\0\0\0" "1\0\0\0" "2\0\0\0" "\0\0\0\0", 52);
+    W32(STACK, number); W32(STACK + 4, 0); W32(STACK + 8, 10);
+    rt_cpu_reset(&c); c.esp = STACK; rt_call(&c, rt_dynamic_import("wcstoll"), RT_RETURN_SENTINEL);
+    assert(((uint64_t)c.edx << 32 | c.eax) == UINT64_C(123456789012));   // au-delà de 32 bits
+
+    uint32_t dst = put("", 64), src = put("a\0\0\0b\0\0\0\0\0\0\0", 12);
+    assert(call("__wcsncpy_chk", 4, dst, src, 4, 16) == dst && R32(dst) == 'a' && R32(dst + 4) == 'b' && R32(dst + 12) == 0);
+    assert(call("__wcscat_chk", 3, dst, src, 16) == dst && R32(dst + 8) == 'a' && R32(dst + 16) == 0);
+    uint32_t narrow = put("", 8);
+    assert(call("__wcstombs_chk", 4, narrow, src, 8, 8) == 2 && !strcmp(GPTR(narrow), "ab"));
+    uint32_t text = put("", 32), format = put("%\0\0\0d\0\0\0\0\0\0\0", 12);
+    W32(STACK, text); W32(STACK + 4, 8); W32(STACK + 8, 1); W32(STACK + 12, 8); W32(STACK + 16, format); W32(STACK + 20, 42);
+    rt_cpu_reset(&c); c.esp = STACK; rt_call(&c, rt_dynamic_import("__swprintf_chk"), RT_RETURN_SENTINEL);
+    assert(c.eax == 2 && R32(text) == '4' && R32(text + 4) == '2' && R32(text + 8) == 0);
+    uint32_t copy = put("", 8);
+    assert(call("__stpcpy_chk", 3, copy, str("abc"), 8) == copy + 3 && !strcmp(GPTR(copy), "abc"));
+}
+
+RT_CHECK(glibc_extra_time_terminal_threads) {
+    next_data = DATA;
+    uint32_t request = put("\0\0\0\0\x40\x42\x0f\0", 8);       // 0 s, 1 ms
+    assert(call("nanosleep", 2, request, 0) == 0);
+    W32(request + 4, 1000000000u);
+    assert(call("nanosleep", 2, request, 0) == UINT32_MAX);    // tv_nsec hors bornes : EINVAL
+    assert(call("sleep", 1, 0) == 0);
+    uint32_t tms = put("", 16);
+    uint32_t ticks = call("times", 1, tms);
+    assert(ticks > 0 && R32(tms + 4) == 0);
+    int fds[2]; assert(!pipe(fds));
+    assert(call("isatty", 1, fds[0]) == 0);
+    assert(call("tcgetattr", 2, fds[0], put("", 64)) == UINT32_MAX);   // ENOTTY sur un tube
+    close(fds[0]); close(fds[1]);
+    assert(!strcmp(GPTR(call("ctermid", 1, 0)), "/dev/tty"));
+    assert(call("pthread_setname_np", 2, 0x12345678u, str("a-name-longer-than-15")) == 34);   // ERANGE
+    assert(call("signal", 2, 13, 1) == 0 && call("raise", 1, 13) == 0);   // SIGPIPE ignoré : raise sans effet
+    assert(call("signal", 2, 13, 0) == 1);
 }

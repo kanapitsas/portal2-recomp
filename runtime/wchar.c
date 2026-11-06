@@ -12,6 +12,7 @@
 // __value = bits déjà décodés.
 //
 // SHIMS: wcslen wcscpy wcsncpy wcscat wcsncat wcscmp wcsncmp wcschr wcsrchr wcsstr
+// SHIMS: wcstoll __wcsncpy_chk __wcscat_chk __wcstombs_chk
 // SHIMS: wcscoll __wcscoll_l __wcsxfrm_l wcstol wcstod wcstof
 // SHIMS: wmemchr wmemcmp wmemcpy wmemmove wmemset
 // SHIMS: towlower towupper iswalnum iswalpha iswblank iswcntrl iswdigit iswgraph iswlower
@@ -237,6 +238,25 @@ static int wchar_shim(CPU *c, const char *name) {
         if (errno) rt_save_errno(c);
         if (b) W32(b, end == text ? a : start + 4 * (uint32_t)(end - text));
         free(text); c->eax = (uint32_t)(int32_t)value;
+    } else if (!strcmp(name, "wcstoll")) {
+        a = arg(c, 0); b = arg(c, 1); int base = (int32_t)arg(c, 2);
+        if (base == 1 || base < 0 || base > 36) { rt_set_errno(c, 22); c->eax = c->edx = 0; return 1; }
+        uint32_t start; char *text = narrow_number(c, a, &start), *end;
+        errno = 0;
+        long long value = strtoll_l(text, &end, base, host_c());
+        if (errno) rt_save_errno(c);
+        if (b) W32(b, end == text ? a : start + 4 * (uint32_t)(end - text));
+        free(text);
+        c->eax = (uint32_t)(uint64_t)value; c->edx = (uint32_t)((uint64_t)value >> 32);
+    } else if (!strcmp(name, "__wcsncpy_chk") || !strcmp(name, "__wcscat_chk") || !strcmp(name, "__wcstombs_chk")) {
+        // _FORTIFY_SOURCE : taille de destination en wchar_t (en octets pour wcstombs), puis
+        // l'opération normale ; les arguments de tête ont la même place.
+        uint32_t room = arg(c, !strcmp(name, "__wcscat_chk") ? 2 : 3), need;
+        if (!strcmp(name, "__wcsncpy_chk")) need = arg(c, 2);
+        else if (!strcmp(name, "__wcstombs_chk")) need = arg(c, 0) ? arg(c, 2) : 0;
+        else { uint32_t end = wlen(c, arg(c, 0)), add = wlen(c, arg(c, 1)); need = end + add + 1; }
+        if (room < need) rt_trap(c, c->eip, "*** buffer overflow detected ***: terminated (__chk_fail)");
+        return rt_shim(c, !strcmp(name, "__wcsncpy_chk") ? "wcsncpy" : !strcmp(name, "__wcscat_chk") ? "wcscat" : "wcstombs");
     } else if (!strcmp(name, "wcstod") || !strcmp(name, "wcstof")) {
         a = arg(c, 0); b = arg(c, 1);
         uint32_t start; char *text = narrow_number(c, a, &start), *end;

@@ -1,7 +1,7 @@
 // POSIX semaphores, Linux scheduling priority ranges and process signal state.
 // SHIMS: sem_init sem_destroy sem_post sem_wait sem_trywait sem_timedwait
 // SHIMS: sched_get_priority_max sched_get_priority_min
-// SHIMS: sigaction sigemptyset sigaddset sigprocmask signal
+// SHIMS: sigaction sigemptyset sigaddset sigprocmask signal raise
 //
 // i386 glibc sem_t is 16 guest bytes. As for mutexes, the native state lives in
 // a registry keyed by the guest address and is never cast onto guest memory;
@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -177,6 +178,15 @@ static int signal_shim(CPU *c, const char *name) {
         }
         if (old) memcpy(rt_write_span(c, old, 8), &previous, 8);
         c->eax = 0;
+    } else if (!strcmp(name, "raise")) {
+        // Signal ignoré par l'invité : sans effet. Sinon l'action par défaut (fin, cœur) ou
+        // un gestionnaire invité, qu'aucun des deux ce runtime ne livre : arrêt explicite.
+        uint32_t signal = argument(c, 0);
+        if (!valid_signal(signal)) { fail(c, LINUX_EINVAL); return 1; }
+        pthread_mutex_lock(&signal_lock); uint32_t handler = dispositions[signal].handler; pthread_mutex_unlock(&signal_lock);
+        if (handler == 1 && signal != 9 && signal != 19) { c->eax = 0; return 1; }
+        char message[64]; snprintf(message, sizeof(message), "guest raise(%u)", signal);
+        rt_trap(c, c->eip, message);
     } else if (!strcmp(name, "signal")) {
         // glibc : sémantique BSD (SA_RESTART), renvoie l'ancien gestionnaire ou SIG_ERR (-1).
         uint32_t signal = argument(c, 0), handler = argument(c, 1);

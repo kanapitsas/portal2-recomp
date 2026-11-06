@@ -12,12 +12,14 @@
 //
 // SHIMS: time clock difftime mktime timegm gmtime gmtime_r localtime localtime_r
 // SHIMS: ctime ctime_r asctime asctime_r strftime __strftime_l __wcsftime_l strptime tzset utime
+// SHIMS: nanosleep sleep times
 #include "rt_locale.h"
 #include <errno.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <unistd.h>
 #include <utime.h>
 
 static uint32_t arg(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
@@ -496,6 +498,39 @@ static uint32_t strptime_guest(CPU *c, uint32_t input, const char *fmt, uint32_t
 }
 
 static int time_shim(CPU *c, const char *name) {
+    if (!strcmp(name, "nanosleep")) {   // timespec i386 : {int32 tv_sec, int32 tv_nsec}
+        uint32_t request = arg(c, 0), remain = arg(c, 1);
+        int32_t sec = (int32_t)R32(request), nsec = (int32_t)R32(request + 4);
+        if (sec < 0 || nsec < 0 || nsec > 999999999) { rt_set_errno(c, EINVAL); c->eax = UINT32_MAX; return 1; }
+        struct timespec delay = {sec, nsec}, left = {0, 0};
+        unsigned saved = rt_guest_suspend();
+        int result = nanosleep(&delay, &left), error = errno;
+        rt_guest_resume(saved);
+        if (result) { errno = error; rt_save_errno(c); if (remain) { W32(remain, (uint32_t)left.tv_sec); W32(remain + 4, (uint32_t)left.tv_nsec); } }
+        c->eax = (uint32_t)result;
+        return 1;
+    }
+    if (!strcmp(name, "sleep")) {       // renvoie les secondes non dormies
+        unsigned saved = rt_guest_suspend();
+        unsigned left = sleep(arg(c, 0));
+        rt_guest_resume(saved);
+        c->eax = left;
+        return 1;
+    }
+    if (!strcmp(name, "times")) {
+        // struct tms i386 : 4 clock_t de 32 bits, en tops de sysconf(_SC_CLK_TCK) = 100 sous Linux.
+        uint32_t out = arg(c, 0);
+        struct timespec user = {0, 0}, now;
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &user);
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        if (out) {
+            rt_write_span(c, out, 16);
+            W32(out, (uint32_t)(user.tv_sec * 100 + user.tv_nsec / 10000000));   // utilisateur + système confondus
+            W32(out + 4, 0); W32(out + 8, 0); W32(out + 12, 0);
+        }
+        c->eax = (uint32_t)(now.tv_sec * 100 + now.tv_nsec / 10000000);
+        return 1;
+    }
     static uint32_t tmbuf, ascbuf;
     if (!strcmp(name, "time")) {
         time_t now = time(NULL); uint32_t out = arg(c, 0);

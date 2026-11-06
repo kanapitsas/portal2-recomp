@@ -3,7 +3,7 @@
 // 4 octets UTF-32), plus les variantes _FORTIFY_SOURCE (__*printf_chk).
 // SHIMS: sprintf vsprintf swprintf vswprintf
 // SHIMS: __snprintf_chk __sprintf_chk __vsnprintf_chk __vsprintf_chk __fprintf_chk
-// SHIMS: __printf_chk __vprintf_chk __vfprintf_chk
+// SHIMS: __printf_chk __vprintf_chk __vfprintf_chk __swprintf_chk __vswprintf_chk
 #include "rt.h"
 #include <ctype.h>
 #include <limits.h>
@@ -407,6 +407,14 @@ int rt_format_shim(CPU *c, const char *name) {
         if (!slen) rt_trap(c, c->eip, "*** buffer overflow detected ***: terminated (__sprintf_chk)");
         c->eax = (uint32_t)unbounded_format(c, argument(c, 0), argument(c, 3), argv,
                                             (int32_t)argument(c, 1), slen);
+        return 1;
+    }
+    // __swprintf_chk(s, n, flag, slen, fmt, ...) : n > slen (en wchar_t) → __chk_fail.
+    if (!strcmp(name, "__swprintf_chk") || !strcmp(name, "__vswprintf_chk")) {
+        uint32_t argv = !strcmp(name, "__vswprintf_chk") ? argument(c, 5) : c->esp + 24;
+        if (argument(c, 1) > argument(c, 3))
+            rt_trap(c, c->eip, "*** buffer overflow detected ***: terminated (__swprintf_chk)");
+        c->eax = (uint32_t)guest_swprintf(c, argument(c, 0), argument(c, 1), argument(c, 4), argv);
         return 1;
     }
     // __printf_chk(flag, fmt, ...), __vprintf_chk(flag, fmt, ap), __vfprintf_chk(fp, flag, fmt, ap).

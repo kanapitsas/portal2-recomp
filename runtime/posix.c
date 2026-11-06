@@ -9,6 +9,7 @@
 // SHIMS: ftruncate fdopen freopen tmpfile tmpnam mkstemp mkfifo creat dup dup2 pipe
 // SHIMS: pathconf faccessat futimes utimes flock __xmknod setvbuf ungetc getwc ungetwc
 // SHIMS: putwc putchar writev ioctl fcntl fcntl64
+// SHIMS: __assert_fail ctermid isatty setbuf freopen64 tcgetattr tcsetattr shm_open
 #include "posix.h"
 int rt_trace_files(const char *path);   // libc.c
 #include "modules.h"
@@ -16,6 +17,7 @@ int rt_trace_files(const char *path);   // libc.c
 #include <fcntl.h>
 #include <stdlib.h>
 #include <sys/file.h>
+#include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
@@ -458,6 +460,45 @@ static int posix_shim(CPU *c, const char *name) {
             iov[i].iov_base = length ? rt_span(c, base, length) : NULL; iov[i].iov_len = length;
         }
         finish(c, (int)writev(fd, iov, count));
+    } else if (!strcmp(name, "__assert_fail")) {   // (assertion, file, line, function)
+        char message[512];
+        snprintf(message, sizeof(message), "guest assertion failed: %s (%s:%u, %s)", string(c, arg(c, 0)),
+                 string(c, arg(c, 1)), arg(c, 2), arg(c, 3) ? string(c, arg(c, 3)) : "?");
+        rt_trap(c, c->eip, message);
+    } else if (!strcmp(name, "ctermid")) {
+        static uint32_t name_buffer;   // L_ctermid = 9 ; tampon statique si s est NULL, comme glibc
+        uint32_t out = arg(c, 0);
+        if (!out) { if (!name_buffer && !(name_buffer = rt_alloc(16))) { fail(c, 12); c->eax = 0; return 1; } out = name_buffer; }
+        memcpy(rt_write_span(c, out, 9), "/dev/tty", 9);
+        c->eax = out;
+    } else if (!strcmp(name, "isatty")) {
+        int result = isatty((int32_t)arg(c, 0));
+        if (!result) rt_save_errno(c);
+        c->eax = (uint32_t)result;
+    } else if (!strcmp(name, "tcgetattr") || !strcmp(name, "tcsetattr")) {
+        // La struct termios Linux n'a ni la taille ni les bits de celle de Darwin : seuls les
+        // descripteurs qui ne sont pas des terminaux (ENOTTY, le cas du jeu) sont traités.
+        int fd = (int32_t)arg(c, 0);
+        if (fcntl(fd, F_GETFD) < 0) { rt_save_errno(c); c->eax = UINT32_MAX; return 1; }
+        if (!isatty(fd)) { fail(c, 25); return 1; }
+        rt_trap(c, c->eip, "terminal attributes (struct termios) are not translated");
+    } else if (!strcmp(name, "setbuf")) {   // setvbuf(fp, buf, buf ? _IOFBF : _IONBF, BUFSIZ = 8192)
+        FILE *file = rt_stream_file(c, arg(c, 0));
+        uint32_t buffer = arg(c, 1);
+        setvbuf(file, buffer ? rt_write_span(c, buffer, 8192) : NULL, buffer ? _IOFBF : _IONBF, 8192);
+    } else if (!strcmp(name, "freopen64")) {
+        return rt_shim(c, "freopen");
+    } else if (!strcmp(name, "shm_open")) {
+        // (name, oflag, mode) ; drapeaux Linux O_RDONLY/O_RDWR 0/2, O_CREAT 0x40, O_EXCL 0x80, O_TRUNC 0x200.
+        const char *object = string(c, arg(c, 0)); uint32_t flags = arg(c, 1);
+        if (flags & ~(3u | 0x40u | 0x80u | 0x200u | 0x80000u)) { fail(c, 22); return 1; }
+        int native = (int)(flags & 3);
+        if (flags & 0x40) native |= O_CREAT;
+        if (flags & 0x80) native |= O_EXCL;
+        if (flags & 0x200) native |= O_TRUNC;
+        int fd = shm_open(object, native, (mode_t)arg(c, 2));
+        if (fd >= 0 && (flags & 0x80000)) fcntl(fd, F_SETFD, FD_CLOEXEC);   // glibc ajoute O_CLOEXEC
+        finish(c, fd);
     } else if (!strcmp(name, "fcntl") || !strcmp(name, "fcntl64")) {
         // Commandes Linux i386 : F_DUPFD 0, F_GETFD 1, F_SETFD 2, F_GETFL 3, F_SETFL 4,
         // F_DUPFD_CLOEXEC 1030. FD_CLOEXEC vaut 1 des deux côtés. Les verrous (F_*LK) et

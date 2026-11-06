@@ -215,10 +215,31 @@ uint32_t rt_alloc_page_aligned(uint32_t size) {
     return addr;
 }
 
-// SHIMS: valloc
+// Tout bloc du tas est aligné sur 16 octets (classes multiples de 16, grands blocs
+// multiples de 4 Kio) ; au-delà et jusqu'à 4 Kio, bloc aligné sur une page.
+static uint32_t aligned_block(CPU *c, uint32_t alignment, uint32_t size) {
+    if (alignment > LARGE_ALIGN) rt_trap(c, c->eip, "guest allocation aligned beyond 4 KiB is not supported");
+    return alignment <= 16 ? rt_alloc(size) : rt_alloc_page_aligned(size);
+}
+
+// SHIMS: valloc memalign posix_memalign aligned_alloc
 static int heap_shim(CPU *c, const char *name) {
-    if (strcmp(name, "valloc")) return 0;
-    c->eax = rt_alloc_page_aligned(R32(c->esp + 4));
+    if (strcmp(name, "valloc") && strcmp(name, "memalign") && strcmp(name, "aligned_alloc") && strcmp(name, "posix_memalign"))
+        return 0;   // le routeur interroge chaque fournisseur : ne rien lire avant
+    uint32_t a = R32(c->esp + 4), b = R32(c->esp + 8), d = R32(c->esp + 12);
+    if (!strcmp(name, "valloc")) {
+        c->eax = rt_alloc_page_aligned(a);
+    } else if (!strcmp(name, "memalign") || !strcmp(name, "aligned_alloc")) {   // (alignment, size)
+        if (!a || (a & (a - 1))) { rt_set_errno(c, 22); c->eax = 0; return 1; }           // EINVAL
+        c->eax = aligned_block(c, a, b);
+    } else if (!strcmp(name, "posix_memalign")) {                             // (void **out, alignment, size)
+        if (!b || (b & (b - 1)) || b % 4) { c->eax = 22; return 1; }        // renvoie EINVAL, errno intact
+        uint32_t block = aligned_block(c, b, d);
+        if (!block) { c->eax = 12; return 1; }
+        rt_write_span(c, a, 4); W32(a, block);
+        c->eax = 0;
+        return 1;
+    } else return 0;
     if (!c->eax) rt_set_errno(c, 12);   // ENOMEM
     return 1;
 }
