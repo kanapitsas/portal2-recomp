@@ -15,7 +15,7 @@
 //   arrête le jeu avec un message explicite.
 // - Attentes hôtes (blocking_begin/end) : verrou invité relâché puis repris.
 //
-// SHIMS: Direct3DCreate9
+// SHIMS: Direct3DCreate9 Direct3DCreate9Ex
 #include "d3d9_bridge.h"
 #include "fps_overlay.h"
 #include "frame_times.h"
@@ -956,6 +956,19 @@ static int d3d9_shim(CPU *c, const char *name) {
         void *d3d = library_create(sdk);
         if (!d3d) fprintf(stderr, "d3d9: d3d9metal_Direct3DCreate9(%u) returned NULL\n", sdk);
         c->eax = d3d9_proxy(c, d3d, D3D9_IDirect3D9);
+        return 1;
+    }
+    if (!strcmp(name, "Direct3DCreate9Ex")) {
+        // Direct3DCreate9Ex(UINT SDKVersion, IDirect3D9Ex **out) : le contrat
+        // libd3d9metal (d3d9metal.h) n'expose qu'IDirect3D9, pas d'objet Ex à
+        // rendre. Réponse d'un système sans D3D9Ex : D3DERR_NOTAVAILABLE et
+        // *out = NULL ; le moteur se replie alors sur Direct3DCreate9.
+        uint32_t out = R32(c->esp + 8);
+        if (out) { rt_write_span(c, out, 4); W32(out, 0); }
+        static int logged;
+        if (!logged++) fprintf(stderr, "d3d9: Direct3DCreate9Ex(%u): IDirect3D9Ex is not bridged, "
+                                       "returning D3DERR_NOTAVAILABLE\n", R32(c->esp + 4));
+        c->eax = 0x8876086au;   // D3DERR_NOTAVAILABLE
         return 1;
     }
     const D3d9Method *m = find_method(name);

@@ -898,3 +898,18 @@ RT_CHECK(fps_overlay_layout_two_lines) {
     }
     assert(line2 && (na != nb || memcmp(a, b, sizeof(FpsRect) * (size_t)na)));
 }
+
+// Direct3DCreate9Ex : pas d'IDirect3D9Ex dans libd3d9metal, réponse d'un
+// système sans D3D9Ex (le moteur se replie sur Direct3DCreate9).
+RT_CHECK(d3d9_create9ex_is_not_available) {
+    CPU c; rt_cpu_reset(&c); c.esp = STACK;
+    W32(SCRATCH, 0xdeadbeef);
+    PUSH(&c, SCRATCH); PUSH(&c, 32);
+    uint32_t base = c.esp;
+    rt_call(&c, rt_dynamic_import("Direct3DCreate9Ex"), RT_RETURN_SENTINEL);
+    assert(c.esp == base && c.eax == 0x8876086au && R32(SCRATCH) == 0);
+    rt_cpu_reset(&c); c.esp = STACK;
+    PUSH(&c, 0); PUSH(&c, 32);
+    rt_call(&c, rt_dynamic_import("Direct3DCreate9Ex"), RT_RETURN_SENTINEL);
+    assert(c.eax == 0x8876086au);
+}

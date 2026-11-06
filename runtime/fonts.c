@@ -10,7 +10,8 @@
 // SHIMS: FT_Init_FreeType FT_Done_FreeType FT_New_Face FT_New_Memory_Face FT_Done_Face
 // SHIMS: FT_Select_Charmap FT_Set_Pixel_Sizes FT_Request_Size FT_Select_Size
 // SHIMS: FT_Get_Char_Index FT_Load_Char FT_Load_Glyph FT_Get_Kerning FT_Get_Postscript_Name FT_MulFix
-// SHIMS: FcInit FcConfigGetCurrent FcConfigSubstitute FcDefaultSubstitute FcFontList FcFontMatch
+// SHIMS: FcInit FcInitLoadConfigAndFonts FcConfigGetCurrent FcConfigSetCurrent FcConfigAppFontAddFile
+// SHIMS: FcConfigSubstitute FcDefaultSubstitute FcFontList FcFontMatch
 // SHIMS: FcFontSetDestroy FcObjectSetCreate FcObjectSetAdd FcObjectSetDestroy
 // SHIMS: FcPatternCreate FcPatternAdd FcPatternDestroy FcPatternGetBool FcPatternGetString
 #include "rt.h"
@@ -408,6 +409,19 @@ static FcConfig *config_of(CPU *c, uint32_t handle) {
     return config;
 }
 
+// Handle invité d'une FcConfig : un seul par configuration, qui garde une
+// référence Fontconfig. FcConfigSetCurrent détruit l'ancienne configuration
+// courante (FcConfigGetCurrent n'en donne pas de référence) : sans celle-ci,
+// un handle déjà rendu à l'invité pointerait sur de la mémoire libérée.
+static uint32_t config_handle(CPU *c, FcConfig *config) {
+    if (!config) return 0;
+    uint32_t handle = rt_handle_find(config, KIND_CONFIG);
+    if (handle) return handle;
+    if (!(handle = rt_handle_new(config, KIND_CONFIG))) rt_trap(c, c->eip, "handle table full (FcConfig)");
+    FcConfigReference(config);
+    return handle;
+}
+
 static uint32_t wrap_pattern(CPU *c, FcPattern *host) {
     if (!host) return 0;
     Pattern *p = calloc(1, sizeof(*p));
@@ -464,11 +478,21 @@ static int fontconfig_shim(CPU *c, const char *name) {
     if (!strcmp(name, "FcInit")) {
         c->eax = (uint32_t)FcInit();
     } else if (!strcmp(name, "FcConfigGetCurrent")) {
-        FcConfig *config = FcConfigGetCurrent();
-        uint32_t handle = config ? rt_handle_find(config, KIND_CONFIG) : 0;
-        if (config && !handle && !(handle = rt_handle_new(config, KIND_CONFIG)))
-            rt_trap(c, c->eip, "handle table full (FcConfig)");
-        c->eax = handle;
+        c->eax = config_handle(c, FcConfigGetCurrent());
+    } else if (!strcmp(name, "FcInitLoadConfigAndFonts")) {
+        // Nouvelle configuration : sa référence initiale revient à l'invité,
+        // config_handle en prend une pour la table. NULL si Fontconfig échoue.
+        c->eax = config_handle(c, FcInitLoadConfigAndFonts());
+    } else if (!strcmp(name, "FcConfigSetCurrent")) {
+        // FcConfigSetCurrent(NULL) recharge la configuration par défaut (2.13+).
+        c->eax = (uint32_t)FcConfigSetCurrent(config_of(c, arg(c, 0)));
+    } else if (!strcmp(name, "FcConfigAppFontAddFile")) {
+        // Chemin invité (dossier du jeu) traduit comme FT_New_Face ; FcFalse si
+        // le fichier est introuvable ou n'est pas une police lisible.
+        FcConfig *config = config_of(c, arg(c, 0));
+        const char *guest_path = host_string(c, arg(c, 1));
+        const char *host_path = guest_path ? rt_read_path(guest_path) : NULL;
+        c->eax = host_path ? (uint32_t)FcConfigAppFontAddFile(config, (const FcChar8 *)host_path) : FcFalse;
     } else if (!strcmp(name, "FcPatternCreate")) {
         c->eax = wrap_pattern(c, FcPatternCreate());
     } else if (!strcmp(name, "FcPatternDestroy")) {

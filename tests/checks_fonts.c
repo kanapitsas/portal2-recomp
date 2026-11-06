@@ -7,6 +7,9 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define STACK 0x20018000u
 #define SCRATCH 0x20019000u   // variables de sortie invitées
@@ -299,4 +302,63 @@ RT_CHECK(fonts_freetype_fixed_sizes_and_color) {
     assert(R8(slot + 0x5e) == FT_PIXEL_MODE_BGRA && (int32_t)R32(slot + 0x54) == 4 * (int32_t)R32(slot + 0x50));
     assert(call("FT_Done_FreeType", 1, lib) == 0);
     FT_Done_Face(host); FT_Done_FreeType(hl);
+}
+
+// Appel par l'adresse dynamique, comme un import invité indirect.
+static uint32_t dcall(const char *name, unsigned count, ...) {
+    CPU c; rt_cpu_reset(&c);
+    c.esp = STACK - 4 * count;
+    va_list ap; va_start(ap, count);
+    for (unsigned i = 0; i < count; ++i) W32(c.esp + 4 * i, va_arg(ap, uint32_t));
+    va_end(ap);
+    uint32_t base = c.esp;
+    rt_call(&c, rt_dynamic_import(name), RT_RETURN_SENTINEL);
+    assert(c.esp == base);
+    return c.eax;
+}
+
+// FcInitLoadConfigAndFonts / FcConfigSetCurrent / FcConfigAppFontAddFile : la
+// police ajoutée n'existe que dans le dépôt Linux, le chemin invité (dossier du
+// jeu) n'aboutit que par la traduction rt_read_path.
+RT_CHECK(fonts_fontconfig_app_font_and_current_config) {
+    assert(call("FcInit", 0) == 1);
+    uint32_t previous = dcall("FcConfigGetCurrent", 0);
+    uint32_t config = dcall("FcInitLoadConfigAndFonts", 0);
+    assert(config >= RT_HANDLE_BASE && config != previous);
+    FcConfig *host = rt_handle_get(config, 0x46434346u);
+    assert(host && host != FcConfigGetCurrent());
+
+    char root[PATH_MAX], game[PATH_MAX], depot[PATH_MAX], user[PATH_MAX], path[PATH_MAX + 32];
+    snprintf(root, sizeof(root), "/tmp/portal2-fonts-XXXXXX"); assert(mkdtemp(root));
+    snprintf(game, sizeof(game), "%s/game", root); assert(!mkdir(game, 0755));
+    snprintf(depot, sizeof(depot), "%s/linux", root); assert(!mkdir(depot, 0755));
+    snprintf(user, sizeof(user), "%s/user", root);
+    snprintf(path, sizeof(path), "%s/resource", depot); assert(!mkdir(path, 0755));
+    snprintf(path, sizeof(path), "cp '%s' '%s/resource/check.ttf'", test_font(), depot); assert(!system(path));
+    assert(!rt_paths_init(game, depot, user));
+
+    snprintf(path, sizeof(path), "%s/resource/check.ttf", game);
+    assert(access(path, F_OK));   // absent du dossier du jeu côté hôte
+    assert(dcall("FcConfigAppFontAddFile", 2, config, gstr(STRINGS, path)) == FcTrue);
+    FcFontSet *app = FcConfigGetFonts(host, FcSetApplication);
+    assert(app && app->nfont >= 1);
+    FcChar8 *file; assert(FcPatternGetString(app->fonts[app->nfont - 1], FC_FILE, 0, &file) == FcResultMatch);
+    char expected[PATH_MAX], got[PATH_MAX];
+    snprintf(path, sizeof(path), "%s/resource/check.ttf", depot);
+    assert(realpath(path, expected) && realpath((const char *)file, got) && !strcmp(expected, got));
+    snprintf(path, sizeof(path), "%s/resource/missing.ttf", game);
+    assert(dcall("FcConfigAppFontAddFile", 2, config, gstr(STRINGS, path)) == FcFalse);
+    snprintf(path, sizeof(path), "%s/resource", depot);
+    FILE *f = fopen(strcat(path, "/notafont.ttf"), "w"); assert(f); fputs("not a font", f); fclose(f);
+    snprintf(path, sizeof(path), "%s/resource/notafont.ttf", game);
+    assert(dcall("FcConfigAppFontAddFile", 2, config, gstr(STRINGS, path)) == FcFalse);
+
+    // Configuration courante changée puis rétablie : l'ancien handle reste
+    // valide (référence gardée par la table) alors que Fontconfig l'a quittée.
+    assert(dcall("FcConfigSetCurrent", 1, config) == FcTrue);
+    assert(FcConfigGetCurrent() == host && dcall("FcConfigGetCurrent", 0) == config);
+    assert(dcall("FcConfigSetCurrent", 1, previous) == FcTrue);
+    assert(dcall("FcConfigGetCurrent", 0) == previous && FcConfigGetCurrent() == rt_handle_get(previous, 0x46434346u));
+
+    snprintf(path, sizeof(path), "rm -rf '%s'", root); assert(!system(path));
 }

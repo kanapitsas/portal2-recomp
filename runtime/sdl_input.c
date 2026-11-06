@@ -8,7 +8,7 @@
 // SHIMS: SDL_NumJoysticks SDL_IsGameController SDL_GameControllerOpen SDL_GameControllerClose
 // SHIMS: SDL_GameControllerGetJoystick SDL_JoystickOpen SDL_JoystickClose SDL_JoystickInstanceID
 // SHIMS: SDL_JoystickNameForIndex SDL_JoystickGetDeviceGUID SDL_JoystickGetGUIDString
-// SHIMS: SDL_HapticOpenFromJoystick SDL_HapticClose SDL_HapticRumbleInit SDL_HapticRumblePlay
+// SHIMS: SDL_HapticOpenFromJoystick SDL_HapticClose SDL_HapticRumbleInit SDL_HapticRumblePlay SDL_HapticRumbleStop
 #include "modules.h"
 #include "sdl_common.h"
 #include "touch_shaper.h"
@@ -604,6 +604,8 @@ static int sdl_input_shim(CPU *c, const char *name) {
         ref_release(handle, KIND_HAPTIC);
     } else if (!strcmp(n, "HapticRumbleInit")) {
         c->eax = (uint32_t)SDL_HapticRumbleInit(ref_host(c, argument(c, 0), KIND_HAPTIC));
+    } else if (!strcmp(n, "HapticRumbleStop")) {
+        c->eax = (uint32_t)SDL_HapticRumbleStop(ref_host(c, argument(c, 0), KIND_HAPTIC));
     } else if (!strcmp(n, "HapticRumblePlay")) {
         float strength = RF(c->esp + 8);
         c->eax = (uint32_t)SDL_HapticRumblePlay(ref_host(c, argument(c, 0), KIND_HAPTIC), strength, argument(c, 2));

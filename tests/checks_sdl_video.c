@@ -6,6 +6,7 @@
 #include <limits.h>
 #define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_syswm.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -349,4 +350,71 @@ uint64_t rt_frame_log_tick(void);
 RT_CHECK(sdl_video_frame_log_tick_is_shared_and_monotonic) {
     uint64_t a = rt_frame_log_tick(), b = rt_frame_log_tick();
     assert(b == a + 1);
+}
+
+// Appel par l'adresse dynamique, comme un import invité indirect.
+static uint32_t dcall(const char *name, unsigned count, ...) {
+    CPU c; rt_cpu_reset(&c); c.esp = STACK;
+    va_list list; va_start(list, count);
+    for (unsigned i = 0; i < count; ++i) W32(c.esp + 4 * i, va_arg(list, uint32_t));
+    va_end(list);
+    rt_call(&c, rt_dynamic_import(name), RT_RETURN_SENTINEL);
+    assert(c.esp == STACK);
+    return c.eax;
+}
+
+// SDL_setenv : même environnement que getenv invité (process.c / libc.c).
+RT_CHECK(sdl_video_setenv_shares_guest_environment) {
+    uint32_t key = put_string(DATA, "P2_SDL_SETENV_CHECK");
+    unsetenv("P2_SDL_SETENV_CHECK");
+    assert(dcall("SDL_setenv", 3, key, put_string(DATA + 64, "one"), 0) == 0);
+    assert(!strcmp(getenv("P2_SDL_SETENV_CHECK"), "one"));
+    uint32_t seen = dcall("getenv", 1, key);
+    assert(seen && !strcmp(guest(seen), "one"));
+    assert(dcall("SDL_setenv", 3, key, put_string(DATA + 64, "two"), 0) == 0);   // sans écrasement
+    assert(!strcmp(getenv("P2_SDL_SETENV_CHECK"), "one"));
+    assert(dcall("SDL_setenv", 3, key, put_string(DATA + 64, "two"), 1) == 0);
+    assert(!strcmp(guest(dcall("getenv", 1, key)), "two"));
+    assert(dcall("SDL_setenv", 3, put_string(DATA + 128, "A=B"), DATA + 64, 1) == UINT32_MAX);
+    assert(dcall("SDL_setenv", 3, put_string(DATA + 128, ""), DATA + 64, 1) == UINT32_MAX);
+    assert(dcall("SDL_setenv", 3, 0, DATA + 64, 1) == UINT32_MAX);
+    assert(dcall("SDL_setenv", 3, key, 0, 1) == UINT32_MAX);
+    unsetenv("P2_SDL_SETENV_CHECK");
+}
+
+// Boîtes de message : stderr seulement (jamais de boîte modale), bouton par
+// défaut (touche Entrée) sinon le premier ; -1 sans bouton.
+RT_CHECK(sdl_video_message_boxes_go_to_stderr) {
+    uint32_t title = put_string(DATA, "abi-smoke"), text = put_string(DATA + 64, "message box check (not shown)");
+    assert(dcall("SDL_ShowSimpleMessageBox", 4, SDL_MESSAGEBOX_ERROR, title, text, 0) == 0);
+
+    uint32_t buttons = DATA + 256, box = DATA + 512, out = DATA + 600;
+    W32(buttons, 0); W32(buttons + 4, 7); W32(buttons + 8, put_string(DATA + 128, "Quit"));
+    W32(buttons + 12, SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT); W32(buttons + 16, 9);
+    W32(buttons + 20, put_string(DATA + 160, "Retry"));
+    W32(box, SDL_MESSAGEBOX_WARNING); W32(box + 4, 0); W32(box + 8, title); W32(box + 12, text);
+    W32(box + 16, 2); W32(box + 20, buttons); W32(box + 24, 0);
+    W32(out, 0x55);
+    assert(dcall("SDL_ShowMessageBox", 2, box, out) == 0 && R32(out) == 9);
+    W32(buttons + 12, 0);   // aucun bouton par défaut : le premier
+    assert(dcall("SDL_ShowMessageBox", 2, box, out) == 0 && R32(out) == 7);
+    W32(box + 16, 0);
+    assert(dcall("SDL_ShowMessageBox", 2, box, out) == 0 && R32(out) == UINT32_MAX);
+    assert(dcall("SDL_ShowMessageBox", 2, box, 0) == 0);
+    W32(box + 16, (uint32_t)-1);
+    assert(dcall("SDL_ShowMessageBox", 2, box, out) == UINT32_MAX);
+    SDL_ClearError();
+    assert(dcall("SDL_ShowMessageBox", 2, 0, out) == UINT32_MAX && *SDL_GetError());
+}
+
+// SDL_GetWindowWMInfo : pas de fenêtre X11 à décrire, échec avec SDL_GetError.
+RT_CHECK(sdl_video_wm_info_is_unavailable) {
+    uint32_t info = DATA + 256;
+    memset(GPTR(info), 0xaa, 64);
+    W8(info, 2); W8(info + 1, 0); W8(info + 2, 22);   // SDL_VERSION
+    SDL_ClearError();
+    assert(dcall("SDL_GetWindowWMInfo", 2, 0, info) == SDL_FALSE);
+    assert(R32(info + 4) == SDL_SYSWM_UNKNOWN);
+    uint32_t error = dcall("SDL_GetError", 0);
+    assert(strstr(guest(error), "X11"));
 }
