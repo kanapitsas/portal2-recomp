@@ -150,6 +150,15 @@ class LifterTests(unittest.TestCase):
         clobbered = lift.JumpTables({'modules': []}, program('ebx, dword ptr [ebp - 0x2c]'))
         clobbered.module, clobbered.read32 = tables.module, tables.read32
         self.assertIsNone(clobbered(base + 0x21))
+        # HL2 engine.so 0x258c48: an SSE conversion into an unrelated register.
+        converted = lift.JumpTables({'modules': []}, program('edx, xmm2'))
+        converted.insns[base + 0x1c] = (base + 0x1f, 'cvttss2si', 'edx, xmm2')
+        converted.module, converted.read32 = tables.module, tables.read32
+        self.assertEqual(converted(base + 0x21), [base + 0x30, base + 0x31])
+        swapped = lift.JumpTables({'modules': []}, program('ecx, edx'))
+        swapped.insns[base + 0x1c] = (base + 0x1f, 'xchg', 'ecx, ebx')   # also writes the base
+        swapped.module, swapped.read32 = tables.module, tables.read32
+        self.assertIsNone(swapped(base + 0x21))
 
     def test_fused_pic_jump_table(self):
         # HL2 engine.so 0x261014 / vphysics.so 0x42295: `add R, [R + 4*I - D]; jmp R`.

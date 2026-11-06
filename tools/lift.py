@@ -723,22 +723,31 @@ class JumpTables:
         return out
 
     MAX_NEUTRAL = 3
-    NEUTRAL_OPS = frozenset({'mov', 'lea', 'movzx', 'movsx'})
+    # Explicit-operand instructions that also write registers implicitly.
+    IMPLICIT_WRITES = frozenset({'xchg', 'xadd', 'cmpxchg', 'cmpxchg8b', 'mul', 'div', 'idiv',
+                                 'cpuid', 'rdtsc', 'enter', 'leave', 'bswap'})
 
     def skip_neutral(self, history, start, protected):
-        """Index of the first instruction from `start` that is not a plain move
-        into a register outside `protected` (or a store to memory); None if
-        anything else, or more than MAX_NEUTRAL moves, comes first."""
+        """Index of the first instruction from `start` that may write a register
+        of `protected`; None if more than MAX_NEUTRAL others come first.
+
+        An instruction is skipped when its only register effect is its first
+        operand (plus flags) and that operand is a general register outside
+        `protected`, an SSE/MMX register or memory: GCC schedules such moves,
+        conversions and arithmetic between the steps of a PIC switch."""
         families = {REGS[r][0] for r in protected if r in REGS}
         for i in range(start, min(len(history), start + self.MAX_NEUTRAL + 1)):
             _, _, op, args = history[i]
-            destination = args.split(',', 1)[0].strip()
-            if op not in self.NEUTRAL_OPS or ',' not in args:
+            parts = [x.strip() for x in args.split(',')]
+            if (op.startswith(('j', 'call', 'ret', 'push', 'pop', 'loop', 'rep'))
+                    or op in self.IMPLICIT_WRITES or len(parts) < 2 or 'es:' in args
+                    or re.fullmatch(r'(lods|scas|cmps|ins|outs)[bwdq]?', op)):
                 return i
+            destination = parts[0]
             if destination in REGS:
                 if REGS[destination][0] in families:
                     return i
-            elif not (op == 'mov' and destination.startswith(('dword ptr [', 'word ptr [', 'byte ptr ['))):
+            elif not (re.fullmatch(r'x?mm\d+', destination) or '[' in destination):
                 return i
         return None
 
