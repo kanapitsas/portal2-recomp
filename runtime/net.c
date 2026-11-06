@@ -5,10 +5,14 @@
 // Les appels bloquants libèrent le verrou d'exécution invité.
 // SHIMS: socket bind listen accept connect send recv sendto recvfrom select poll
 // SHIMS: setsockopt getsockname gethostbyname inet_addr
+// SHIMS: getpeername getsockopt shutdown inet_ntop inet_pton inet_ntoa
+// SHIMS: getaddrinfo freeaddrinfo getifaddrs freeifaddrs
 #include "posix.h"
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <ifaddrs.h>
+#include <net/if.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
@@ -72,11 +76,9 @@ static int host_address(CPU *c, uint32_t address, uint32_t length, struct sockad
     }
 }
 
-// sockaddr hôte -> invité, avec la sémantique Linux de troncature : la longueur
-// réelle est rendue même si le tampon invité est plus petit.
-static void guest_address(CPU *c, const struct sockaddr_storage *in, socklen_t in_length, uint32_t address, uint32_t length_address) {
-    if (!address) return;
-    uint8_t out[128] = {0}; uint32_t size;
+// sockaddr hôte -> octets Linux (out[128]) ; renvoie la taille Linux.
+static uint32_t linux_address(CPU *c, const struct sockaddr_storage *in, socklen_t in_length, uint8_t out[128]) {
+    uint32_t size; memset(out, 0, 128);
     switch (in->ss_family) {
     case AF_INET: {
         const struct sockaddr_in *v4 = (const struct sockaddr_in *)in;
@@ -98,6 +100,14 @@ static void guest_address(CPU *c, const struct sockaddr_storage *in, socklen_t i
     case AF_UNSPEC: size = 2; break;
     default: rt_trap(c, c->eip, "host returned an untranslated socket address family");
     }
+    return size;
+}
+
+// sockaddr hôte -> invité, avec la sémantique Linux de troncature : la longueur
+// réelle est rendue même si le tampon invité est plus petit.
+static void guest_address(CPU *c, const struct sockaddr_storage *in, socklen_t in_length, uint32_t address, uint32_t length_address) {
+    if (!address) return;
+    uint8_t out[128]; uint32_t size = linux_address(c, in, in_length, out);
     rt_write_span(c, length_address, 4);
     uint32_t capacity = R32(length_address);
     if ((int32_t)capacity < 0) capacity = 0;
@@ -125,75 +135,103 @@ static int host_message_flags(CPU *c, uint32_t flags, int receiving) {
 #define BLOCKING(call) ({ unsigned saved_ = rt_guest_suspend(); __typeof__(call) result_ = (call); \
     int error_ = errno; rt_guest_resume(saved_); errno = error_; result_; })
 
+// Options entières de même forme sous Linux et Darwin : niveau et nom Linux ->
+// hôte. Renvoie 0 si l'option n'est pas de cette forme (cas particuliers).
+static int integer_option(int level, int name, int *native_level, int *native_name) {
+    static const struct { int level, name, native_level, native_name; } table[] = {
+        {1, 2, SOL_SOCKET, SO_REUSEADDR}, {1, 5, SOL_SOCKET, SO_DONTROUTE}, {1, 6, SOL_SOCKET, SO_BROADCAST},
+        {1, 7, SOL_SOCKET, SO_SNDBUF}, {1, 8, SOL_SOCKET, SO_RCVBUF}, {1, 9, SOL_SOCKET, SO_KEEPALIVE},
+        {1, 10, SOL_SOCKET, SO_OOBINLINE}, {1, 15, SOL_SOCKET, SO_REUSEPORT}, {1, 18, SOL_SOCKET, SO_RCVLOWAT},
+        {1, 19, SOL_SOCKET, SO_SNDLOWAT},
+        {0, 1, IPPROTO_IP, IP_TOS}, {0, 2, IPPROTO_IP, IP_TTL},
+        {6, 1, IPPROTO_TCP, TCP_NODELAY}, {6, 4, IPPROTO_TCP, TCP_KEEPALIVE},
+        {6, 5, IPPROTO_TCP, TCP_KEEPINTVL}, {6, 6, IPPROTO_TCP, TCP_KEEPCNT},
+        {41, 26, IPPROTO_IPV6, IPV6_V6ONLY},
+    };
+    for (size_t i = 0; i < sizeof(table) / sizeof(*table); ++i)
+        if (table[i].level == level && table[i].name == name) {
+            *native_level = table[i].native_level; *native_name = table[i].native_name; return 1;
+        }
+    return 0;
+}
+
+static _Noreturn void untranslated_option(CPU *c, int level) {
+    rt_trap(c, c->eip, level == 1 ? "SOL_SOCKET option not translated" : level == 0 ? "IPPROTO_IP option not translated"
+                     : level == 6 ? "IPPROTO_TCP option not translated" : level == 41 ? "IPPROTO_IPV6 option not translated"
+                     : "socket option level not translated");
+}
+
 static int socket_option(CPU *c, int fd, int level, int name, uint32_t value, uint32_t length) {
-    const void *data = length ? rt_span(c, value, length) : NULL;
+    if (length) rt_span(c, value, length);
     int integer = length >= 4 ? (int32_t)R32(value) : 0, native_level, native_name;
-    switch (level) {
-    case 1: // SOL_SOCKET
-        native_level = SOL_SOCKET;
-        switch (name) {
-        case 2: native_name = SO_REUSEADDR; break; case 5: native_name = SO_DONTROUTE; break;
-        case 6: native_name = SO_BROADCAST; break; case 7: native_name = SO_SNDBUF; break;
-        case 8: native_name = SO_RCVBUF; break; case 9: native_name = SO_KEEPALIVE; break;
-        case 10: native_name = SO_OOBINLINE; break; case 15: native_name = SO_REUSEPORT; break;
-        case 18: native_name = SO_RCVLOWAT; break; case 19: native_name = SO_SNDLOWAT; break;
-        case 13: { // SO_LINGER : struct linger {int,int} identique
-            if (length < 8) { errno = EINVAL; return -1; }
-            struct linger linger = {(int32_t)R32(value), (int32_t)R32(value + 4)};
-            return setsockopt(fd, SOL_SOCKET, SO_LINGER, &linger, sizeof(linger));
-        }
-        case 20: case 21: { // SO_RCVTIMEO/SO_SNDTIMEO : timeval i386 {long,long}
-            if (length < 8) { errno = EINVAL; return -1; }
-            struct timeval tv = {(int32_t)R32(value), (int32_t)R32(value + 4)};
-            return setsockopt(fd, SOL_SOCKET, name == 20 ? SO_RCVTIMEO : SO_SNDTIMEO, &tv, sizeof(tv));
-        }
-        case 3: case 4: errno = ENOPROTOOPT; return -1; // SO_TYPE/SO_ERROR : lecture seule
-        default: rt_trap(c, c->eip, "SOL_SOCKET option not translated");
-        }
-        break;
-    case 0: // IPPROTO_IP
-        native_level = IPPROTO_IP;
-        switch (name) {
-        case 1: native_name = IP_TOS; break;
-        case 2: native_name = IP_TTL; break;
-        case 33: case 34: { // IP_MULTICAST_TTL/LOOP : int ou octet sous Linux, u_char sous Darwin
-            if (!length) { errno = EINVAL; return -1; }
-            unsigned char byte = (unsigned char)(length >= 4 ? integer : R8(value));
-            return setsockopt(fd, IPPROTO_IP, name == 33 ? IP_MULTICAST_TTL : IP_MULTICAST_LOOP, &byte, 1);
-        }
-        case 32: { // IP_MULTICAST_IF : in_addr, ip_mreq ou ip_mreqn
-            if (length < 4) { errno = EINVAL; return -1; }
-            struct in_addr address; memcpy(&address, rt_span(c, length >= 8 ? value + 4 : value, 4), 4);
-            if (length >= 12 && R32(value + 8) && !address.s_addr) rt_trap(c, c->eip, "ip_mreqn interface index not translated");
-            return setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, &address, sizeof(address));
-        }
-        case 35: case 36: { // IP_ADD/DROP_MEMBERSHIP : ip_mreq (8) ou ip_mreqn (12)
-            if (length < 8) { errno = EINVAL; return -1; }
-            struct ip_mreq request; memcpy(&request, rt_span(c, value, 8), 8);
-            if (length >= 12 && R32(value + 8) && !request.imr_interface.s_addr) rt_trap(c, c->eip, "ip_mreqn interface index not translated");
-            return setsockopt(fd, IPPROTO_IP, name == 35 ? IP_ADD_MEMBERSHIP : IP_DROP_MEMBERSHIP, &request, sizeof(request));
-        }
-        default: rt_trap(c, c->eip, "IPPROTO_IP option not translated");
-        }
-        break;
-    case 6: // IPPROTO_TCP
-        native_level = IPPROTO_TCP;
-        switch (name) {
-        case 1: native_name = TCP_NODELAY; break; case 4: native_name = TCP_KEEPALIVE; break;
-        case 5: native_name = TCP_KEEPINTVL; break; case 6: native_name = TCP_KEEPCNT; break;
-        default: rt_trap(c, c->eip, "IPPROTO_TCP option not translated");
-        }
-        break;
-    case 41: // IPPROTO_IPV6
-        native_level = IPPROTO_IPV6;
-        if (name == 26) native_name = IPV6_V6ONLY;
-        else rt_trap(c, c->eip, "IPPROTO_IPV6 option not translated");
-        break;
-    default: rt_trap(c, c->eip, "socket option level not translated");
+    if (integer_option(level, name, &native_level, &native_name)) {
+        if (length < 4) { errno = EINVAL; return -1; }
+        return setsockopt(fd, native_level, native_name, &integer, sizeof(integer));
     }
-    if (length < 4) { errno = EINVAL; return -1; }
-    (void)data;
-    return setsockopt(fd, native_level, native_name, &integer, sizeof(integer));
+    if (level == 1) switch (name) {
+    case 13: { // SO_LINGER : struct linger {int,int} identique
+        if (length < 8) { errno = EINVAL; return -1; }
+        struct linger linger = {(int32_t)R32(value), (int32_t)R32(value + 4)};
+        return setsockopt(fd, SOL_SOCKET, SO_LINGER, &linger, sizeof(linger));
+    }
+    case 20: case 21: { // SO_RCVTIMEO/SO_SNDTIMEO : timeval i386 {long,long}
+        if (length < 8) { errno = EINVAL; return -1; }
+        struct timeval tv = {(int32_t)R32(value), (int32_t)R32(value + 4)};
+        return setsockopt(fd, SOL_SOCKET, name == 20 ? SO_RCVTIMEO : SO_SNDTIMEO, &tv, sizeof(tv));
+    }
+    case 3: case 4: errno = ENOPROTOOPT; return -1; // SO_TYPE/SO_ERROR : lecture seule
+    }
+    if (level == 0) switch (name) {
+    case 33: case 34: { // IP_MULTICAST_TTL/LOOP : int ou octet sous Linux, u_char sous Darwin
+        if (!length) { errno = EINVAL; return -1; }
+        unsigned char byte = (unsigned char)(length >= 4 ? integer : R8(value));
+        return setsockopt(fd, IPPROTO_IP, name == 33 ? IP_MULTICAST_TTL : IP_MULTICAST_LOOP, &byte, 1);
+    }
+    case 32: { // IP_MULTICAST_IF : in_addr, ip_mreq ou ip_mreqn
+        if (length < 4) { errno = EINVAL; return -1; }
+        struct in_addr address; memcpy(&address, rt_span(c, length >= 8 ? value + 4 : value, 4), 4);
+        if (length >= 12 && R32(value + 8) && !address.s_addr) rt_trap(c, c->eip, "ip_mreqn interface index not translated");
+        return setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, &address, sizeof(address));
+    }
+    case 35: case 36: { // IP_ADD/DROP_MEMBERSHIP : ip_mreq (8) ou ip_mreqn (12)
+        if (length < 8) { errno = EINVAL; return -1; }
+        struct ip_mreq request; memcpy(&request, rt_span(c, value, 8), 8);
+        if (length >= 12 && R32(value + 8) && !request.imr_interface.s_addr) rt_trap(c, c->eip, "ip_mreqn interface index not translated");
+        return setsockopt(fd, IPPROTO_IP, name == 35 ? IP_ADD_MEMBERSHIP : IP_DROP_MEMBERSHIP, &request, sizeof(request));
+    }
+    }
+    untranslated_option(c, level);
+}
+
+// getsockopt Linux : copie min(*optlen, taille) octets et écrit la taille réelle.
+static int read_socket_option(CPU *c, int fd, int level, int name, uint32_t value, uint32_t length_address) {
+    rt_write_span(c, length_address, 4);
+    int32_t capacity = (int32_t)R32(length_address);
+    if (capacity < 0) { errno = EINVAL; return -1; }
+    uint8_t out[8] = {0}; uint32_t size = 0; int native_level, native_name, integer = 0; socklen_t got = sizeof(integer);
+    if (integer_option(level, name, &native_level, &native_name)) {
+        if (getsockopt(fd, native_level, native_name, &integer, &got)) return -1;
+    } else if (level == 1 && (name == 3 || name == 4)) { // SO_TYPE (mêmes valeurs SOCK_*), SO_ERROR (errno traduit)
+        if (getsockopt(fd, SOL_SOCKET, name == 3 ? SO_TYPE : SO_ERROR, &integer, &got)) return -1;
+        if (name == 4 && integer) integer = rt_linux_errno(integer);
+    } else if (level == 1 && name == 13) { // SO_LINGER
+        struct linger linger; got = sizeof(linger);
+        if (getsockopt(fd, SOL_SOCKET, SO_LINGER, &linger, &got)) return -1;
+        int32_t pair[2] = {linger.l_onoff, linger.l_linger}; memcpy(out, pair, 8); size = 8;
+    } else if (level == 1 && (name == 20 || name == 21)) { // timeval Darwin -> i386 {long,long}
+        struct timeval tv; got = sizeof(tv);
+        if (getsockopt(fd, SOL_SOCKET, name == 20 ? SO_RCVTIMEO : SO_SNDTIMEO, &tv, &got)) return -1;
+        int32_t pair[2] = {(int32_t)tv.tv_sec, (int32_t)tv.tv_usec}; memcpy(out, pair, 8); size = 8;
+    } else if (level == 0 && (name == 33 || name == 34)) { // u_char Darwin ; glibc rend un int (octet si optlen < 4)
+        unsigned char byte = 0; got = 1;
+        if (getsockopt(fd, IPPROTO_IP, name == 33 ? IP_MULTICAST_TTL : IP_MULTICAST_LOOP, &byte, &got)) return -1;
+        integer = byte; if (capacity < 4) { out[0] = byte; size = 1; }
+    } else untranslated_option(c, level);
+    if (!size) { memcpy(out, &integer, 4); size = 4; }
+    uint32_t copy = (uint32_t)capacity < size ? (uint32_t)capacity : size;
+    if (copy) memcpy(rt_write_span(c, value, copy), out, copy);
+    W32(length_address, copy);
+    return 0;
 }
 
 static uint32_t hostent_buffer, hostent_size;
@@ -257,6 +295,137 @@ static uint16_t linux_poll_events(short native) {
 }
 
 static double now(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return (double)t.tv_sec + t.tv_nsec * 1e-9; }
+
+// getaddrinfo : drapeaux AI_* Linux -> Darwin. -1 si un drapeau Linux inconnu
+// (EAI_BADFLAGS comme glibc) ; AI_IDN et compagnie n'ont pas d'équivalent.
+static int host_addrinfo_flags(CPU *c, uint32_t flags) {
+    if (flags & ~0x7ffu) return -1;
+    if (flags & 0x3c0) rt_trap(c, c->eip, "getaddrinfo AI_IDN/AI_CANONIDN flags not translated");
+    int native = 0;
+    if (flags & 0x1) native |= AI_PASSIVE;
+    if (flags & 0x2) native |= AI_CANONNAME;
+    if (flags & 0x4) native |= AI_NUMERICHOST;
+    if (flags & 0x8) native |= AI_V4MAPPED;
+    if (flags & 0x10) native |= AI_ALL;
+    if (flags & 0x20) native |= AI_ADDRCONFIG;
+    if (flags & 0x400) native |= AI_NUMERICSERV;
+    return native;
+}
+// Codes EAI_* Darwin (positifs) -> Linux (négatifs).
+static int32_t linux_addrinfo_error(int error) {
+    switch (error) {
+    case 0: return 0;
+    case EAI_ADDRFAMILY: return -9; case EAI_AGAIN: return -3; case EAI_BADFLAGS: return -1;
+    case EAI_FAIL: return -4; case EAI_FAMILY: return -6; case EAI_MEMORY: return -10;
+    case EAI_NODATA: return -5; case EAI_NONAME: return -2; case EAI_SERVICE: return -8;
+    case EAI_SOCKTYPE: return -7; case EAI_SYSTEM: return -11; case EAI_OVERFLOW: return -12;
+    case EAI_BADHINTS: return -1; case EAI_PROTOCOL: return -7;
+    default: return -4;
+    }
+}
+
+// Libère une liste chaînée invitée dont le lien suivant est à l'offset 0 ou 28.
+static void free_guest_list(uint32_t node, uint32_t next_offset) {
+    while (node) { uint32_t next = R32(node + next_offset); rt_free(node); node = next; }
+}
+
+// struct addrinfo i386 (32 octets) : flags, family, socktype, protocol, addrlen,
+// addr, canonname, next. Un bloc invité par nœud : addrinfo, sockaddr Linux (28), nom.
+static int32_t guest_addrinfo(CPU *c, uint32_t node_text, uint32_t service_text, uint32_t hints, uint32_t out) {
+    struct addrinfo native_hints = {0}, *list = NULL;
+    uint32_t linux_flags = 0;
+    if (hints) {
+        rt_span(c, hints, 32);
+        linux_flags = R32(hints);
+        int flags = host_addrinfo_flags(c, linux_flags), family = (int32_t)R32(hints + 4);
+        if (flags < 0) return -1;
+        native_hints.ai_flags = flags;
+        native_hints.ai_family = family == L_AF_UNSPEC ? AF_UNSPEC : family == L_AF_INET ? AF_INET : family == L_AF_INET6 ? AF_INET6 : -1;
+        if (native_hints.ai_family < 0) return -6;
+        native_hints.ai_socktype = (int32_t)R32(hints + 8); // SOCK_* et IPPROTO_* identiques
+        native_hints.ai_protocol = (int32_t)R32(hints + 12);
+    } else { native_hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG; linux_flags = 0x8 | 0x20; } // défaut glibc
+    if (node_text) rt_string_length(c, node_text);
+    if (service_text) rt_string_length(c, service_text);
+    rt_write_span(c, out, 4);
+    int error = BLOCKING(getaddrinfo(node_text ? GPTR(node_text) : NULL, service_text ? GPTR(service_text) : NULL,
+                                     &native_hints, &list));
+    if (error) { int32_t code = linux_addrinfo_error(error); if (code == -11) rt_save_errno(c); return code; }
+    uint32_t head = 0, tail = 0;
+    for (struct addrinfo *i = list; i; i = i->ai_next) {
+        if (i->ai_family != AF_INET && i->ai_family != AF_INET6) continue;
+        size_t name = i->ai_canonname ? strlen(i->ai_canonname) + 1 : 0;
+        uint32_t node = rt_alloc((uint32_t)(32 + 28 + name));
+        if (!node) { freeaddrinfo(list); free_guest_list(head, 28); return -10; }
+        memset(GPTR(node), 0, 32 + 28 + name);
+        struct sockaddr_storage address = {0}; memcpy(&address, i->ai_addr, i->ai_addrlen);
+        uint8_t bytes[128]; uint32_t size = linux_address(c, &address, i->ai_addrlen, bytes);
+        memcpy(GPTR(node + 32), bytes, size);
+        // glibc recopie les drapeaux de la demande dans chaque résultat.
+        W32(node, linux_flags); W32(node + 4, i->ai_family == AF_INET ? L_AF_INET : L_AF_INET6);
+        W32(node + 8, (uint32_t)i->ai_socktype); W32(node + 12, (uint32_t)i->ai_protocol);
+        W32(node + 16, size); W32(node + 20, node + 32);
+        if (name) { memcpy(GPTR(node + 60), i->ai_canonname, name); W32(node + 24, node + 60); }
+        if (tail) W32(tail + 28, node); else head = node;
+        tail = node;
+    }
+    freeaddrinfo(list);
+    if (!head) return -2; // que des familles non IP : EAI_NONAME
+    W32(out, head);
+    return 0;
+}
+
+// Drapeaux IFF_* Darwin -> Linux : bits 0..9 identiques, IFF_MULTICAST déplacé ;
+// OACTIVE/SIMPLEX/LINK* n'ont pas d'équivalent (et collisionnent avec MASTER/SLAVE).
+static uint32_t linux_interface_flags(unsigned flags) {
+    return (flags & 0x3ffu) | (flags & IFF_MULTICAST ? 0x1000u : 0);
+}
+
+// sockaddr d'interface Darwin -> bloc Linux à `at` ; les masques Darwin ont
+// parfois sa_len tronqué et une famille nulle : on prend celle de l'adresse.
+static uint32_t interface_address(CPU *c, const struct sockaddr *in, int family, uint32_t at) {
+    if (!in) return 0;
+    struct sockaddr_storage address = {0};
+    size_t length = in->sa_len ? in->sa_len : (family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+    if (length > sizeof(address)) length = sizeof(address);
+    memcpy(&address, in, length);
+    address.ss_family = (sa_family_t)family;
+    address.ss_len = family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+    uint8_t bytes[128]; uint32_t size = linux_address(c, &address, address.ss_len, bytes);
+    memcpy(GPTR(at), bytes, size);
+    return at;
+}
+
+// struct ifaddrs i386 (28 octets) : next, name, flags, addr, netmask, ifu, data.
+// Seules les entrées AF_INET/AF_INET6 sont rendues (pas AF_LINK).
+static int guest_ifaddrs(CPU *c, uint32_t out) {
+    rt_write_span(c, out, 4);
+    struct ifaddrs *list = NULL;
+    if (getifaddrs(&list)) return -1;
+    uint32_t head = 0, tail = 0;
+    for (struct ifaddrs *i = list; i; i = i->ifa_next) {
+        if (!i->ifa_addr || (i->ifa_addr->sa_family != AF_INET && i->ifa_addr->sa_family != AF_INET6)) continue;
+        int family = i->ifa_addr->sa_family;
+        size_t name = strlen(i->ifa_name) + 1;
+        uint32_t node = rt_alloc((uint32_t)(28 + 3 * 28 + name));
+        if (!node) { freeifaddrs(list); free_guest_list(head, 0); errno = ENOMEM; return -1; }
+        memset(GPTR(node), 0, 28 + 3 * 28 + name);
+        memcpy(GPTR(node + 112), i->ifa_name, name);
+        W32(node + 4, node + 112); W32(node + 8, linux_interface_flags(i->ifa_flags));
+        W32(node + 12, interface_address(c, i->ifa_addr, family, node + 28));
+        W32(node + 16, interface_address(c, i->ifa_netmask, family, node + 56));
+        if (i->ifa_flags & (IFF_BROADCAST | IFF_POINTOPOINT)) W32(node + 20, interface_address(c, i->ifa_dstaddr, family, node + 84));
+        if (tail) W32(tail, node); else head = node;
+        tail = node;
+    }
+    freeifaddrs(list);
+    W32(out, head);
+    return 0;
+}
+
+// Tampon de inet_ntoa : un seul par processus (glibc en a un par thread) ;
+// alloué au premier appel dans le tas invité.
+static uint32_t ntoa_buffer;
 
 static int net_shim(CPU *c, const char *name) {
     struct sockaddr_storage address; socklen_t length; int error;
@@ -357,6 +526,46 @@ static int net_shim(CPU *c, const char *name) {
     } else if (!strcmp(name, "gethostbyname")) {
         uint32_t text = arg(c, 0); rt_string_length(c, text);
         c->eax = lookup_host(c, GPTR(text)) ? 0 : hostent_buffer;
+    } else if (!strcmp(name, "getpeername")) {
+        length = sizeof(address);
+        int result = getpeername((int32_t)arg(c, 0), (struct sockaddr *)&address, &length);
+        if (!result) guest_address(c, &address, length, arg(c, 1), arg(c, 2));
+        finish(c, result);
+    } else if (!strcmp(name, "getsockopt")) {
+        finish(c, read_socket_option(c, (int32_t)arg(c, 0), (int32_t)arg(c, 1), (int32_t)arg(c, 2), arg(c, 3), arg(c, 4)));
+    } else if (!strcmp(name, "shutdown")) { // SHUT_RD/WR/RDWR identiques
+        finish(c, shutdown((int32_t)arg(c, 0), (int32_t)arg(c, 1)));
+    } else if (!strcmp(name, "inet_pton")) {
+        int family = (int32_t)arg(c, 0); uint32_t text = arg(c, 1), out = arg(c, 2);
+        if (family != L_AF_INET && family != L_AF_INET6) { fail(c, 97); return 1; }
+        rt_string_length(c, text);
+        uint8_t bytes[16];
+        int result = inet_pton(family == L_AF_INET ? AF_INET : AF_INET6, GPTR(text), bytes);
+        if (result == 1) memcpy(rt_write_span(c, out, family == L_AF_INET ? 4 : 16), bytes, family == L_AF_INET ? 4 : 16);
+        c->eax = (uint32_t)result;
+    } else if (!strcmp(name, "inet_ntop")) {
+        int family = (int32_t)arg(c, 0); uint32_t source = arg(c, 1), out = arg(c, 2), size = arg(c, 3);
+        if (family != L_AF_INET && family != L_AF_INET6) { rt_set_errno(c, 97); c->eax = 0; return 1; }
+        char text[INET6_ADDRSTRLEN];
+        const void *bytes = rt_span(c, source, family == L_AF_INET ? 4 : 16);
+        if (!inet_ntop(family == L_AF_INET ? AF_INET : AF_INET6, bytes, text, sizeof(text))) { rt_save_errno(c); c->eax = 0; return 1; }
+        size_t used = strlen(text) + 1;
+        if (used > size) { rt_set_errno(c, 28); c->eax = 0; return 1; } // ENOSPC
+        memcpy(rt_write_span(c, out, used), text, used);
+        c->eax = out;
+    } else if (!strcmp(name, "inet_ntoa")) { // struct in_addr passée par valeur
+        struct in_addr address = {arg(c, 0)};
+        if (!ntoa_buffer && !(ntoa_buffer = rt_alloc(16))) { rt_set_errno(c, 12); c->eax = 0; return 1; }
+        inet_ntop(AF_INET, &address, GPTR(ntoa_buffer), 16);
+        c->eax = ntoa_buffer;
+    } else if (!strcmp(name, "getaddrinfo")) {
+        c->eax = (uint32_t)guest_addrinfo(c, arg(c, 0), arg(c, 1), arg(c, 2), arg(c, 3));
+    } else if (!strcmp(name, "freeaddrinfo")) {
+        free_guest_list(arg(c, 0), 28);
+    } else if (!strcmp(name, "getifaddrs")) {
+        finish(c, guest_ifaddrs(c, arg(c, 0)));
+    } else if (!strcmp(name, "freeifaddrs")) {
+        free_guest_list(arg(c, 0), 0);
     } else if (!strcmp(name, "inet_addr")) {
         uint32_t text = arg(c, 0); rt_string_length(c, text);
         c->eax = inet_addr(GPTR(text));
