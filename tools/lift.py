@@ -212,6 +212,16 @@ def code_address(address, rebase):
     return f'({address:#x}u + {CODE_RELOCATED})' if rebase else f'{address:#x}u'
 
 
+# AES-NI, PCLMULQDQ, SSE4.1/4.2, AVX, XSAVE, RDRAND/RDSEED et VIA PadLock.
+CPUID_GATED = frozenset('''aesenc aesenclast aesdec aesdeclast aesimc aeskeygenassist pclmulqdq
+    mpsadbw phminposuw pextrb pinsrb pinsrd pextrq pinsrq pmovzxbw pmovzxbd pmovzxbq pmovzxwd pmovzxwq
+    pmovzxdq pmovsxbw pmovsxbd pmovsxbq pmovsxwd pmovsxwq pmovsxdq ptest pblendw pblendvb blendps blendpd
+    blendvps blendvpd dpps dppd insertps extractps roundps roundpd roundss roundsd pmulld pmuldq pminsb
+    pminsd pminuw pminud pmaxsb pmaxsd pmaxuw pmaxud pcmpeqq pcmpgtq packusdw movntdqa pcmpestri pcmpestrm
+    pcmpistri pcmpistrm crc32 popcnt vzeroall vzeroupper xgetbv xsave xrstor rdrand rdseed
+    xstorerng xstore xcryptecb xcryptcbc xcryptctr xcryptcfb xcryptofb xsha1 xsha256 montmul'''.split())
+
+
 def translate(pc, insn, entries=frozenset(), callees=None, cases=None, rebase=False):
     if callees is None:
         callees = set()
@@ -220,6 +230,10 @@ def translate(pc, insn, entries=frozenset(), callees=None, cases=None, rebase=Fa
     here, after = code_address(pc, rebase), code_address(nxt, rebase)
     if op in ('int3', 'ud2', 'hlt'):
         return f'rt_trap(c, {here}, "{op}");', []
+    if op in CPUID_GATED:
+        # Extension que rt_cpuid (runtime/cpu.c) n'annonce pas : le code qui la choisit
+        # selon CPUID (OpenSSL, Crypto++, libvpx) ne l'atteint pas ; sinon, arrêt explicite.
+        return f'rt_trap(c, {here}, "{op}: CPU extension not reported by CPUID");', []
     string = string_instruction(op, args, nxt)
     if string is not None:
         return string

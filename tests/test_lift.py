@@ -162,10 +162,10 @@ class LifterTests(unittest.TestCase):
         self.assertIsNone(lift.import_called(0x300, insns, imports, tables))
 
     def test_audit_scan_collects_every_rejection(self):
-        insns = {0x10: (0x12, 'rsm', ''), 0x12: (0x14, 'vzeroall', ''), 0x14: (0x15, 'ret', '')}
+        insns = {0x10: (0x12, 'rsm', ''), 0x12: (0x14, 'vpaddd', 'ymm0, ymm1, ymm2'), 0x14: (0x15, 'ret', '')}
         count, failures, indirect = lift.scan(0x10, insns)
         self.assertEqual(count, 3)
-        self.assertEqual([op for _, op, _, _ in failures], ['rsm', 'vzeroall'])
+        self.assertEqual([op for _, op, _, _ in failures], ['rsm', 'vpaddd'])
         with self.assertRaises(lift.Unsupported):   # the generator itself stays fail-closed
             lift.lift(0x10, insns)
 
@@ -224,3 +224,13 @@ class ResolveExportTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CpuidGatedInstructions(unittest.TestCase):
+    def test_aes_and_sse41_trap_in_place(self):
+        # Une fonction qui contient une branche AES-NI reste traduite ; l'instruction piège.
+        for op, args in (('aesenc', 'xmm2, xmm1'), ('pinsrd', 'xmm7, ebp, 0x3'), ('xgetbv', '')):
+            code, successors = lift.translate(0x1000, (0x1004, op, args))
+            self.assertIn('rt_trap(c, 0x1000u', code)
+            self.assertIn('not reported by CPUID', code)
+            self.assertEqual(successors, [])

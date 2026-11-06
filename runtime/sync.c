@@ -191,8 +191,11 @@ static int signal_shim(CPU *c, const char *name) {
         // glibc : sémantique BSD (SA_RESTART), renvoie l'ancien gestionnaire ou SIG_ERR (-1).
         uint32_t signal = argument(c, 0), handler = argument(c, 1);
         if (!valid_signal(signal) || signal == 9 || signal == 19) { fail(c, LINUX_EINVAL); c->eax = UINT32_MAX; return 1; }
-        if (handler > 1 && signal != 17)
-            rt_trap(c, c->eip, "guest signal handler cannot be delivered by this runtime");
+        // SIGCHLD, et SIGILL des sondes CPU de Crypto++ (signal + setjmp autour de `por` et
+        // `cpuid`, que le code traduit exécute) : enregistrés sans être livrés ; une instruction
+        // vraiment illégale reste un arrêt explicite du runtime (rt_trap), pas un SIGILL.
+        if (handler > 1 && signal != 17 && signal != 4)
+            { char m[96]; snprintf(m, sizeof(m), "guest handler for signal %u cannot be delivered by this runtime", signal); rt_trap(c, c->eip, m); }
         pthread_mutex_lock(&signal_lock);
         int host = host_signal(signal);
         if (host && handler <= 1) {
@@ -214,8 +217,8 @@ static int signal_shim(CPU *c, const char *name) {
             const uint8_t *raw = rt_span(c, act, SIGACTION_SIZE);
             memcpy(&next.handler, raw, 4); memcpy(next.mask, raw + 4, SIGSET_SIZE);
             memcpy(&next.flags, raw + 132, 4); memcpy(&next.restorer, raw + 136, 4);
-            if (next.handler > 1 && signal != 17)
-                rt_trap(c, c->eip, "guest signal handler cannot be delivered by this runtime");
+            if (next.handler > 1 && signal != 17 && signal != 4)
+                { char m[96]; snprintf(m, sizeof(m), "guest handler for signal %u cannot be delivered by this runtime", signal); rt_trap(c, c->eip, m); }
         }
         pthread_mutex_lock(&signal_lock);
         Disposition previous = dispositions[signal];

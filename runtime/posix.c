@@ -526,6 +526,33 @@ static int posix_shim(CPU *c, const char *name) {
             if (value & 0x400) native |= O_APPEND;
             if (value & 0x800) native |= O_NONBLOCK;
             finish(c, fcntl(fd, F_SETFL, native));
+        } else if ((command >= 5 && command <= 7) || (command >= 12 && command <= 14)) {
+            // Verrous POSIX. struct flock i386 : l_type@0 et l_whence@2 (short), l_start@4,
+            // l_len@8, l_pid@12 (32 bits) ; flock64 (12-14) : l_start@4, l_len@12 (64 bits),
+            // l_pid@20. Types Linux RDLCK 0, WRLCK 1, UNLCK 2 (Darwin : 1, 3, 2).
+            int wide = command >= 12, get = command == 5 || command == 12, wait = command == 7 || command == 14;
+            uint32_t size = wide ? 24 : 16;
+            const uint8_t *raw = rt_span(c, value, size);
+            int16_t type, whence; memcpy(&type, raw, 2); memcpy(&whence, raw + 2, 2);
+            struct flock lock; memset(&lock, 0, sizeof(lock));
+            if (type < 0 || type > 2 || whence < 0 || whence > 2) { fail(c, 22); return 1; }
+            lock.l_type = (short)(type == 0 ? F_RDLCK : type == 1 ? F_WRLCK : F_UNLCK);
+            lock.l_whence = whence;   // SEEK_SET/CUR/END identiques
+            if (wide) { int64_t start, length; memcpy(&start, raw + 4, 8); memcpy(&length, raw + 12, 8); lock.l_start = start; lock.l_len = length; }
+            else { int32_t start, length; memcpy(&start, raw + 4, 4); memcpy(&length, raw + 8, 4); lock.l_start = start; lock.l_len = length; }
+            int result;
+            if (wait) { unsigned saved = rt_guest_suspend(); result = fcntl(fd, F_SETLKW, &lock); int e = errno; rt_guest_resume(saved); errno = e; }
+            else result = fcntl(fd, get ? F_GETLK : F_SETLK, &lock);
+            if (result < 0) { if (errno == EAGAIN || errno == EACCES) errno = EAGAIN; finish(c, result); return 1; }
+            if (get) {
+                uint8_t *out = rt_write_span(c, value, size);
+                int16_t linux_type = (int16_t)(lock.l_type == F_RDLCK ? 0 : lock.l_type == F_WRLCK ? 1 : 2), linux_whence = (int16_t)lock.l_whence;
+                memcpy(out, &linux_type, 2); memcpy(out + 2, &linux_whence, 2);
+                int32_t pid = lock.l_pid;
+                if (wide) { int64_t start = lock.l_start, length = lock.l_len; memcpy(out + 4, &start, 8); memcpy(out + 12, &length, 8); memcpy(out + 20, &pid, 4); }
+                else { int32_t start = (int32_t)lock.l_start, length = (int32_t)lock.l_len; memcpy(out + 4, &start, 4); memcpy(out + 8, &length, 4); memcpy(out + 12, &pid, 4); }
+            }
+            c->eax = 0;
         } else {
             fail(c, 22);
         }

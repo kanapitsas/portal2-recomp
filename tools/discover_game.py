@@ -11,6 +11,8 @@ import re
 import subprocess
 import sys
 from table_roots import adjacent_roots
+import games
+import localconfig
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--steps', type=int, default=10)
@@ -18,7 +20,7 @@ parser.add_argument('--timeout', type=int, default=30)
 parser.add_argument('--opt', default='0', choices=['0','1','2','3'])
 args = parser.parse_args()
 layout = json.loads(Path('build/game/prep/layout.json').read_text())
-roots_path = Path('config/game-roots.json')
+roots_path = Path(games.profile(localconfig.load())['roots'])
 for attempt in range(args.steps):
     built = subprocess.run([sys.executable, '-u', 'tools/build_game.py', '--opt', args.opt])
     if built.returncode: sys.exit(built.returncode)

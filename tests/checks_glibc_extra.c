@@ -73,7 +73,18 @@ RT_CHECK(glibc_extra_fcntl_linux_values) {
     assert(call("fcntl", 3, fds[0], 2, 1) == 0 && call("fcntl", 2, fds[0], 1) == 1);   // FD_CLOEXEC
     int copy = (int)call("fcntl64", 3, fds[1], 1030, 100);                 // F_DUPFD_CLOEXEC
     assert(copy >= 100 && (fcntl(copy, F_GETFD) & FD_CLOEXEC));
-    assert(call("fcntl", 3, fds[0], 6, 0) == UINT32_MAX);                 // F_SETLK : non traduit
+    assert(call("fcntl", 3, fds[0], 9, 0) == UINT32_MAX);                 // F_SETOWN : non traduit
+    char lock_path[] = "/tmp/glibc-extra-lockXXXXXX"; int lockfd = mkstemp(lock_path); assert(lockfd >= 0);
+    next_data = DATA;
+    uint32_t lock = put("\1\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 16);       // F_WRLCK Linux, tout le fichier
+    assert(call("fcntl", 3, lockfd, 6, lock) == 0);                        // F_SETLK
+    struct flock seen = {.l_type = F_WRLCK, .l_whence = SEEK_SET};
+    assert(!fcntl(lockfd, F_GETLK, &seen) && seen.l_type == F_UNLCK);      // le verrou est à nous
+    W16(lock, 2);                                                          // F_UNLCK Linux
+    assert(call("fcntl", 3, lockfd, 6, lock) == 0);
+    W16(lock, 7);
+    assert(call("fcntl", 3, lockfd, 6, lock) == UINT32_MAX);              // type invalide
+    close(lockfd); unlink(lock_path);
     close(copy); close(fds[0]); close(fds[1]);
 }
 
@@ -81,6 +92,8 @@ RT_CHECK(glibc_extra_signal_and_valloc) {
     assert(call("signal", 2, 13, 1) == 0);    // SIGPIPE -> SIG_IGN, ancien SIG_DFL
     assert(call("signal", 2, 13, 0) == 1);    // retour à SIG_DFL, ancien SIG_IGN
     assert(call("signal", 2, 9, 1) == UINT32_MAX);   // SIGKILL : SIG_ERR
+    assert(call("signal", 2, 4, 0x12345678u) == 0);  // SIGILL des sondes Crypto++ : enregistré
+    assert(call("signal", 2, 4, 0) == 0x12345678u);
     uint32_t small = call("valloc", 1, 100), large = call("valloc", 1, 0x12345);
     assert(small && !(small & 0xfff) && large && !(large & 0xfff) && small != large);
     assert(rt_heap_usable_size(small) >= 100 && rt_heap_usable_size(large) >= 0x12345);
