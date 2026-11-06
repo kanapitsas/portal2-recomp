@@ -2,6 +2,7 @@
 // signaux et threads hôtes étrangers appelant du code invité.
 #include "checks.h"
 #include "modules.h"
+#include <errno.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdatomic.h>
@@ -440,4 +441,18 @@ RT_CHECK(pthread_hot_calls_have_direct_routes) {
     assert(routed(&c, "pthread_self", args, 0) == call(&c, "pthread_self", args, 0));
     args[0] = m; assert(call(&c, "pthread_mutex_destroy", args, 1) == 0);
     rt_guest_leave();
+}
+
+// FUTEX_WAIT relatif (horloge monotone) : expire après le délai, pas avant,
+// et un délai nul expire aussitôt.
+RT_CHECK(futex_relative_timeout_expires_on_time) {
+    CPU c; main_cpu(&c);
+    uint32_t word = DATA + 0xa00, timeout = DATA + 0xa08;
+    W32(word, 0); W32(timeout, 0); W32(timeout + 4, 30000000);   // 30 ms
+    struct timespec start; clock_gettime(CLOCK_MONOTONIC, &start);
+    assert(rt_futex(&c, word, 128, 0, timeout) == -1 && errno == ETIMEDOUT);
+    double waited = elapsed_ms(&start);
+    assert(waited >= 29.0 && waited < 2000);
+    W32(timeout + 4, 0);
+    assert(rt_futex(&c, word, 128, 0, timeout) == -1 && errno == ETIMEDOUT);
 }
