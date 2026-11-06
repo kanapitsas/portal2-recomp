@@ -1,6 +1,7 @@
 #!/bin/bash
 # Removes what setup.sh / tools/make_app.py installed outside this folder:
-# "Portal 2 Natif.app", its log and, only if you confirm separately, the saves
+# "Portal 2 Natif.app", its log, the installer app's build folder and, only if
+# you confirm separately, the saves
 # and settings. Everything is moved to the Trash, not erased.
 #
 # usage: ./uninstall.sh
@@ -15,6 +16,8 @@ H="${P2_UNINSTALL_HOME:-$HOME}"   # override for tests only
 CONFIG="${P2_CONFIG:-$REPO/config/local.json}"
 NAME="Portal 2 Natif"
 SUPPORT="$H/Library/Application Support/$NAME"
+# Source and build unpacked by "Portal 2 Installer.app" (installer/Installer.swift).
+BUILD_DIR="$H/Library/Application Support/$NAME Build"
 LOG="$H/Library/Logs/Portal2Natif.log"
 TRASH="$H/.Trash"
 SYSTEM_APPS="${P2_UNINSTALL_HOME:+$H/system}/Applications"   # tests never see /Applications
@@ -48,6 +51,7 @@ APPS=()
 for a in "$H/Applications/$NAME.app" "$SYSTEM_APPS/$NAME.app"; do
     [ -e "$a" ] && APPS+=("$a")
 done
+[ -e "$BUILD_DIR" ] && APPS+=("$BUILD_DIR")
 SAVES=()
 [ -e "$SUPPORT" ] && SAVES+=("$SUPPORT")
 USER_DIR="$(config_get user_dir)"
@@ -78,7 +82,10 @@ esac
 
 echo "App:"
 if [ ${#APPS[@]} -eq 0 ] && [ ! -e "$LOG" ]; then echo "  (nothing installed)"; fi
-for a in ${APPS[@]+"${APPS[@]}"}; do echo "  $a"; done
+for a in ${APPS[@]+"${APPS[@]}"}; do
+    if [ "$a" = "$BUILD_DIR" ]; then echo "  $a (source and build, $(du -sh "$a" 2>/dev/null | cut -f1 | tr -d ' '))"
+    else echo "  $a"; fi
+done
 [ -e "$LOG" ] && echo "  $LOG"
 echo "Saves and settings (kept unless you say yes below):"
 [ ${#SAVES[@]} -eq 0 ] && echo "  (none)"
@@ -120,7 +127,9 @@ EOF
 [ -d "$OLD_SAVES" ] && cat <<EOF
 - Older saves location (copied to the new one by make_app.py): $(cd "$OLD_SAVES" && pwd)
 EOF
-cat <<EOF
+[ "$REPO" != "$BUILD_DIR" ] && cat <<EOF
 - This folder (code, build/, deps/): $REPO
+EOF
+cat <<EOF
 - On an iPhone, remove the Portal 2 app like any other app.
 EOF
