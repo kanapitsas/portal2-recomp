@@ -84,8 +84,11 @@ RT_CHECK(steam_generated_table_is_consistent) {
         assert(!strncmp(m->name, steam_interfaces[m->iface].version, length) && !strncmp(m->name + length, "::", 2));
         for (size_t j = 0; j < i; ++j) assert(steam_methods[j].iface != m->iface || steam_methods[j].slot != m->slot);
     }
-    // Les 25 versions servies par la dylib, parmi les 27 demandées par Portal 2.
-    assert(steam_interface_count == 25);
+    // Les 25 versions servies par la dylib parmi les 27 demandées par Portal 2, plus les 11
+    // de Half-Life 2 (SDK 1.60, et ISteamTimeline V004 du SDK 1.61).
+    assert(steam_interface_count == 36);
+    assert(method("SteamUser023::GetSteamID")->slot == 2 && method("SteamUser023::GetSteamID")->sret);
+    assert(method("STEAMTIMELINE_INTERFACE_V004::SetTimelineTooltip") && method("STEAMUGC_INTERFACE_VERSION020::CreateItem"));
     assert(method("SteamUser021::GetSteamID")->slot == 2 && method("SteamUser021::GetSteamID")->sret);
     assert(!method("SteamUser021::BLoggedOn")->sret && method("SteamUser021::BLoggedOn")->slot == 1);
 }

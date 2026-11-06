@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Generate runtime/steam_generated.c: Steam interface tables (SDK 1.53a) for the guest bridge.
+"""Generate runtime/steam_generated.c: Steam interface tables for the guest bridge (Portal 2: SDK 1.53a;
+Half-Life 2: SDK 1.60 and the Timeline V004 of 1.61, see SOURCES).
 
 Sources, all local:
 - vtable slots: ARM64 disassembly of the official `libsteam_api.dylib`. Each flat function
   `SteamAPI_ISteamX_Method` is a tail call `ldr x8,[x0]; ldr xN,[x8,#off]; br xN`: the slot is
   off/8 (Itanium ABI, same order as i386 GCC) and N, the first free register, gives the number
   of integer arguments (cross-check of the signatures);
-- signatures: `NativeMethods.cs` of Steamworks.NET 20.1.0 (MIT, same package), and the return
+- signatures: `NativeMethods.cs` of the same Steamworks.NET package (MIT), and the return
   type of the C# wrappers (CSteamID/CGameID returned by value, strings, interfaces);
 - ISteamController has no C# counterpart: its methods take the signature of the ISteamInput
   method of the same name when the disassembled argument count agrees.
@@ -25,7 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 # Versions demandées par Portal 2 (docs/steam.md), identiques aux accesseurs du SDK 1.53a.
-VERSIONS = {
+VERSIONS_PORTAL2 = {
     'ISteamClient': 'SteamClient020', 'ISteamUser': 'SteamUser021', 'ISteamFriends': 'SteamFriends017',
     'ISteamUtils': 'SteamUtils010', 'ISteamMatchmaking': 'SteamMatchMaking009',
     'ISteamGameSearch': 'SteamMatchGameSearch001', 'ISteamMatchmakingServers': 'SteamMatchMakingServers002',
@@ -40,6 +41,24 @@ VERSIONS = {
     'ISteamInput': 'SteamInput006', 'ISteamGameServer': 'SteamGameServer014',
     'ISteamGameServerStats': 'SteamGameServerStats001',
 }
+# Versions demandées par Half-Life 2 (mise à jour des 20 ans) en plus de celles de Portal 2 :
+# SDK 1.60, sauf ISteamTimeline que client.so demande en V004 (SDK 1.61, voir SOURCES).
+VERSIONS_HL2 = {
+    'ISteamClient': 'SteamClient021', 'ISteamUser': 'SteamUser023', 'ISteamUGC': 'STEAMUGC_INTERFACE_VERSION020',
+    'ISteamVideo': 'STEAMVIDEO_INTERFACE_V007', 'ISteamGameServer': 'SteamGameServer015',
+    'ISteamParties': 'SteamParties002', 'ISteamRemotePlay': 'STEAMREMOTEPLAY_INTERFACE_VERSION002',
+    'ISteamNetworkingUtils': 'SteamNetworkingUtils004', 'ISteamNetworkingSockets': 'SteamNetworkingSockets012',
+    'ISteamNetworkingMessages': 'SteamNetworkingMessages002',
+}
+VERSIONS_TIMELINE = {'ISteamTimeline': 'STEAMTIMELINE_INTERFACE_V004'}
+DOWNLOADS = ROOT.parent / 'work/downloads'
+# (dossier Steamworks.NET dépaqueté, versions tirées de sa dylib). Une version déjà produite
+# par une source précédente n'est pas reprise : sa disposition de vtable ne change jamais.
+SOURCES = [
+    ('steamworks', VERSIONS_PORTAL2),          # Steamworks.NET 20.1.0, SDK 1.53a
+    ('steamworks-2024.8.0', VERSIONS_HL2),      # SDK 1.60
+    ('steamworks-2025.161.0', VERSIONS_TIMELINE),  # SDK 1.61
+]
 # Scalaires C# -> (type C, octets sur la pile i386).
 SCALARS = {'int': ('int32_t', 4), 'uint': ('uint32_t', 4), 'short': ('int16_t', 4), 'ushort': ('uint16_t', 4),
            'byte': ('uint8_t', 4), 'sbyte': ('int8_t', 4), 'bool': ('bool', 4), 'long': ('int64_t', 8),
@@ -166,7 +185,7 @@ class Unsupported(Exception):
     pass
 
 
-def plan_method(flat, method, ret, params, wrapper, types, gprs):
+def plan_method(flat, method, ret, params, wrapper, types, gprs, slot):
     """Return (C body, sret); raise Unsupported with the reason."""
     def scalar(t):
         t = types.get(t, t)
@@ -245,9 +264,10 @@ def plan_method(flat, method, ret, params, wrapper, types, gprs):
         rproto, store = 'void *', f'c->eax = steam_proxy(c, r, a{names.index("pchVersion")});'
     else:
         raise Unsupported(f'retour {ret} ({wrapper})')
-    body = [f'typedef {rproto} (*F)({", ".join(proto)});', 'static void *cache;',
-            'void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);',
-            f'if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "{flat}"), __ATOMIC_RELAXED);', *lines]
+    # La fonction flat de la dylib n'est que `ldr x8,[x0]; ldr xN,[x8,#off]; br xN` (vérifié
+    # par disassemble) : on appelle directement l'emplacement de la vtable de l'objet hôte.
+    # La disposition dépend alors de la version demandée, pas du SDK de la dylib chargée.
+    body = [f'typedef {rproto} (*F)({", ".join(proto)});', f'void *fn = steam_slot(c, self, {slot}u);', *lines]
     body.append(f'{"" if rproto == "void" else rproto + " r = "}((F)fn)({", ".join(call)});')
     body.extend(post)
     if store:
@@ -255,7 +275,16 @@ def plan_method(flat, method, ret, params, wrapper, types, gprs):
     return body, sret
 
 
-def generate(pkg, dylib):
+def generate(sources):
+    """sources: [(dossier du paquet, dylib, {classe: version})], dans l'ordre de priorité."""
+    methods, interfaces, stats = [], [], {}
+    for pkg, dylib, versions in sources:
+        wanted = {k: v for k, v in versions.items() if v not in {i[0] for i in interfaces}}
+        generate_source(pkg, dylib, wanted, methods, interfaces, stats)
+    return emit(methods, interfaces), stats, methods
+
+
+def generate_source(pkg, dylib, versions, methods, interfaces, stats):
     files = sdk_files(pkg)
     types = typedefs(files)
     slots, symbols = disassemble(dylib)
@@ -270,8 +299,7 @@ def generate(pkg, dylib):
                 ret, params = natives[twin]
                 natives[flat] = (ret, [] if method in ('Init', 'RunFrame') else params)
                 wrappers.setdefault(flat, wrappers.get(twin))
-    methods, interfaces, stats = [], [], {}
-    for klass, version in VERSIONS.items():
+    for klass, version in versions.items():
         prefix = f'SteamAPI_{klass}_'
         own = sorted((s, f) for f, s in slots.items() if f.startswith(prefix))
         if not own:
@@ -293,14 +321,18 @@ def generate(pkg, dylib):
                 if flat not in natives:
                     raise Unsupported('signature absente de Steamworks.NET')
                 ret, params = natives[flat]
-                entry['body'], entry['sret'] = plan_method(flat, method, ret, params, wrappers.get(flat), types, gprs)
+                entry['body'], entry['sret'] = plan_method(flat, method, ret, params, wrappers.get(flat), types, gprs, slot)
             except Unsupported as exc:
                 entry['why'] = str(exc)
             methods.append(entry)
         stats[version] = (len(own), sum(('body' in m or 'fn' in m) for m in methods if m['iface'] == len(interfaces) - 1), count)
+
+
+def emit(methods, interfaces):
     methods.sort(key=lambda m: m['name'])
-    out = ['/* Généré par tools/gen_steam.py depuis la libsteam_api.dylib officielle (SDK 1.53a) et',
-           ' * Steamworks.NET 20.1.0 (MIT). Ne pas modifier : relancer le générateur. */',
+    out = ['/* Généré par tools/gen_steam.py depuis les libsteam_api.dylib officielles (SDK 1.53a, 1.60,',
+           ' * 1.61) et Steamworks.NET 20.1.0, 2024.8.0, 2025.161.0 (MIT). Ne pas modifier : relancer',
+           ' * le générateur. */',
            '#include "steam.h"', '']
     out.extend(f'void {fn}(CPU *c, void *self, uint32_t args, uint32_t sret);' for fn in sorted(set(MANUAL.values())))
     for index, m in enumerate(methods):
@@ -322,18 +354,18 @@ def generate(pkg, dylib):
                    f'{m.get("fn", "NULL")}, {why}}},')
     out.append('};')
     out.append(f'const size_t steam_method_count = {len(methods)};')
-    return '\n'.join(out) + '\n', stats, methods
+    return '\n'.join(out) + '\n'
 
 
 def main():
-    config = json.loads((ROOT / 'config/local.json').read_text()) if (ROOT / 'config/local.json').exists() else {}
-    default_dylib = config.get('steam_api_dylib', str(ROOT.parent / 'work/downloads/steamworks/steam_api.bundle/Contents/MacOS/libsteam_api.dylib'))
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--sdk', type=Path, default=ROOT.parent / 'work/downloads/steamworks/pkg')
-    parser.add_argument('--dylib', type=Path, default=Path(default_dylib))
+    parser.add_argument('--downloads', type=Path, default=DOWNLOADS,
+                        help='folder holding the unpacked Steamworks.NET packages of SOURCES')
     parser.add_argument('--out', type=Path, default=ROOT / 'runtime/steam_generated.c')
     args = parser.parse_args()
-    code, stats, methods = generate(args.sdk, args.dylib)
+    sources = [(args.downloads / name / 'pkg', args.downloads / name / 'steam_api.bundle/Contents/MacOS/libsteam_api.dylib',
+                versions) for name, versions in SOURCES]
+    code, stats, methods = generate(sources)
     args.out.write_text(code)
     total = sum(s[0] for s in stats.values()); done = sum(s[1] for s in stats.values())
     for version, (n, ok, slots) in stats.items():

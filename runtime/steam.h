@@ -22,6 +22,7 @@ extern const size_t steam_method_count;
 
 // Aides du code généré (steam.c).
 void *steam_flat(CPU *c, const char *symbol);                // symbole de la dylib, piège s'il manque
+void *steam_slot(CPU *c, void *self, uint32_t slot);         // emplacement de la vtable d'un objet hôte
 const char *steam_in_string(CPU *c, uint32_t address);       // NULL si 0
 void *steam_out(CPU *c, uint32_t address, uint32_t size);    // NULL si 0
 // Tampons de count éléments : lus par Steam (contrôle de lecture) ou écrits (contrôle d'écriture).
