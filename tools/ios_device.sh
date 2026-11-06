@@ -9,6 +9,8 @@
 #   tools/ios_device.sh prep                     copy only Documents/prep again (after gameprep: ~80 MB)
 #   tools/ios_device.sh run [seconds] [VAR=value...]   launch (default 180 s), then fetch Documents/game.log
 #   tools/ios_device.sh backtap                  fetch the back-tap dataset (Documents/backtap/dataset.csv)
+#   tools/ios_device.sh saves status|pull|push [--force] [--dry-run]   saves between the Mac and the iPhone
+#                                                (tools/save_sync.py; docs/usage.md#saves-between-mac-and-iphone)
 # Device: P2_DEVICE (UDID or name), else the first connected iPhone/iPad.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -37,6 +39,13 @@ has_file() {  # chemin relatif au conteneur : code 0 s'il existe sur l'appareil
 }
 copy_to() {  # source destination (relative au conteneur de données)
   dc device copy to --domain-type appDataContainer --domain-identifier "$1" --source "$2" --destination "$3"
+}
+list_saves() {  # fichier JSON : liste horodatée de Documents/portal2-userdata/portal2 (sauvegardes)
+  dc device info files --domain-type appDataContainer --domain-identifier "$APP_ID" \
+    --subdirectory Documents/portal2-userdata/portal2 --json-output "$1" >/dev/null 2>&1 || {
+    echo "cannot list Documents/portal2-userdata/portal2 on the device: is it unlocked, and was the game launched once?"
+    exit 1
+  }
 }
 
 case "${1:-}" in
@@ -99,6 +108,30 @@ backtap)
   dc device copy from --domain-type appDataContainer --domain-identifier $APP_ID \
     --source Documents/backtap/dataset.csv --destination build/ios/device/backtap/dataset.csv
   echo "dataset: build/ios/device/backtap/dataset.csv ($(($(wc -l < build/ios/device/backtap/dataset.csv) - 1)) examples)"
+  ;;
+saves)
+  action=${2:-status}; shift; shift || true
+  case "$action" in status|pull|push) ;; *) echo "saves status|pull|push [--force] [--dry-run]"; exit 2 ;; esac
+  if [ "$action" = pull ] && pgrep -x portal2-native >/dev/null && [[ " $* " != *" --force "* ]]; then
+    echo "the game is running on the Mac: quit it first (it rewrites its saves)"; exit 1
+  fi
+  mkdir -p build/ios/device
+  listing=build/ios/device/saves-listing.json   # kept for debugging
+  sync=(python3 tools/save_sync.py)
+  list_saves "$listing"
+  if [ "$action" = status ]; then "${sync[@]}" status --listing "$listing" --device "$DEVICE"; exit; fi
+  ops=$("${sync[@]}" plan "$action" --listing "$listing" --device "$DEVICE" "$@")
+  case " $* " in *" --dry-run "*) exit 0 ;; esac
+  # Copies faites ou non, l'état ne retient que celles arrivées (save_sync.py record),
+  # plus les fichiers déjà identiques (référence pour la prochaine comparaison).
+  trap 'list_saves "$listing" && "${sync[@]}" record --listing "$listing" --device "$DEVICE"' EXIT
+  while IFS=$'\t' read -r op from to; do   # </dev/null : devicectl ne doit pas lire la liste
+    case "$op" in
+    from) dc device copy from --domain-type appDataContainer --domain-identifier "$APP_ID" \
+            --source "$from" --destination "$to" >/dev/null </dev/null ;;
+    to) copy_to "$APP_ID" "$from" "$to" >/dev/null </dev/null ;;
+    esac
+  done <<< "$ops"
   ;;
 *) awk 'NR > 1 && !/^#/ {exit} NR > 1 {sub(/^# ?/, ""); print}' "$0"; exit 2 ;;
 esac

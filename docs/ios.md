@@ -114,6 +114,9 @@ xcodebuild -project P2Signing.xcodeproj -scheme Portal2 -destination generic/pla
 Replace `YOURTEAMID` with your team ID (Xcode > Settings > Accounts, or the
 `OU` field of your Apple Development certificate).
 
+Saves: `tools/ios_device.sh saves status|pull|push` copies them between the Mac
+and the iPhone over the cable ([details](usage.md#saves-between-mac-and-iphone)).
+
 `Documents/launch.args` in the app's container adds arguments
 (one per line), for example `+map` followed by `sp_a2_laser_intro`.
 
