@@ -649,8 +649,11 @@ int rt_libc_shim(CPU *c, const char *name) {
         if(!result){save_errno(c);c->eax=0;}
         else {
             size_t length=strlen(result)+1;
-            if(!a){ n=n?n:(uint32_t)length; a=rt_alloc(n); if(!a)errno=ENOMEM; }
-            if(!a || length>n){if(a)errno=ERANGE;save_errno(c);c->eax=0;}
+            // glibc : tampon fourni de taille 0 → EINVAL ; trop petit → ERANGE
+            // (aussi pour un tampon alloué de taille demandée, sans l'allouer).
+            int error=a && !n?EINVAL:n && length>n?ERANGE:0;
+            if(!error && !a){ a=rt_alloc(n?n:(uint32_t)length); if(!a)error=ENOMEM; }
+            if(error){errno=error;save_errno(c);c->eax=0;}
             else {memcpy(rt_write_span(c,a,length),result,length);c->eax=a;}
             free(result);
         }
