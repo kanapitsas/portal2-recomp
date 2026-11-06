@@ -295,7 +295,8 @@ RT_CHECK(d3d9_generated_tables_match_d3d9_h) {
         {D3D9_IDirect3DTexture9, 22}, {D3D9_IDirect3DCubeTexture9, 22}, {D3D9_IDirect3DVolumeTexture9, 22},
         {D3D9_IDirect3DSurface9, 17}, {D3D9_IDirect3DVolume9, 11}, {D3D9_IDirect3DVertexBuffer9, 14},
         {D3D9_IDirect3DIndexBuffer9, 14}, {D3D9_IDirect3DVertexDeclaration9, 5}, {D3D9_IDirect3DVertexShader9, 5},
-        {D3D9_IDirect3DPixelShader9, 5}, {D3D9_IDirect3DStateBlock9, 6}, {D3D9_IDirect3DQuery9, 8}};
+        {D3D9_IDirect3DPixelShader9, 5}, {D3D9_IDirect3DStateBlock9, 6}, {D3D9_IDirect3DQuery9, 8},
+        {D3D9_IDirect3D9Ex, 22}, {D3D9_IDirect3DDevice9Ex, 134}, {D3D9_IDirect3DSwapChain9Ex, 13}};
     for (size_t i = 0; i < sizeof(sizes) / sizeof(*sizes); ++i) {
         const D3d9Interface *info = &rt_d3d9_interfaces[sizes[i].iface];
         assert(!info->abstract && info->slot_count == sizes[i].slots);
@@ -899,17 +900,40 @@ RT_CHECK(fps_overlay_layout_two_lines) {
     assert(line2 && (na != nb || memcmp(a, b, sizeof(FpsRect) * (size_t)na)));
 }
 
-// Direct3DCreate9Ex : pas d'IDirect3D9Ex dans libd3d9metal, réponse d'un
-// système sans D3D9Ex (le moteur se replie sur Direct3DCreate9).
-RT_CHECK(d3d9_create9ex_is_not_available) {
+// Direct3DCreate9Ex : Half-Life 2 n'a pas de repli sur Direct3DCreate9.
+static void *ex_vtbl[22];
+static Fake d3d_ex = {ex_vtbl, 1, 0, NULL, NULL};
+static unsigned ex_sdk;
+static int32_t fake_create_ex(unsigned sdk, void **out) { ex_sdk = sdk; d3d_ex.refs = 1; *out = &d3d_ex; return 0; }
+static int32_t ex_luid(Fake *self, uint32_t adapter, uint32_t *luid) {
+    assert(self == &d3d_ex && adapter == 0);
+    luid[0] = 0x1234; luid[1] = 0x5678; return 0;
+}
+static CPU create9ex(uint32_t out) {
     CPU c; rt_cpu_reset(&c); c.esp = STACK;
-    W32(SCRATCH, 0xdeadbeef);
-    PUSH(&c, SCRATCH); PUSH(&c, 32);
+    PUSH(&c, out); PUSH(&c, 32);
     uint32_t base = c.esp;
     rt_call(&c, rt_dynamic_import("Direct3DCreate9Ex"), RT_RETURN_SENTINEL);
-    assert(c.esp == base && c.eax == 0x8876086au && R32(SCRATCH) == 0);
-    rt_cpu_reset(&c); c.esp = STACK;
-    PUSH(&c, 0); PUSH(&c, 32);
-    rt_call(&c, rt_dynamic_import("Direct3DCreate9Ex"), RT_RETURN_SENTINEL);
-    assert(c.eax == 0x8876086au);
+    assert(c.esp == base);
+    return c;
+}
+RT_CHECK(d3d9_create9ex_bridges_idirect3d9ex) {
+    assert(create9ex(0).eax == 0x8876086cu);                         // pas de sortie : D3DERR_INVALIDCALL
+    W32(SCRATCH, 0xdeadbeef);
+    assert(create9ex(SCRATCH).eax == 0x8876086au && R32(SCRATCH) == 0);   // pas de bibliothèque : NOTAVAILABLE
+
+    fill(ex_vtbl, 22);
+    ex_vtbl[1] = (void *)f_addref; ex_vtbl[2] = (void *)f_release; ex_vtbl[21] = (void *)ex_luid;
+    use_test_library(fake_init);
+    rt_d3d9_set_library_ex(fake_create_ex);
+    W32(SCRATCH, 0);
+    assert(create9ex(SCRATCH).eax == 0 && ex_sdk == 32);
+    uint32_t proxy = R32(SCRATCH);
+    assert(proxy && R32(proxy + 4) == tag(D3D9_IDirect3D9Ex));
+    assert(slot_of("IDirect3D9Ex", "GetAdapterLUID") == 21 && slot_of("IDirect3D9Ex", "CreateDeviceEx") == 20);
+    assert(CALL(proxy, IDirect3D9Ex, GetAdapterLUID, 0, SCRATCH + 16).eax == 0);
+    assert(R32(SCRATCH + 16) == 0x1234 && R32(SCRATCH + 20) == 0x5678);
+    assert(CALL0(proxy, IUnknown, Release).eax == 0);
+    rt_d3d9_set_library_ex(NULL);
+    drop_test_library();
 }

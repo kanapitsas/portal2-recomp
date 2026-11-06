@@ -288,6 +288,35 @@ interface IDirect3DQuery9 : IUnknown {D9771460-A695-4F26-BBD3-27B840B541CC}
     DWORD GetDataSize()
     HRESULT Issue(u dwIssueFlags)
     HRESULT GetData(out:dwSize pData, u dwSize, u dwGetDataFlags)
+
+interface IDirect3D9Ex : IDirect3D9 {02177241-69FC-400C-8FF1-93A44DF6861D}
+    UINT GetAdapterModeCountEx(u Adapter, in:12 pFilter)
+    HRESULT EnumAdapterModesEx(u Adapter, in:12 pFilter, u Mode, out:24 pMode)
+    HRESULT GetAdapterDisplayModeEx(u Adapter, out:24 pMode, out:4 pRotation)
+    HRESULT CreateDeviceEx(u Adapter, u DeviceType, hwnd hFocusWindow, u BehaviorFlags, params pPresentationParameters, in:24 pFullscreenDisplayMode, pp:IDirect3DDevice9Ex ppReturnedDeviceInterface)
+    HRESULT GetAdapterLUID(u Adapter, out:8 pLUID)
+
+interface IDirect3DDevice9Ex : IDirect3DDevice9 {B18B10CE-2649-405A-870F-95F777D4313A}
+    HRESULT SetConvolutionMonoKernel(u width, u height, in:4*width rows, in:4*height columns)
+    HRESULT ComposeRects(if:IDirect3DSurface9 pSrc, if:IDirect3DSurface9 pDst, if:IDirect3DVertexBuffer9 pSrcRectDescs, u NumRects, if:IDirect3DVertexBuffer9 pDstRectDescs, u Operation, i Xoffset, i Yoffset)
+    HRESULT PresentEx(in:16 pSourceRect, in:16 pDestRect, hwnd hDestWindowOverride, rgndata pDirtyRegion, u dwFlags)
+    HRESULT GetGPUThreadPriority(out:4 pPriority)
+    HRESULT SetGPUThreadPriority(i Priority)
+    HRESULT WaitForVBlank(u iSwapChain)
+    HRESULT CheckResourceResidency(u pResourceArray, u NumResources) !stub
+    HRESULT SetMaximumFrameLatency(u MaxLatency)
+    HRESULT GetMaximumFrameLatency(out:4 pMaxLatency)
+    HRESULT CheckDeviceState(hwnd hDestinationWindow)
+    HRESULT CreateRenderTargetEx(u Width, u Height, u Format, u MultiSample, u MultisampleQuality, u Lockable, pp:IDirect3DSurface9 ppSurface, shared pSharedHandle, u Usage)
+    HRESULT CreateOffscreenPlainSurfaceEx(u Width, u Height, u Format, u Pool, pp:IDirect3DSurface9 ppSurface, shared pSharedHandle, u Usage)
+    HRESULT CreateDepthStencilSurfaceEx(u Width, u Height, u Format, u MultiSample, u MultisampleQuality, u Discard, pp:IDirect3DSurface9 ppSurface, shared pSharedHandle, u Usage)
+    HRESULT ResetEx(params pPresentationParameters, in:24 pFullscreenDisplayMode)
+    HRESULT GetDisplayModeEx(u iSwapChain, out:24 pMode, out:4 pRotation)
+
+interface IDirect3DSwapChain9Ex : IDirect3DSwapChain9 {91886CAF-1C3D-4D2E-A0AB-3E4C7D8D3303}
+    HRESULT GetLastPresentCount(out:4 pLastPresentCount)
+    HRESULT GetPresentStats(u pPresentationStatistics) !stub
+    HRESULT GetDisplayModeEx(out:24 pMode, out:4 pRotation)
 '''
 
 RETURNS = {'HRESULT': 'int32_t', 'ULONG': 'uint32_t', 'UINT': 'uint32_t', 'DWORD': 'uint32_t',

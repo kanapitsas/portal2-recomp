@@ -75,6 +75,7 @@ static __attribute__((noreturn, format(printf, 2, 3))) void fail(CPU *c, const c
 static pthread_mutex_t library_lock = PTHREAD_MUTEX_INITIALIZER;
 static d3d9metal_init_fn library_init, test_init;
 static d3d9metal_create_fn library_create, test_create;
+static d3d9_create_ex_fn library_create_ex, test_create_ex;
 static int library_state;   // 0 : à charger, 1 : prête, -1 : absente ou refusée
 static char library_path[PATH_MAX];
 
@@ -83,6 +84,7 @@ static char library_path[PATH_MAX];
 // l'app signée ; tools/build_ios.py --d3d9metal lie libd3d9metal.a).
 int d3d9metal_init(const D3D9MetalHost *host);
 void *d3d9metal_Direct3DCreate9(unsigned sdk_version);
+int32_t Direct3DCreate9Ex(unsigned sdk_version, void **out);
 #else
 static int executable_dir(char *out, size_t size) {
     char exe[PATH_MAX], real[PATH_MAX];
@@ -123,7 +125,13 @@ static void *open_library(char *path, size_t size) {
 void rt_d3d9_set_library(d3d9metal_init_fn init, d3d9metal_create_fn create) {
     pthread_mutex_lock(&library_lock);
     test_init = init; test_create = create;
-    library_init = NULL; library_create = NULL; library_state = 0;
+    library_init = NULL; library_create = NULL; library_create_ex = NULL; library_state = 0;
+    pthread_mutex_unlock(&library_lock);
+}
+void rt_d3d9_set_library_ex(d3d9_create_ex_fn create_ex) {
+    pthread_mutex_lock(&library_lock);
+    test_create_ex = create_ex;
+    library_create_ex = NULL; library_state = 0;
     pthread_mutex_unlock(&library_lock);
 }
 
@@ -263,14 +271,16 @@ static int load_library(void) {
         library_state = -1;
         d3d9metal_init_fn init = test_init;
         d3d9metal_create_fn create = test_create;
+        d3d9_create_ex_fn create_ex = test_create_ex;
         if (!init) {
 #ifdef RT_D3D9METAL_STATIC
-            init = d3d9metal_init; create = d3d9metal_Direct3DCreate9;
+            init = d3d9metal_init; create = d3d9metal_Direct3DCreate9; create_ex = Direct3DCreate9Ex;
             snprintf(library_path, sizeof(library_path), "libd3d9metal (linked in)");
 #else
             void *handle = open_library(library_path, sizeof(library_path));
             init = handle ? (d3d9metal_init_fn)dlsym(handle, "d3d9metal_init") : NULL;
             create = handle ? (d3d9metal_create_fn)dlsym(handle, "d3d9metal_Direct3DCreate9") : NULL;
+            create_ex = handle ? (d3d9_create_ex_fn)dlsym(handle, "Direct3DCreate9Ex") : NULL;
             if (!init || !create) fprintf(stderr, "d3d9: %s: %s\n", library_path, handle ? "d3d9metal_* exports missing" : "not loaded");
 #endif
         } else snprintf(library_path, sizeof(library_path), "(test library)");
@@ -283,7 +293,7 @@ static int load_library(void) {
             if (status) fprintf(stderr, "d3d9: d3d9metal_init failed (%d)\n", status);
             else {
                 if (!test_init) initialized = init;
-                library_init = init; library_create = create; library_state = 1;
+                library_init = init; library_create = create; library_create_ex = create_ex; library_state = 1;
                 fprintf(stderr, "d3d9: %s ready (vendor %04x device %04x, %u display modes, cache %s)\n", library_path,
                         host.vendor_id, host.device_id, host.mode_count, host.cache_dir ? host.cache_dir : "none");
             }
@@ -959,16 +969,24 @@ static int d3d9_shim(CPU *c, const char *name) {
         return 1;
     }
     if (!strcmp(name, "Direct3DCreate9Ex")) {
-        // Direct3DCreate9Ex(UINT SDKVersion, IDirect3D9Ex **out) : le contrat
-        // libd3d9metal (d3d9metal.h) n'expose qu'IDirect3D9, pas d'objet Ex à
-        // rendre. Réponse d'un système sans D3D9Ex : D3DERR_NOTAVAILABLE et
-        // *out = NULL ; le moteur se replie alors sur Direct3DCreate9.
-        uint32_t out = R32(c->esp + 8);
-        if (out) { rt_write_span(c, out, 4); W32(out, 0); }
-        static int logged;
-        if (!logged++) fprintf(stderr, "d3d9: Direct3DCreate9Ex(%u): IDirect3D9Ex is not bridged, "
-                                       "returning D3DERR_NOTAVAILABLE\n", R32(c->esp + 4));
-        c->eax = 0x8876086au;   // D3DERR_NOTAVAILABLE
+        // Direct3DCreate9Ex(UINT SDKVersion, IDirect3D9Ex **out). Half-Life 2
+        // ne se replie pas sur Direct3DCreate9 : sans IDirect3D9Ex, pas de rendu.
+        uint32_t sdk = R32(c->esp + 4), out = R32(c->esp + 8);
+        if (!out) { c->eax = 0x8876086cu; return 1; }   // D3DERR_INVALIDCALL
+        rt_write_span(c, out, 4); W32(out, 0);
+        if (!load_library() || !library_create_ex) {
+            static int logged;
+            if (!logged++) fprintf(stderr, "d3d9: Direct3DCreate9Ex(%u): %s, returning D3DERR_NOTAVAILABLE\n", sdk,
+                                   library_state > 0 ? "the native library does not export Direct3DCreate9Ex"
+                                                     : "no native Direct3D 9 library");
+            c->eax = 0x8876086au;   // D3DERR_NOTAVAILABLE
+            return 1;
+        }
+        void *d3d = NULL;
+        int32_t hr = library_create_ex(sdk, &d3d);
+        if (hr < 0 || !d3d) fprintf(stderr, "d3d9: Direct3DCreate9Ex(%u) failed (0x%08x)\n", sdk, (uint32_t)hr);
+        else W32(out, d3d9_proxy(c, d3d, D3D9_IDirect3D9Ex));
+        c->eax = (uint32_t)hr;
         return 1;
     }
     const D3d9Method *m = find_method(name);

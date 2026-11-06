@@ -104,6 +104,10 @@ uint32_t d3d9_guest_pointer(CPU *c, const void *host);
 // NULL/NULL pour revenir à libd3d9metal.dylib.
 #include "d3d9/d3d9metal.h"
 void rt_d3d9_set_library(d3d9metal_init_fn init, d3d9metal_create_fn create);
+// Direct3DCreate9Ex de d3d9.h (exporté par libd3d9metal à côté du contrat) :
+// HRESULT, IDirect3D9Ex* dans *out. Facultatif : absent, D3DERR_NOTAVAILABLE.
+typedef int32_t (*d3d9_create_ex_fn)(unsigned sdk_version, void **out);
+void rt_d3d9_set_library_ex(d3d9_create_ex_fn create_ex);   // tests ; NULL : celui de la bibliothèque
 const D3D9MetalHost *rt_d3d9_host(void);
 uint32_t rt_d3d9_find_proxy(const void *host);   // 0 si aucun
 // Tests sans fenêtre : CAMetalLayer rendue pour un HWND à la place de la vue SDL (NULL : SDL).

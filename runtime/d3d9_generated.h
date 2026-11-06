@@ -23,12 +23,15 @@ enum {
     D3D9_IDirect3DPixelShader9 = 15,
     D3D9_IDirect3DStateBlock9 = 16,
     D3D9_IDirect3DQuery9 = 17,
-    D3D9_INTERFACE_COUNT = 18,
+    D3D9_IDirect3D9Ex = 18,
+    D3D9_IDirect3DDevice9Ex = 19,
+    D3D9_IDirect3DSwapChain9Ex = 20,
+    D3D9_INTERFACE_COUNT = 21,
 };
-#define D3D9_MASK_IUnknown 0x3ffceu
-#define D3D9_MASK_IDirect3D9 0x2u
-#define D3D9_MASK_IDirect3DDevice9 0x4u
-#define D3D9_MASK_IDirect3DSwapChain9 0x8u
+#define D3D9_MASK_IUnknown 0x1fffceu
+#define D3D9_MASK_IDirect3D9 0x40002u
+#define D3D9_MASK_IDirect3DDevice9 0x80004u
+#define D3D9_MASK_IDirect3DSwapChain9 0x100008u
 #define D3D9_MASK_IDirect3DResource9 0xfc0u
 #define D3D9_MASK_IDirect3DBaseTexture9 0x1c0u
 #define D3D9_MASK_IDirect3DTexture9 0x40u
@@ -43,6 +46,9 @@ enum {
 #define D3D9_MASK_IDirect3DPixelShader9 0x8000u
 #define D3D9_MASK_IDirect3DStateBlock9 0x10000u
 #define D3D9_MASK_IDirect3DQuery9 0x20000u
+#define D3D9_MASK_IDirect3D9Ex 0x40000u
+#define D3D9_MASK_IDirect3DDevice9Ex 0x80000u
+#define D3D9_MASK_IDirect3DSwapChain9Ex 0x100000u
 
 #define D3D9_SLOT_IDirect3DResource9_SetPrivateData 4
 void d3d9_manual_IDirect3DResource9_SetPrivateData(CPU *c, void *self, uint32_t a);
