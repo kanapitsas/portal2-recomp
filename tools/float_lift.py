@@ -2,7 +2,7 @@
 import re
 
 
-def _lower_base(op, args, nxt, Operand, Unsupported):
+def _lower_base(op, args, nxt, Operand, Unsupported, here='c->eip'):
     def xmm(text):
         m = re.fullmatch(r'xmm([0-7])', text)
         return int(m[1]) if m else None
@@ -55,7 +55,7 @@ def _lower_base(op, args, nxt, Operand, Unsupported):
             for text in parts:
                 if xmm(text) is None:
                     address = Operand(text).addr
-                    code = f'if (({address}) & 15) rt_trap(c, c->eip, "unaligned SSE move"); ' + code
+                    code = f'if (({address}) & 15) rt_trap(c, {here}, "unaligned SSE move"); ' + code
     elif op in ('movsd', 'movss') and len(parts) == 2 and any(xmm(p) is not None for p in parts):
         dst, src = parts; size = 64 if op == 'movsd' else 32
         field = 'q' if size == 64 else 'd'
@@ -218,14 +218,15 @@ FCMOV = {'fcmovb': 'B', 'fcmove': 'E', 'fcmovbe': 'BE', 'fcmovu': 'P',
          'fcmovnb': 'AE', 'fcmovne': 'NE', 'fcmovnbe': 'A', 'fcmovnu': 'NP'}
 
 
-def lower(op, args, nxt, Operand, Unsupported):
-    code = _lower_extended(op, args, Operand, Unsupported)
+def lower(op, args, nxt, Operand, Unsupported, here='c->eip'):
+    """`here`: C expression of the instruction address, reported by alignment traps."""
+    code = _lower_extended(op, args, Operand, Unsupported, here)
     if code is not None:
         return code + f' goto L{nxt:x};', [nxt]
-    return _lower_base(op, args, nxt, Operand, Unsupported)
+    return _lower_base(op, args, nxt, Operand, Unsupported, here)
 
 
-def _lower_extended(op, args, Operand, Unsupported):
+def _lower_extended(op, args, Operand, Unsupported, here='c->eip'):
     parts = [x.strip() for x in args.split(',')] if args else []
 
     def reg(text, kind):
@@ -268,7 +269,7 @@ def _lower_extended(op, args, Operand, Unsupported):
         if reg(text, 'xmm') is None and reg(text, 'mm') is None and '[' in text:
             mem = Operand(text)
             if mem.width == 128:
-                return f'if (({mem.addr}) & 15) rt_trap(c, c->eip, "unaligned SSE operand"); ' + code
+                return f'if (({mem.addr}) & 15) rt_trap(c, {here}, "unaligned SSE operand"); ' + code
         return code
 
     def binary(dst, src, body):
@@ -473,7 +474,7 @@ def _lower_extended(op, args, Operand, Unsupported):
     if op in ('movntps', 'movntpd', 'movntdq') and two:
         mem = Operand(parts[0])
         if mem.addr is None or mem.width != 128: raise Unsupported('non-temporal store operand')
-        return (f'if (({mem.addr}) & 15) rt_trap(c, c->eip, "unaligned SSE operand"); '
+        return (f'if (({mem.addr}) & 15) rt_trap(c, {here}, "unaligned SSE operand"); '
                 f'WX({mem.addr}, c->xmm[{xmm_dst(parts[1])}]);')
     if op == 'movnti' and two:
         return Operand(parts[0]).write(Operand(parts[1]).read())
