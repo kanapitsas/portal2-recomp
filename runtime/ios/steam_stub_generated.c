@@ -555,6 +555,7 @@ EXPORT bool SteamAPI_ISteamUGC_BInitWorkshopForGameServer(void *a0, uint32_t a1,
 EXPORT uint64_t SteamAPI_ISteamUGC_CreateItem(void *a0, uint32_t a1, int32_t a2) { (void)a0; (void)a1; (void)a2; return 0; }
 EXPORT uint64_t SteamAPI_ISteamUGC_CreateQueryAllUGCRequestCursor(void *a0, int32_t a1, int32_t a2, uint32_t a3, uint32_t a4, const char *a5) { (void)a0; (void)a1; (void)a2; (void)a3; (void)a4; (void)a5; return 0; }
 EXPORT uint64_t SteamAPI_ISteamUGC_CreateQueryAllUGCRequestPage(void *a0, int32_t a1, int32_t a2, uint32_t a3, uint32_t a4, uint32_t a5) { (void)a0; (void)a1; (void)a2; (void)a3; (void)a4; (void)a5; return 0; }
+EXPORT uint64_t SteamAPI_ISteamUGC_CreateQueryUGCDetailsRequest(void *a0, void *a1, uint32_t a2) { (void)a0; (void)a1; (void)a2; return 0; }
 EXPORT uint64_t SteamAPI_ISteamUGC_CreateQueryUserUGCRequest(void *a0, uint32_t a1, int32_t a2, int32_t a3, int32_t a4, uint32_t a5, uint32_t a6, uint32_t a7) { (void)a0; (void)a1; (void)a2; (void)a3; (void)a4; (void)a5; (void)a6; (void)a7; return 0; }
 EXPORT uint64_t SteamAPI_ISteamUGC_DeleteItem(void *a0, uint64_t a1) { (void)a0; (void)a1; return 0; }
 EXPORT bool SteamAPI_ISteamUGC_DownloadItem(void *a0, uint64_t a1, bool a2) { (void)a0; (void)a1; (void)a2; return false; }
@@ -614,6 +615,8 @@ EXPORT bool SteamAPI_ISteamUGC_SetTimeUpdatedDateRange(void *a0, uint64_t a1, ui
 EXPORT uint64_t SteamAPI_ISteamUGC_SetUserItemVote(void *a0, uint64_t a1, bool a2) { (void)a0; (void)a1; (void)a2; return 0; }
 EXPORT bool SteamAPI_ISteamUGC_ShowWorkshopEULA(void *a0) { (void)a0; return false; }
 EXPORT uint64_t SteamAPI_ISteamUGC_StartItemUpdate(void *a0, uint32_t a1, uint64_t a2) { (void)a0; (void)a1; (void)a2; return 0; }
+EXPORT uint64_t SteamAPI_ISteamUGC_StartPlaytimeTracking(void *a0, void *a1, uint32_t a2) { (void)a0; (void)a1; (void)a2; return 0; }
+EXPORT uint64_t SteamAPI_ISteamUGC_StopPlaytimeTracking(void *a0, void *a1, uint32_t a2) { (void)a0; (void)a1; (void)a2; return 0; }
 EXPORT uint64_t SteamAPI_ISteamUGC_StopPlaytimeTrackingForAllItems(void *a0) { (void)a0; return 0; }
 EXPORT uint64_t SteamAPI_ISteamUGC_SubmitItemUpdate(void *a0, uint64_t a1, const char *a2) { (void)a0; (void)a1; (void)a2; return 0; }
 EXPORT uint64_t SteamAPI_ISteamUGC_SubscribeItem(void *a0, uint64_t a1) { (void)a0; (void)a1; return 0; }

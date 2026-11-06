@@ -88,6 +88,8 @@ INPUT_BUFFERS = {
     ('SendDataOnSocket', 'pubData'), ('SendMessageToUser', 'pubData'), ('SendMessageToConnection', 'pData'),
     ('ReceivedRelayAuthTicket', 'pvTicket'), ('ReceivedP2PCustomSignal', 'pMsg'), ('SetCertificate', 'pCertificate'),
     ('SendSignal', 'pMsg'), ('SendRejectionSignal', 'pMsg'),
+    ('StartPlaytimeTracking', 'pvecPublishedFileID'), ('StopPlaytimeTracking', 'pvecPublishedFileID'),
+    ('CreateQueryUGCDetailsRequest', 'pvecPublishedFileID'),
 }
 
 
@@ -97,7 +99,7 @@ def natural_size(scalar):
     return {'bool': 1, 'int8_t': 1, 'uint8_t': 1, 'int16_t': 2, 'uint16_t': 2}.get(scalar[0], scalar[1])
 
 
-SIZE_NAME = re.compile(r'^(cub|cb|cch|un?Max|c[A-Z]|n\w*Size|\w*BufferSize|\w*Max\w*|\w*Count\w*|un\w*Size\w*)')
+SIZE_NAME = re.compile(r'^(cub|cb|cch|un?Max|unNum\w+|c[A-Z]|n\w*Size|\w*BufferSize|\w*Max\w*|\w*Count\w*|un\w*Size\w*)')
 
 
 def sdk_files(pkg):

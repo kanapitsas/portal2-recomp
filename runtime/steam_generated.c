@@ -3031,6 +3031,18 @@ static void m285(CPU *c, void *self, uint32_t args, uint32_t sret) {
     uint64_t r = ((F)fn)(self, a0, a1, a2, a3, a4);
     steam_ret64(c, (uint64_t)r);
 }
+/* STEAMUGC_INTERFACE_VERSION016::CreateQueryUGCDetailsRequest */
+static void m286(CPU *c, void *self, uint32_t args, uint32_t sret) {
+    (void)args; (void)sret;
+    typedef uint64_t (*F)(void *, void *, uint32_t);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_CreateQueryUGCDetailsRequest"), __ATOMIC_RELAXED);
+    void *a0 = steam_in_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 8u);
+    uint32_t a1 = (uint32_t)R32(args + 4u);
+    uint64_t r = ((F)fn)(self, a0, a1);
+    steam_ret64(c, (uint64_t)r);
+}
 /* STEAMUGC_INTERFACE_VERSION016::CreateQueryUserUGCRequest */
 static void m287(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
@@ -3760,6 +3772,30 @@ static void m347(CPU *c, void *self, uint32_t args, uint32_t sret) {
     uint64_t r = ((F)fn)(self, a0, a1);
     steam_ret64(c, (uint64_t)r);
 }
+/* STEAMUGC_INTERFACE_VERSION016::StartPlaytimeTracking */
+static void m348(CPU *c, void *self, uint32_t args, uint32_t sret) {
+    (void)args; (void)sret;
+    typedef uint64_t (*F)(void *, void *, uint32_t);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_StartPlaytimeTracking"), __ATOMIC_RELAXED);
+    void *a0 = steam_in_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 8u);
+    uint32_t a1 = (uint32_t)R32(args + 4u);
+    uint64_t r = ((F)fn)(self, a0, a1);
+    steam_ret64(c, (uint64_t)r);
+}
+/* STEAMUGC_INTERFACE_VERSION016::StopPlaytimeTracking */
+static void m349(CPU *c, void *self, uint32_t args, uint32_t sret) {
+    (void)args; (void)sret;
+    typedef uint64_t (*F)(void *, void *, uint32_t);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_StopPlaytimeTracking"), __ATOMIC_RELAXED);
+    void *a0 = steam_in_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 8u);
+    uint32_t a1 = (uint32_t)R32(args + 4u);
+    uint64_t r = ((F)fn)(self, a0, a1);
+    steam_ret64(c, (uint64_t)r);
+}
 /* STEAMUGC_INTERFACE_VERSION016::StopPlaytimeTrackingForAllItems */
 static void m350(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
@@ -3987,6 +4023,16 @@ static void m371(CPU *c, void *self, uint32_t args, uint32_t sret) {
     uint32_t a3 = (uint32_t)R32(args + 12u);
     uint32_t a4 = (uint32_t)R32(args + 16u);
     uint64_t r = ((F)fn)(self, a0, a1, a2, a3, a4);
+    steam_ret64(c, (uint64_t)r);
+}
+/* STEAMUGC_INTERFACE_VERSION020::CreateQueryUGCDetailsRequest */
+static void m372(CPU *c, void *self, uint32_t args, uint32_t sret) {
+    (void)args; (void)sret;
+    typedef uint64_t (*F)(void *, void *, uint32_t);
+    void *fn = steam_slot(c, self, 3u);
+    void *a0 = steam_in_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 8u);
+    uint32_t a1 = (uint32_t)R32(args + 4u);
+    uint64_t r = ((F)fn)(self, a0, a1);
     steam_ret64(c, (uint64_t)r);
 }
 /* STEAMUGC_INTERFACE_VERSION020::CreateQueryUserUGCRequest */
@@ -4660,6 +4706,26 @@ static void m440(CPU *c, void *self, uint32_t args, uint32_t sret) {
     void *fn = steam_slot(c, self, 45u);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 4u);
+    uint64_t r = ((F)fn)(self, a0, a1);
+    steam_ret64(c, (uint64_t)r);
+}
+/* STEAMUGC_INTERFACE_VERSION020::StartPlaytimeTracking */
+static void m441(CPU *c, void *self, uint32_t args, uint32_t sret) {
+    (void)args; (void)sret;
+    typedef uint64_t (*F)(void *, void *, uint32_t);
+    void *fn = steam_slot(c, self, 82u);
+    void *a0 = steam_in_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 8u);
+    uint32_t a1 = (uint32_t)R32(args + 4u);
+    uint64_t r = ((F)fn)(self, a0, a1);
+    steam_ret64(c, (uint64_t)r);
+}
+/* STEAMUGC_INTERFACE_VERSION020::StopPlaytimeTracking */
+static void m442(CPU *c, void *self, uint32_t args, uint32_t sret) {
+    (void)args; (void)sret;
+    typedef uint64_t (*F)(void *, void *, uint32_t);
+    void *fn = steam_slot(c, self, 83u);
+    void *a0 = steam_in_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 8u);
+    uint32_t a1 = (uint32_t)R32(args + 4u);
     uint64_t r = ((F)fn)(self, a0, a1);
     steam_ret64(c, (uint64_t)r);
 }
@@ -11157,7 +11223,7 @@ const SteamMethodInfo steam_methods[] = {
     {"STEAMUGC_INTERFACE_VERSION016::CreateItem", 14u, 40u, 0, m283, NULL},
     {"STEAMUGC_INTERFACE_VERSION016::CreateQueryAllUGCRequestCursor", 14u, 2u, 0, m284, NULL},
     {"STEAMUGC_INTERFACE_VERSION016::CreateQueryAllUGCRequestPage", 14u, 1u, 0, m285, NULL},
-    {"STEAMUGC_INTERFACE_VERSION016::CreateQueryUGCDetailsRequest", 14u, 3u, 0, NULL, "tampon inout PublishedFileId_t[] pvecPublishedFileID sans taille"},
+    {"STEAMUGC_INTERFACE_VERSION016::CreateQueryUGCDetailsRequest", 14u, 3u, 0, m286, NULL},
     {"STEAMUGC_INTERFACE_VERSION016::CreateQueryUserUGCRequest", 14u, 0u, 0, m287, NULL},
     {"STEAMUGC_INTERFACE_VERSION016::DeleteItem", 14u, 83u, 0, m288, NULL},
     {"STEAMUGC_INTERFACE_VERSION016::DownloadItem", 14u, 72u, 0, m289, NULL},
@@ -11219,8 +11285,8 @@ const SteamMethodInfo steam_methods[] = {
     {"STEAMUGC_INTERFACE_VERSION016::SetUserItemVote", 14u, 61u, 0, m345, NULL},
     {"STEAMUGC_INTERFACE_VERSION016::ShowWorkshopEULA", 14u, 84u, 0, m346, NULL},
     {"STEAMUGC_INTERFACE_VERSION016::StartItemUpdate", 14u, 41u, 0, m347, NULL},
-    {"STEAMUGC_INTERFACE_VERSION016::StartPlaytimeTracking", 14u, 75u, 0, NULL, "tampon inout PublishedFileId_t[] pvecPublishedFileID sans taille"},
-    {"STEAMUGC_INTERFACE_VERSION016::StopPlaytimeTracking", 14u, 76u, 0, NULL, "tampon inout PublishedFileId_t[] pvecPublishedFileID sans taille"},
+    {"STEAMUGC_INTERFACE_VERSION016::StartPlaytimeTracking", 14u, 75u, 0, m348, NULL},
+    {"STEAMUGC_INTERFACE_VERSION016::StopPlaytimeTracking", 14u, 76u, 0, m349, NULL},
     {"STEAMUGC_INTERFACE_VERSION016::StopPlaytimeTrackingForAllItems", 14u, 77u, 0, m350, NULL},
     {"STEAMUGC_INTERFACE_VERSION016::SubmitItemUpdate", 14u, 59u, 0, m351, NULL},
     {"STEAMUGC_INTERFACE_VERSION016::SubscribeItem", 14u, 65u, 0, m352, NULL},
@@ -11243,7 +11309,7 @@ const SteamMethodInfo steam_methods[] = {
     {"STEAMUGC_INTERFACE_VERSION020::CreateItem", 27u, 44u, 0, m369, NULL},
     {"STEAMUGC_INTERFACE_VERSION020::CreateQueryAllUGCRequestCursor", 27u, 2u, 0, m370, NULL},
     {"STEAMUGC_INTERFACE_VERSION020::CreateQueryAllUGCRequestPage", 27u, 1u, 0, m371, NULL},
-    {"STEAMUGC_INTERFACE_VERSION020::CreateQueryUGCDetailsRequest", 27u, 3u, 0, NULL, "tampon inout PublishedFileId_t[] pvecPublishedFileID sans taille"},
+    {"STEAMUGC_INTERFACE_VERSION020::CreateQueryUGCDetailsRequest", 27u, 3u, 0, m372, NULL},
     {"STEAMUGC_INTERFACE_VERSION020::CreateQueryUserUGCRequest", 27u, 0u, 0, m373, NULL},
     {"STEAMUGC_INTERFACE_VERSION020::DeleteItem", 27u, 90u, 0, m374, NULL},
     {"STEAMUGC_INTERFACE_VERSION020::DownloadItem", 27u, 79u, 0, m375, NULL},
@@ -11312,8 +11378,8 @@ const SteamMethodInfo steam_methods[] = {
     {"STEAMUGC_INTERFACE_VERSION020::SetUserItemVote", 27u, 68u, 0, m438, NULL},
     {"STEAMUGC_INTERFACE_VERSION020::ShowWorkshopEULA", 27u, 91u, 0, m439, NULL},
     {"STEAMUGC_INTERFACE_VERSION020::StartItemUpdate", 27u, 45u, 0, m440, NULL},
-    {"STEAMUGC_INTERFACE_VERSION020::StartPlaytimeTracking", 27u, 82u, 0, NULL, "tampon inout PublishedFileId_t[] pvecPublishedFileID sans taille"},
-    {"STEAMUGC_INTERFACE_VERSION020::StopPlaytimeTracking", 27u, 83u, 0, NULL, "tampon inout PublishedFileId_t[] pvecPublishedFileID sans taille"},
+    {"STEAMUGC_INTERFACE_VERSION020::StartPlaytimeTracking", 27u, 82u, 0, m441, NULL},
+    {"STEAMUGC_INTERFACE_VERSION020::StopPlaytimeTracking", 27u, 83u, 0, m442, NULL},
     {"STEAMUGC_INTERFACE_VERSION020::StopPlaytimeTrackingForAllItems", 27u, 84u, 0, m443, NULL},
     {"STEAMUGC_INTERFACE_VERSION020::SubmitItemUpdate", 27u, 66u, 0, m444, NULL},
     {"STEAMUGC_INTERFACE_VERSION020::SubscribeItem", 27u, 72u, 0, m445, NULL},
