@@ -9,7 +9,9 @@ void steam_manual_utils_warning_hook(CPU *c, void *self, uint32_t args, uint32_t
 static void m0(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamAppList_GetAppBuildId"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -18,7 +20,9 @@ static void m0(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint32_t, void *, int32_t);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamAppList_GetAppInstallDir"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     void *a1 = steam_out_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 1u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -29,7 +33,9 @@ static void m1(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m2(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint32_t, void *, int32_t);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamAppList_GetAppName"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     void *a1 = steam_out_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 1u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -40,7 +46,9 @@ static void m2(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m3(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, void *, uint32_t);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamAppList_GetInstalledApps"), __ATOMIC_RELAXED);
     void *a0 = steam_out_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 4u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     uint32_t r = ((F)fn)(self, a0, a1);
@@ -50,7 +58,9 @@ static void m3(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m4(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamAppList_GetNumInstalledApps"), __ATOMIC_RELAXED);
     uint32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -58,7 +68,9 @@ static void m4(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m5(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t, void *, void *, void *, int32_t);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_BGetDLCDataByIndex"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     void *a1 = steam_out(c, R32(args + 4u), 4u);
     void *a2 = steam_out(c, R32(args + 8u), 1u);
@@ -71,7 +83,9 @@ static void m5(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m6(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 19u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_BIsAppInstalled"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -80,7 +94,9 @@ static void m6(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m7(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_BIsCybercafe"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -88,7 +104,9 @@ static void m7(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m8(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_BIsDlcInstalled"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -97,7 +115,9 @@ static void m8(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m9(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_BIsLowViolence"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -105,7 +125,9 @@ static void m9(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m10(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_BIsSubscribed"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -113,7 +135,9 @@ static void m10(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m11(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_BIsSubscribedApp"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -122,7 +146,9 @@ static void m11(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m12(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 27u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_BIsSubscribedFromFamilySharing"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -130,7 +156,9 @@ static void m12(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m13(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_BIsSubscribedFromFreeWeekend"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -138,7 +166,9 @@ static void m13(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m14(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, void *);
-    void *fn = steam_slot(c, self, 28u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_BIsTimedTrial"), __ATOMIC_RELAXED);
     void *a0 = steam_out(c, R32(args + 0u), 4u);
     void *a1 = steam_out(c, R32(args + 4u), 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -148,7 +178,9 @@ static void m14(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m15(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_BIsVACBanned"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -156,7 +188,9 @@ static void m15(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m16(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 23u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_GetAppBuildId"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -164,7 +198,9 @@ static void m16(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m17(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, uint32_t, void *, uint32_t);
-    void *fn = steam_slot(c, self, 18u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_GetAppInstallDir"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     void *a1 = steam_out_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 1u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -175,7 +211,9 @@ static void m17(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m18(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *);
-    void *fn = steam_slot(c, self, 20u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_GetAppOwner"), __ATOMIC_RELAXED);
     uint64_t r = ((F)fn)(self);
     steam_ret_sret(c, sret, r);
 }
@@ -183,7 +221,9 @@ static void m18(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m19(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_GetAvailableGameLanguages"), __ATOMIC_RELAXED);
     const char * r = ((F)fn)(self);
     c->eax = steam_guest_string(c, r);
 }
@@ -191,7 +231,9 @@ static void m19(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m20(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, int32_t);
-    void *fn = steam_slot(c, self, 15u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_GetCurrentBetaName"), __ATOMIC_RELAXED);
     void *a0 = steam_out_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     int32_t a1 = (int32_t)R32(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -201,7 +243,9 @@ static void m20(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m21(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_GetCurrentGameLanguage"), __ATOMIC_RELAXED);
     const char * r = ((F)fn)(self);
     c->eax = steam_guest_string(c, r);
 }
@@ -209,7 +253,9 @@ static void m21(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m22(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 10u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_GetDLCCount"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -217,7 +263,9 @@ static void m22(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m23(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, void *, void *);
-    void *fn = steam_slot(c, self, 22u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_GetDlcDownloadProgress"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     void *a1 = steam_out(c, R32(args + 4u), 8u);
     void *a2 = steam_out(c, R32(args + 8u), 8u);
@@ -228,7 +276,9 @@ static void m23(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m24(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_GetEarliestPurchaseUnixTime"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -237,7 +287,9 @@ static void m24(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m25(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 25u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_GetFileDetails"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -246,7 +298,9 @@ static void m25(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m26(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, uint32_t, void *, uint32_t);
-    void *fn = steam_slot(c, self, 17u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_GetInstalledDepots"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     void *a1 = steam_out_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 4u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -257,7 +311,9 @@ static void m26(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m27(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, void *, int32_t);
-    void *fn = steam_slot(c, self, 26u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_GetLaunchCommandLine"), __ATOMIC_RELAXED);
     void *a0 = steam_out_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     int32_t a1 = (int32_t)R32(args + 4u);
     int32_t r = ((F)fn)(self, a0, a1);
@@ -267,7 +323,9 @@ static void m27(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m28(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 21u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_GetLaunchQueryParam"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -276,7 +334,9 @@ static void m28(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m29(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 12u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_InstallDLC"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -284,7 +344,9 @@ static void m29(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m30(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 16u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_MarkContentCorrupt"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -293,14 +355,18 @@ static void m30(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m31(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *);
-    void *fn = steam_slot(c, self, 24u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_RequestAllProofOfPurchaseKeys"), __ATOMIC_RELAXED);
     ((F)fn)(self);
 }
 /* STEAMAPPS_INTERFACE_VERSION008::RequestAppProofOfPurchaseKey */
 static void m32(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 14u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_RequestAppProofOfPurchaseKey"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -308,7 +374,9 @@ static void m32(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m33(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 13u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamApps_UninstallDLC"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -316,7 +384,9 @@ static void m33(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m34(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, const char *, const char *);
-    void *fn = steam_slot(c, self, 12u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_AddHeader"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 4u));
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -326,7 +396,9 @@ static void m34(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m35(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, bool);
-    void *fn = steam_slot(c, self, 36u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_AllowStartRequest"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     bool a1 = (R8(args + 4u) != 0);
     ((F)fn)(self, a0, a1);
@@ -335,7 +407,9 @@ static void m35(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m36(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 26u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_CopyToClipboard"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -343,7 +417,9 @@ static void m36(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m37(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, const char *, const char *);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_CreateBrowser"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     const char *a1 = steam_in_string(c, R32(args + 4u));
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -353,7 +429,9 @@ static void m37(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m38(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, const char *);
-    void *fn = steam_slot(c, self, 13u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_ExecuteJavascript"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 4u));
     ((F)fn)(self, a0, a1);
@@ -362,7 +440,9 @@ static void m38(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m40(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, const char *, bool, bool);
-    void *fn = steam_slot(c, self, 28u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_Find"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 4u));
     bool a2 = (R8(args + 8u) != 0);
@@ -373,7 +453,9 @@ static void m40(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m41(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 30u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_GetLinkAtPosition"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -383,7 +465,9 @@ static void m41(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m42(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 10u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_GoBack"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -391,7 +475,9 @@ static void m42(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m43(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_GoForward"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -399,7 +485,9 @@ static void m43(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m44(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_Init"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -407,7 +495,9 @@ static void m44(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m45(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, bool);
-    void *fn = steam_slot(c, self, 37u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_JSDialogResponse"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     bool a1 = (R8(args + 4u) != 0);
     ((F)fn)(self, a0, a1);
@@ -416,7 +506,9 @@ static void m45(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m46(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, uint32_t, int32_t);
-    void *fn = steam_slot(c, self, 21u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_KeyChar"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -426,7 +518,9 @@ static void m46(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m47(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, uint32_t, int32_t, bool);
-    void *fn = steam_slot(c, self, 19u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_KeyDown"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -437,7 +531,9 @@ static void m47(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m48(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, uint32_t, int32_t);
-    void *fn = steam_slot(c, self, 20u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_KeyUp"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -447,7 +543,9 @@ static void m48(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m49(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, const char *, const char *);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_LoadURL"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 4u));
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -457,7 +555,9 @@ static void m49(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m50(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, int32_t);
-    void *fn = steam_slot(c, self, 16u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_MouseDoubleClick"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     ((F)fn)(self, a0, a1);
@@ -466,7 +566,9 @@ static void m50(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m51(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, int32_t);
-    void *fn = steam_slot(c, self, 15u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_MouseDown"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     ((F)fn)(self, a0, a1);
@@ -475,7 +577,9 @@ static void m51(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m52(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 17u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_MouseMove"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -485,7 +589,9 @@ static void m52(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m53(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, int32_t);
-    void *fn = steam_slot(c, self, 14u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_MouseUp"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     ((F)fn)(self, a0, a1);
@@ -494,7 +600,9 @@ static void m53(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m54(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, int32_t);
-    void *fn = steam_slot(c, self, 18u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_MouseWheel"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     ((F)fn)(self, a0, a1);
@@ -503,7 +611,9 @@ static void m54(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m55(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 35u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_OpenDeveloperTools"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -511,7 +621,9 @@ static void m55(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m56(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 27u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_PasteFromClipboard"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -519,7 +631,9 @@ static void m56(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m57(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_Reload"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -527,7 +641,9 @@ static void m57(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m58(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_RemoveBrowser"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -535,7 +651,9 @@ static void m58(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m59(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, bool);
-    void *fn = steam_slot(c, self, 33u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_SetBackgroundMode"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     bool a1 = (R8(args + 4u) != 0);
     ((F)fn)(self, a0, a1);
@@ -544,7 +662,9 @@ static void m59(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m60(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *, const char *, const char *, const char *, uint32_t, bool, bool);
-    void *fn = steam_slot(c, self, 31u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_SetCookie"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     const char *a1 = steam_in_string(c, R32(args + 4u));
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -558,7 +678,9 @@ static void m60(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m61(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, float);
-    void *fn = steam_slot(c, self, 34u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_SetDPIScalingFactor"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     float a1 = RF(args + 4u);
     ((F)fn)(self, a0, a1);
@@ -567,7 +689,9 @@ static void m61(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m62(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, uint32_t);
-    void *fn = steam_slot(c, self, 22u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_SetHorizontalScroll"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     ((F)fn)(self, a0, a1);
@@ -576,7 +700,9 @@ static void m62(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m63(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, bool);
-    void *fn = steam_slot(c, self, 24u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_SetKeyFocus"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     bool a1 = (R8(args + 4u) != 0);
     ((F)fn)(self, a0, a1);
@@ -585,7 +711,9 @@ static void m63(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m64(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, float, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 32u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_SetPageScaleFactor"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     float a1 = RF(args + 4u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -596,7 +724,9 @@ static void m64(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m65(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, uint32_t, uint32_t);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_SetSize"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -606,7 +736,9 @@ static void m65(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m66(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, uint32_t);
-    void *fn = steam_slot(c, self, 23u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_SetVerticalScroll"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     ((F)fn)(self, a0, a1);
@@ -615,7 +747,9 @@ static void m66(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m67(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_Shutdown"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -623,7 +757,9 @@ static void m67(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m68(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 29u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_StopFind"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -631,7 +767,9 @@ static void m68(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m69(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_StopLoad"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -639,7 +777,9 @@ static void m69(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m70(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 25u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTMLSurface_ViewSource"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -647,7 +787,9 @@ static void m70(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m71(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 17u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_CreateCookieContainer"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     uint32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -656,7 +798,9 @@ static void m71(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m72(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, int32_t, const char *);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_CreateHTTPRequest"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 4u));
     uint32_t r = ((F)fn)(self, a0, a1);
@@ -666,7 +810,9 @@ static void m72(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m73(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_DeferHTTPRequest"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -675,7 +821,9 @@ static void m73(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m74(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, void *);
-    void *fn = steam_slot(c, self, 15u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_GetHTTPDownloadProgressPct"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     void *a1 = steam_out(c, R32(args + 4u), 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -685,7 +833,9 @@ static void m74(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m75(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, void *);
-    void *fn = steam_slot(c, self, 24u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_GetHTTPRequestWasTimedOut"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     void *a1 = steam_out(c, R32(args + 4u), 1u);
     bool r = ((F)fn)(self, a0, a1);
@@ -695,7 +845,9 @@ static void m75(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m76(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, void *, uint32_t);
-    void *fn = steam_slot(c, self, 12u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_GetHTTPResponseBodyData"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     void *a1 = steam_out_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 1u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -706,7 +858,9 @@ static void m76(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m77(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, void *);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_GetHTTPResponseBodySize"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     void *a1 = steam_out(c, R32(args + 4u), 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -716,7 +870,9 @@ static void m77(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m78(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, const char *, void *);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_GetHTTPResponseHeaderSize"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 4u));
     void *a2 = steam_out(c, R32(args + 8u), 4u);
@@ -727,7 +883,9 @@ static void m78(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m79(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, const char *, void *, uint32_t);
-    void *fn = steam_slot(c, self, 10u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_GetHTTPResponseHeaderValue"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 4u));
     void *a2 = steam_out_buffer(c, R32(args + 8u), (int64_t)(int32_t)R32(args + 12u), 1u);
@@ -739,7 +897,9 @@ static void m79(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m80(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, uint32_t, void *, uint32_t);
-    void *fn = steam_slot(c, self, 13u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_GetHTTPStreamingResponseBodyData"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     void *a2 = steam_out_buffer(c, R32(args + 8u), (int64_t)(int32_t)R32(args + 12u), 1u);
@@ -751,7 +911,9 @@ static void m80(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m81(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_PrioritizeHTTPRequest"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -760,7 +922,9 @@ static void m81(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m82(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 18u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_ReleaseCookieContainer"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -769,7 +933,9 @@ static void m82(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m83(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 14u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_ReleaseHTTPRequest"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -778,7 +944,9 @@ static void m83(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m84(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, void *);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_SendHTTPRequest"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     void *a1 = steam_out(c, R32(args + 4u), 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -788,7 +956,9 @@ static void m84(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m85(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, void *);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_SendHTTPRequestAndStreamResponse"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     void *a1 = steam_out(c, R32(args + 4u), 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -798,7 +968,9 @@ static void m85(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m86(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, const char *, const char *, const char *);
-    void *fn = steam_slot(c, self, 19u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_SetCookie"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 4u));
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -810,7 +982,9 @@ static void m86(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m87(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, uint32_t);
-    void *fn = steam_slot(c, self, 23u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_SetHTTPRequestAbsoluteTimeoutMS"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -820,7 +994,9 @@ static void m87(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m88(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, uint64_t);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_SetHTTPRequestContextValue"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -830,7 +1006,9 @@ static void m88(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m89(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, uint32_t);
-    void *fn = steam_slot(c, self, 20u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_SetHTTPRequestCookieContainer"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -840,7 +1018,9 @@ static void m89(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m90(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, const char *, const char *);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_SetHTTPRequestGetOrPostParameter"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 4u));
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -851,7 +1031,9 @@ static void m90(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m91(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, const char *, const char *);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_SetHTTPRequestHeaderValue"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 4u));
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -862,7 +1044,9 @@ static void m91(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m92(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, uint32_t);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_SetHTTPRequestNetworkActivityTimeout"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -872,7 +1056,9 @@ static void m92(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m94(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, bool);
-    void *fn = steam_slot(c, self, 22u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_SetHTTPRequestRequiresVerifiedCertificate"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     bool a1 = (R8(args + 4u) != 0);
     bool r = ((F)fn)(self, a0, a1);
@@ -882,7 +1068,9 @@ static void m94(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m95(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, const char *);
-    void *fn = steam_slot(c, self, 21u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamHTTP_SetHTTPRequestUserAgentInfo"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 4u));
     bool r = ((F)fn)(self, a0, a1);
@@ -892,7 +1080,9 @@ static void m95(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m96(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, int32_t);
-    void *fn = steam_slot(c, self, 12u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_AddPromoItem"), __ATOMIC_RELAXED);
     void *a0 = steam_out(c, R32(args + 0u), 4u);
     int32_t a1 = (int32_t)R32(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -902,7 +1092,9 @@ static void m96(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m98(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t, uint64_t);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_CheckResultSteamID"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -912,7 +1104,9 @@ static void m98(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m99(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, uint64_t, uint32_t);
-    void *fn = steam_slot(c, self, 14u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_ConsumeItem"), __ATOMIC_RELAXED);
     void *a0 = steam_out(c, R32(args + 0u), 4u);
     uint64_t a1 = (uint64_t)R64(args + 4u);
     uint32_t a2 = (uint32_t)R32(args + 12u);
@@ -923,7 +1117,9 @@ static void m99(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m100(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, void *, uint32_t, bool);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_DeserializeResult"), __ATOMIC_RELAXED);
     void *a0 = steam_out(c, R32(args + 0u), 4u);
     void *a1 = steam_in_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 1u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -935,7 +1131,9 @@ static void m100(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m101(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_DestroyResult"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -943,7 +1141,9 @@ static void m101(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m104(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_GetAllItems"), __ATOMIC_RELAXED);
     void *a0 = steam_out(c, R32(args + 0u), 4u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -952,7 +1152,9 @@ static void m104(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m108(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t, void *, void *);
-    void *fn = steam_slot(c, self, 29u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_GetItemPrice"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     void *a1 = steam_out(c, R32(args + 4u), 8u);
     void *a2 = steam_out(c, R32(args + 8u), 8u);
@@ -963,7 +1165,9 @@ static void m108(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m109(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, void *, uint32_t);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_GetItemsByID"), __ATOMIC_RELAXED);
     void *a0 = steam_out(c, R32(args + 0u), 4u);
     void *a1 = steam_in_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 8u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -974,7 +1178,9 @@ static void m109(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m111(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 27u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_GetNumItemsWithPrices"), __ATOMIC_RELAXED);
     uint32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -982,7 +1188,9 @@ static void m111(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m114(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_GetResultStatus"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -991,7 +1199,9 @@ static void m114(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m115(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_GetResultTimestamp"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     uint32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -1000,7 +1210,9 @@ static void m115(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m116(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_GrantPromoItems"), __ATOMIC_RELAXED);
     void *a0 = steam_out(c, R32(args + 0u), 4u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1009,7 +1221,9 @@ static void m116(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m117(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, const char *);
-    void *fn = steam_slot(c, self, 37u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_InspectItem"), __ATOMIC_RELAXED);
     void *a0 = steam_out(c, R32(args + 0u), 4u);
     const char *a1 = steam_in_string(c, R32(args + 4u));
     bool r = ((F)fn)(self, a0, a1);
@@ -1019,7 +1233,9 @@ static void m117(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m118(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 20u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_LoadItemDefinitions"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1027,7 +1243,9 @@ static void m118(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m119(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 31u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_RemoveProperty"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     const char *a2 = steam_in_string(c, R32(args + 16u));
@@ -1038,7 +1256,9 @@ static void m119(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m120(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 23u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_RequestEligiblePromoItemDefinitionsIDs"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -1047,7 +1267,9 @@ static void m120(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m121(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *);
-    void *fn = steam_slot(c, self, 26u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_RequestPrices"), __ATOMIC_RELAXED);
     uint64_t r = ((F)fn)(self);
     steam_ret64(c, (uint64_t)r);
 }
@@ -1055,14 +1277,18 @@ static void m121(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m122(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *);
-    void *fn = steam_slot(c, self, 17u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_SendItemDropHeartbeat"), __ATOMIC_RELAXED);
     ((F)fn)(self);
 }
 /* STEAMINVENTORY_INTERFACE_V003::SetPropertyBool */
 static void m124(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint64_t, const char *, bool);
-    void *fn = steam_slot(c, self, 33u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_SetPropertyBool"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     const char *a2 = steam_in_string(c, R32(args + 16u));
@@ -1074,7 +1300,9 @@ static void m124(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m125(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint64_t, const char *, float);
-    void *fn = steam_slot(c, self, 35u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_SetPropertyFloat"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     const char *a2 = steam_in_string(c, R32(args + 16u));
@@ -1086,7 +1314,9 @@ static void m125(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m126(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint64_t, const char *, int64_t);
-    void *fn = steam_slot(c, self, 34u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_SetPropertyInt64"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     const char *a2 = steam_in_string(c, R32(args + 16u));
@@ -1098,7 +1328,9 @@ static void m126(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m127(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint64_t, const char *, const char *);
-    void *fn = steam_slot(c, self, 32u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_SetPropertyString"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     const char *a2 = steam_in_string(c, R32(args + 16u));
@@ -1110,7 +1342,9 @@ static void m127(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m129(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *);
-    void *fn = steam_slot(c, self, 30u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_StartUpdateProperties"), __ATOMIC_RELAXED);
     uint64_t r = ((F)fn)(self);
     steam_ret64(c, (uint64_t)r);
 }
@@ -1118,7 +1352,9 @@ static void m129(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m130(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, void *);
-    void *fn = steam_slot(c, self, 36u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_SubmitUpdateProperties"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out(c, R32(args + 8u), 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -1128,7 +1364,9 @@ static void m130(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m131(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, uint64_t, uint32_t, uint64_t);
-    void *fn = steam_slot(c, self, 16u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_TransferItemQuantity"), __ATOMIC_RELAXED);
     void *a0 = steam_out(c, R32(args + 0u), 4u);
     uint64_t a1 = (uint64_t)R64(args + 4u);
     uint32_t a2 = (uint32_t)R32(args + 12u);
@@ -1140,7 +1378,9 @@ static void m131(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m132(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, int32_t);
-    void *fn = steam_slot(c, self, 18u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInventory_TriggerItemDrop"), __ATOMIC_RELAXED);
     void *a0 = steam_out(c, R32(args + 0u), 4u);
     int32_t a1 = (int32_t)R32(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -1150,7 +1390,9 @@ static void m132(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m133(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_BActivationSuccess"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1159,7 +1401,9 @@ static void m133(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m134(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_BIsCurrentMusicRemote"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1167,7 +1411,9 @@ static void m134(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m135(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 21u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_CurrentEntryDidChange"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1175,7 +1421,9 @@ static void m135(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m136(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 17u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_CurrentEntryIsAvailable"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1184,7 +1432,9 @@ static void m136(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m137(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 16u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_CurrentEntryWillChange"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1192,7 +1442,9 @@ static void m137(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m138(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_DeregisterSteamMusicRemote"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1200,7 +1452,9 @@ static void m138(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m139(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_EnableLooped"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1209,7 +1463,9 @@ static void m139(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m140(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_EnablePlayNext"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1218,7 +1474,9 @@ static void m140(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m141(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_EnablePlayPrevious"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1227,7 +1485,9 @@ static void m141(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m142(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_EnablePlaylists"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1236,7 +1496,9 @@ static void m142(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m143(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 10u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_EnableQueue"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1245,7 +1507,9 @@ static void m143(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m144(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_EnableShuffled"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1254,7 +1518,9 @@ static void m144(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m145(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 31u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_PlaylistDidChange"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1262,7 +1528,9 @@ static void m145(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m146(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 27u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_PlaylistWillChange"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1270,7 +1538,9 @@ static void m146(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m147(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 26u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_QueueDidChange"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1278,7 +1548,9 @@ static void m147(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m148(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 22u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_QueueWillChange"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1286,7 +1558,9 @@ static void m148(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m149(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_RegisterSteamMusicRemote"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1295,7 +1569,9 @@ static void m149(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m150(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 28u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_ResetPlaylistEntries"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1303,7 +1579,9 @@ static void m150(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m151(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 23u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_ResetQueueEntries"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1311,7 +1589,9 @@ static void m151(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m152(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 30u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_SetCurrentPlaylistEntry"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1320,7 +1600,9 @@ static void m152(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m153(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 25u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_SetCurrentQueueEntry"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1329,7 +1611,9 @@ static void m153(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m154(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_SetDisplayName"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1338,7 +1622,9 @@ static void m154(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m155(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, uint32_t);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_SetPNGIcon_64x64"), __ATOMIC_RELAXED);
     void *a0 = steam_in_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -1348,7 +1634,9 @@ static void m155(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m156(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 29u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_SetPlaylistEntry"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -1359,7 +1647,9 @@ static void m156(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m157(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 24u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_SetQueueEntry"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -1370,7 +1660,9 @@ static void m157(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m158(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, uint32_t);
-    void *fn = steam_slot(c, self, 20u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_UpdateCurrentEntryCoverArt"), __ATOMIC_RELAXED);
     void *a0 = steam_in_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -1380,7 +1672,9 @@ static void m158(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m159(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 19u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_UpdateCurrentEntryElapsedSeconds"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1389,7 +1683,9 @@ static void m159(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m160(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 18u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_UpdateCurrentEntryText"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1398,7 +1694,9 @@ static void m160(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m161(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 14u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_UpdateLooped"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1407,7 +1705,9 @@ static void m161(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m162(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 12u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_UpdatePlaybackStatus"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1416,7 +1716,9 @@ static void m162(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m163(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 13u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_UpdateShuffled"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1425,7 +1727,9 @@ static void m163(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m164(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, float);
-    void *fn = steam_slot(c, self, 15u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusicRemote_UpdateVolume"), __ATOMIC_RELAXED);
     float a0 = RF(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1434,7 +1738,9 @@ static void m164(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m165(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusic_BIsEnabled"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1442,7 +1748,9 @@ static void m165(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m166(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusic_BIsPlaying"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1450,7 +1758,9 @@ static void m166(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m167(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusic_GetPlaybackStatus"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -1458,7 +1768,9 @@ static void m167(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m168(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef float (*F)(void *);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusic_GetVolume"), __ATOMIC_RELAXED);
     float r = ((F)fn)(self);
     rt_return_st0(c, r);
 }
@@ -1466,35 +1778,45 @@ static void m168(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m169(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusic_Pause"), __ATOMIC_RELAXED);
     ((F)fn)(self);
 }
 /* STEAMMUSIC_INTERFACE_VERSION001::Play */
 static void m170(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusic_Play"), __ATOMIC_RELAXED);
     ((F)fn)(self);
 }
 /* STEAMMUSIC_INTERFACE_VERSION001::PlayNext */
 static void m171(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusic_PlayNext"), __ATOMIC_RELAXED);
     ((F)fn)(self);
 }
 /* STEAMMUSIC_INTERFACE_VERSION001::PlayPrevious */
 static void m172(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusic_PlayPrevious"), __ATOMIC_RELAXED);
     ((F)fn)(self);
 }
 /* STEAMMUSIC_INTERFACE_VERSION001::SetVolume */
 static void m173(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, float);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMusic_SetVolume"), __ATOMIC_RELAXED);
     float a0 = RF(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -1502,7 +1824,9 @@ static void m173(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m174(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamParentalSettings_BIsAppBlocked"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1511,7 +1835,9 @@ static void m174(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m175(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamParentalSettings_BIsAppInBlockList"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1520,7 +1846,9 @@ static void m175(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m176(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamParentalSettings_BIsFeatureBlocked"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1529,7 +1857,9 @@ static void m176(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m177(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamParentalSettings_BIsFeatureInBlockList"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1538,7 +1868,9 @@ static void m177(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m178(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamParentalSettings_BIsParentalLockEnabled"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1546,7 +1878,9 @@ static void m178(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m179(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamParentalSettings_BIsParentalLockLocked"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1627,7 +1961,9 @@ static void m187(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m188(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 57u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_BeginFileWriteBatch"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1635,7 +1971,9 @@ static void m188(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m189(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 38u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_CommitPublishedFileUpdate"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -1644,7 +1982,9 @@ static void m189(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m190(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 31u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_CreatePublishedFileUpdateRequest"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -1653,7 +1993,9 @@ static void m190(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m191(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 40u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_DeletePublishedFile"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -1662,7 +2004,9 @@ static void m191(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m192(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 58u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_EndFileWriteBatch"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1670,7 +2014,9 @@ static void m192(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m193(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, int32_t, uint32_t);
-    void *fn = steam_slot(c, self, 52u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_EnumeratePublishedFilesByUserAction"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -1680,7 +2026,9 @@ static void m193(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m195(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 41u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_EnumerateUserPublishedFiles"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -1689,7 +2037,9 @@ static void m195(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m197(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 43u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_EnumerateUserSubscribedFiles"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -1698,7 +2048,9 @@ static void m197(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m198(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_FileDelete"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1707,7 +2059,9 @@ static void m198(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m199(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 13u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_FileExists"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1716,7 +2070,9 @@ static void m199(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m200(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_FileForget"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1725,7 +2081,9 @@ static void m200(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m201(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 14u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_FilePersisted"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1734,7 +2092,9 @@ static void m201(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m202(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, const char *, void *, int32_t);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_FileRead"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     void *a1 = steam_out_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 1u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -1745,7 +2105,9 @@ static void m202(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m203(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, const char *, uint32_t, uint32_t);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_FileReadAsync"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     uint32_t a1 = (uint32_t)R32(args + 4u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -1756,7 +2118,9 @@ static void m203(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m204(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, void *, uint32_t);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_FileReadAsyncComplete"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out_buffer(c, R32(args + 8u), (int64_t)(int32_t)R32(args + 12u), 1u);
     uint32_t a2 = (uint32_t)R32(args + 12u);
@@ -1767,7 +2131,9 @@ static void m204(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m205(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_FileShare"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -1776,7 +2142,9 @@ static void m205(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m206(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *, void *, int32_t);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_FileWrite"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     void *a1 = steam_in_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 1u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -1787,7 +2155,9 @@ static void m206(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m207(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, const char *, void *, uint32_t);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_FileWriteAsync"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     void *a1 = steam_in_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 1u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -1798,7 +2168,9 @@ static void m207(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m208(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 12u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_FileWriteStreamCancel"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1807,7 +2179,9 @@ static void m208(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m209(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_FileWriteStreamClose"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -1816,7 +2190,9 @@ static void m209(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m210(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_FileWriteStreamOpen"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -1825,7 +2201,9 @@ static void m210(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m211(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, void *, int32_t);
-    void *fn = steam_slot(c, self, 10u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_FileWriteStreamWriteChunk"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_in_buffer(c, R32(args + 8u), (int64_t)(int32_t)R32(args + 12u), 1u);
     int32_t a2 = (int32_t)R32(args + 12u);
@@ -1836,7 +2214,9 @@ static void m211(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m212(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 28u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_GetCachedUGCCount"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -1844,7 +2224,9 @@ static void m212(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m213(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 29u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_GetCachedUGCHandle"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -1853,7 +2235,9 @@ static void m213(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m214(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 18u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_GetFileCount"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -1861,7 +2245,9 @@ static void m214(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m215(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, int32_t, void *);
-    void *fn = steam_slot(c, self, 19u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_GetFileNameAndSize"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     void *a1 = steam_out(c, R32(args + 4u), 4u);
     const char * r = ((F)fn)(self, a0, a1);
@@ -1871,7 +2257,9 @@ static void m215(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m216(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 15u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_GetFileSize"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -1880,7 +2268,9 @@ static void m216(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m217(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int64_t (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 16u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_GetFileTimestamp"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     int64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -1889,7 +2279,9 @@ static void m217(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m218(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, int32_t, void *, void *);
-    void *fn = steam_slot(c, self, 56u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_GetLocalFileChange"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     void *a1 = steam_out(c, R32(args + 4u), 4u);
     void *a2 = steam_out(c, R32(args + 8u), 4u);
@@ -1900,7 +2292,9 @@ static void m218(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m219(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 55u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_GetLocalFileChangeCount"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -1908,7 +2302,9 @@ static void m219(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m220(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, uint32_t);
-    void *fn = steam_slot(c, self, 39u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_GetPublishedFileDetails"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -1918,7 +2314,9 @@ static void m220(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m221(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 46u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_GetPublishedItemVoteDetails"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -1927,7 +2325,9 @@ static void m221(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m222(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, void *);
-    void *fn = steam_slot(c, self, 20u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_GetQuota"), __ATOMIC_RELAXED);
     void *a0 = steam_out(c, R32(args + 0u), 8u);
     void *a1 = steam_out(c, R32(args + 4u), 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -1937,7 +2337,9 @@ static void m222(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m223(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 17u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_GetSyncPlatforms"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -1946,7 +2348,9 @@ static void m223(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m224(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, void *, const char **, void *, void *);
-    void *fn = steam_slot(c, self, 26u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_GetUGCDetails"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out(c, R32(args + 8u), 4u);
     void *a2_slot = steam_out(c, R32(args + 12u), 4u); const char *a2_text = NULL;
@@ -1961,7 +2365,9 @@ static void m224(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m225(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, void *, void *);
-    void *fn = steam_slot(c, self, 25u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_GetUGCDownloadProgress"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out(c, R32(args + 8u), 4u);
     void *a2 = steam_out(c, R32(args + 12u), 4u);
@@ -1972,7 +2378,9 @@ static void m225(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m226(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 48u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_GetUserPublishedItemVoteDetails"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -1981,7 +2389,9 @@ static void m226(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m227(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 21u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_IsCloudEnabledForAccount"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1989,7 +2399,9 @@ static void m227(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m228(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 22u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_IsCloudEnabledForApp"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -1997,7 +2409,9 @@ static void m228(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m229(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 23u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_SetCloudEnabledForApp"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     ((F)fn)(self, a0);
 }
@@ -2005,7 +2419,9 @@ static void m229(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m230(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *, int32_t);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_SetSyncPlatforms"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     int32_t a1 = (int32_t)R32(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -2015,7 +2431,9 @@ static void m230(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m231(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, int32_t);
-    void *fn = steam_slot(c, self, 51u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_SetUserPublishedFileAction"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -2025,7 +2443,9 @@ static void m231(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m232(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 42u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_SubscribePublishedFile"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -2034,7 +2454,9 @@ static void m232(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m233(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, uint32_t);
-    void *fn = steam_slot(c, self, 24u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_UGCDownload"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -2044,7 +2466,9 @@ static void m233(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m234(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, const char *, uint32_t);
-    void *fn = steam_slot(c, self, 54u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_UGCDownloadToLocation"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     uint32_t a2 = (uint32_t)R32(args + 12u);
@@ -2055,7 +2479,9 @@ static void m234(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m235(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, void *, int32_t, uint32_t, int32_t);
-    void *fn = steam_slot(c, self, 27u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_UGCRead"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out_buffer(c, R32(args + 8u), (int64_t)(int32_t)R32(args + 12u), 1u);
     int32_t a2 = (int32_t)R32(args + 12u);
@@ -2068,7 +2494,9 @@ static void m235(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m236(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 44u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_UnsubscribePublishedFile"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -2077,7 +2505,9 @@ static void m236(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m237(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 35u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_UpdatePublishedFileDescription"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2087,7 +2517,9 @@ static void m237(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m238(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 32u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_UpdatePublishedFileFile"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2097,7 +2529,9 @@ static void m238(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m239(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 33u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_UpdatePublishedFilePreviewFile"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2107,7 +2541,9 @@ static void m239(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m240(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 45u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_UpdatePublishedFileSetChangeDescription"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2117,7 +2553,9 @@ static void m240(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m242(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 34u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_UpdatePublishedFileTitle"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2127,7 +2565,9 @@ static void m242(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m243(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, int32_t);
-    void *fn = steam_slot(c, self, 36u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_UpdatePublishedFileVisibility"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -2137,7 +2577,9 @@ static void m243(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m244(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, bool);
-    void *fn = steam_slot(c, self, 47u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamRemoteStorage_UpdateUserPublishedItemVote"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool a1 = (R8(args + 8u) != 0);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -2147,7 +2589,9 @@ static void m244(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m245(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, const char *, const char *, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamScreenshots_AddScreenshotToLibrary"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     const char *a1 = steam_in_string(c, R32(args + 4u));
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -2159,7 +2603,9 @@ static void m245(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m246(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, int32_t, const char *, const char *);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamScreenshots_AddVRScreenshotToLibrary"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 4u));
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -2170,7 +2616,9 @@ static void m246(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m247(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamScreenshots_HookScreenshots"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     ((F)fn)(self, a0);
 }
@@ -2178,7 +2626,9 @@ static void m247(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m248(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamScreenshots_IsScreenshotsHooked"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -2186,7 +2636,9 @@ static void m248(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m249(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, const char *);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamScreenshots_SetLocation"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 4u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2196,7 +2648,9 @@ static void m249(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m250(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, uint64_t);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamScreenshots_TagPublishedFile"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -2206,7 +2660,9 @@ static void m250(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m251(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, uint64_t);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamScreenshots_TagUser"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -2216,14 +2672,18 @@ static void m251(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m252(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamScreenshots_TriggerScreenshot"), __ATOMIC_RELAXED);
     ((F)fn)(self);
 }
 /* STEAMSCREENSHOTS_INTERFACE_VERSION003::WriteScreenshot */
 static void m253(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, void *, uint32_t, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamScreenshots_WriteScreenshot"), __ATOMIC_RELAXED);
     void *a0 = steam_in_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -2410,7 +2870,9 @@ static void m271(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m272(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, uint32_t);
-    void *fn = steam_slot(c, self, 80u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_AddAppDependency"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -2420,7 +2882,9 @@ static void m272(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m273(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, uint64_t);
-    void *fn = steam_slot(c, self, 78u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_AddDependency"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -2430,7 +2894,9 @@ static void m273(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m274(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 21u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_AddExcludedTag"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2440,7 +2906,9 @@ static void m274(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m275(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *, const char *);
-    void *fn = steam_slot(c, self, 53u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_AddItemKeyValueTag"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     const char *a2 = steam_in_string(c, R32(args + 12u));
@@ -2451,7 +2919,9 @@ static void m275(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m276(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *, int32_t);
-    void *fn = steam_slot(c, self, 54u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_AddItemPreviewFile"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     int32_t a2 = (int32_t)R32(args + 12u);
@@ -2462,7 +2932,9 @@ static void m276(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m277(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 55u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_AddItemPreviewVideo"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2472,7 +2944,9 @@ static void m277(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m278(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint32_t, uint64_t);
-    void *fn = steam_slot(c, self, 63u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_AddItemToFavorites"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 4u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -2482,7 +2956,9 @@ static void m278(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m279(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *, const char *);
-    void *fn = steam_slot(c, self, 38u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_AddRequiredKeyValueTag"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     const char *a2 = steam_in_string(c, R32(args + 12u));
@@ -2493,7 +2969,9 @@ static void m279(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m280(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 19u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_AddRequiredTag"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2503,7 +2981,9 @@ static void m280(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m282(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, const char *);
-    void *fn = steam_slot(c, self, 73u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_BInitWorkshopForGameServer"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 4u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2513,7 +2993,9 @@ static void m282(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m283(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint32_t, int32_t);
-    void *fn = steam_slot(c, self, 40u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_CreateItem"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -2523,7 +3005,9 @@ static void m283(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m284(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, int32_t, int32_t, uint32_t, uint32_t, const char *);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_CreateQueryAllUGCRequestCursor"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -2536,7 +3020,9 @@ static void m284(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m285(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, int32_t, int32_t, uint32_t, uint32_t, uint32_t);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_CreateQueryAllUGCRequestPage"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -2549,7 +3035,9 @@ static void m285(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m287(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint32_t, int32_t, int32_t, int32_t, uint32_t, uint32_t, uint32_t);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_CreateQueryUserUGCRequest"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -2564,7 +3052,9 @@ static void m287(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m288(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 83u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_DeleteItem"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -2573,7 +3063,9 @@ static void m288(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m289(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, bool);
-    void *fn = steam_slot(c, self, 72u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_DownloadItem"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool a1 = (R8(args + 8u) != 0);
     bool r = ((F)fn)(self, a0, a1);
@@ -2583,7 +3075,9 @@ static void m289(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m290(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 82u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetAppDependencies"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -2592,7 +3086,9 @@ static void m290(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m291(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, void *, void *);
-    void *fn = steam_slot(c, self, 71u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetItemDownloadInfo"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out(c, R32(args + 8u), 8u);
     void *a2 = steam_out(c, R32(args + 12u), 8u);
@@ -2603,7 +3099,9 @@ static void m291(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m292(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, void *, void *, uint32_t, void *);
-    void *fn = steam_slot(c, self, 70u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetItemInstallInfo"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out(c, R32(args + 8u), 8u);
     void *a2 = steam_out_buffer(c, R32(args + 12u), (int64_t)(int32_t)R32(args + 16u), 1u);
@@ -2616,7 +3114,9 @@ static void m292(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m293(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 69u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetItemState"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -2625,7 +3125,9 @@ static void m293(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m294(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, void *, void *);
-    void *fn = steam_slot(c, self, 60u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetItemUpdateProgress"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out(c, R32(args + 8u), 8u);
     void *a2 = steam_out(c, R32(args + 12u), 8u);
@@ -2636,7 +3138,9 @@ static void m294(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m295(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 67u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetNumSubscribedItems"), __ATOMIC_RELAXED);
     uint32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -2644,7 +3148,9 @@ static void m295(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m296(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint32_t, const char *, void *, uint32_t);
-    void *fn = steam_slot(c, self, 17u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetQueryFirstUGCKeyValueTag"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     const char *a2 = steam_in_string(c, R32(args + 12u));
@@ -2657,7 +3163,9 @@ static void m296(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m297(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint32_t, void *, uint32_t);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetQueryUGCChildren"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     void *a2 = steam_out_buffer(c, R32(args + 12u), (int64_t)(int32_t)R32(args + 16u), 8u);
@@ -2669,7 +3177,9 @@ static void m297(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m298(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint32_t, uint32_t, void *, uint32_t, void *, uint32_t);
-    void *fn = steam_slot(c, self, 16u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetQueryUGCKeyValueTag"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     uint32_t a2 = (uint32_t)R32(args + 12u);
@@ -2684,7 +3194,9 @@ static void m298(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m299(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint32_t, void *, uint32_t);
-    void *fn = steam_slot(c, self, 10u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetQueryUGCMetadata"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     void *a2 = steam_out_buffer(c, R32(args + 12u), (int64_t)(int32_t)R32(args + 16u), 1u);
@@ -2696,7 +3208,9 @@ static void m299(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m300(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, uint64_t, uint32_t);
-    void *fn = steam_slot(c, self, 13u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetQueryUGCNumAdditionalPreviews"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     uint32_t r = ((F)fn)(self, a0, a1);
@@ -2706,7 +3220,9 @@ static void m300(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m301(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, uint64_t, uint32_t);
-    void *fn = steam_slot(c, self, 15u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetQueryUGCNumKeyValueTags"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     uint32_t r = ((F)fn)(self, a0, a1);
@@ -2716,7 +3232,9 @@ static void m301(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m302(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, uint64_t, uint32_t);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetQueryUGCNumTags"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     uint32_t r = ((F)fn)(self, a0, a1);
@@ -2726,7 +3244,9 @@ static void m302(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m303(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint32_t, void *, uint32_t);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetQueryUGCPreviewURL"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     void *a2 = steam_out_buffer(c, R32(args + 12u), (int64_t)(int32_t)R32(args + 16u), 1u);
@@ -2738,7 +3258,9 @@ static void m303(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m305(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint32_t, int32_t, void *);
-    void *fn = steam_slot(c, self, 12u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetQueryUGCStatistic"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     int32_t a2 = (int32_t)R32(args + 12u);
@@ -2750,7 +3272,9 @@ static void m305(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m306(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint32_t, uint32_t, void *, uint32_t);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetQueryUGCTag"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     uint32_t a2 = (uint32_t)R32(args + 12u);
@@ -2763,7 +3287,9 @@ static void m306(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m307(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint32_t, uint32_t, void *, uint32_t);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetQueryUGCTagDisplayName"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     uint32_t a2 = (uint32_t)R32(args + 12u);
@@ -2776,7 +3302,9 @@ static void m307(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m308(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, void *, uint32_t);
-    void *fn = steam_slot(c, self, 68u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetSubscribedItems"), __ATOMIC_RELAXED);
     void *a0 = steam_out_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 8u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     uint32_t r = ((F)fn)(self, a0, a1);
@@ -2786,7 +3314,9 @@ static void m308(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m309(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 62u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetUserItemVote"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -2795,7 +3325,9 @@ static void m309(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m310(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *);
-    void *fn = steam_slot(c, self, 85u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_GetWorkshopEULAStatus"), __ATOMIC_RELAXED);
     uint64_t r = ((F)fn)(self);
     steam_ret64(c, (uint64_t)r);
 }
@@ -2803,7 +3335,9 @@ static void m310(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m311(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 18u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_ReleaseQueryUGCRequest"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -2812,7 +3346,9 @@ static void m311(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m312(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 51u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_RemoveAllItemKeyValueTags"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -2821,7 +3357,9 @@ static void m312(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m313(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, uint32_t);
-    void *fn = steam_slot(c, self, 81u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_RemoveAppDependency"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -2831,7 +3369,9 @@ static void m313(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m314(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, uint64_t);
-    void *fn = steam_slot(c, self, 79u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_RemoveDependency"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -2841,7 +3381,9 @@ static void m314(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m315(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint32_t, uint64_t);
-    void *fn = steam_slot(c, self, 64u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_RemoveItemFromFavorites"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 4u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -2851,7 +3393,9 @@ static void m315(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m316(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 52u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_RemoveItemKeyValueTags"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2861,7 +3405,9 @@ static void m316(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m317(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint32_t);
-    void *fn = steam_slot(c, self, 58u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_RemoveItemPreview"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -2871,7 +3417,9 @@ static void m317(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m318(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, uint32_t);
-    void *fn = steam_slot(c, self, 39u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_RequestUGCDetails"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -2881,7 +3429,9 @@ static void m318(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m319(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SendQueryUGCRequest"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -2890,7 +3440,9 @@ static void m319(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m320(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint32_t);
-    void *fn = steam_slot(c, self, 31u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetAllowCachedResponse"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -2900,7 +3452,9 @@ static void m320(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m321(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, bool);
-    void *fn = steam_slot(c, self, 50u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetAllowLegacyUpload"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool a1 = (R8(args + 8u) != 0);
     bool r = ((F)fn)(self, a0, a1);
@@ -2910,7 +3464,9 @@ static void m321(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m322(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 32u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetCloudFileNameFilter"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2920,7 +3476,9 @@ static void m322(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m323(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 48u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetItemContent"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2930,7 +3488,9 @@ static void m323(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m324(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 43u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetItemDescription"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2940,7 +3500,9 @@ static void m324(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m325(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 45u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetItemMetadata"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2950,7 +3512,9 @@ static void m325(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m326(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 49u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetItemPreview"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2960,7 +3524,9 @@ static void m326(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m328(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 42u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetItemTitle"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2970,7 +3536,9 @@ static void m328(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m329(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 44u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetItemUpdateLanguage"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -2980,7 +3548,9 @@ static void m329(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m330(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, int32_t);
-    void *fn = steam_slot(c, self, 46u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetItemVisibility"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -2990,7 +3560,9 @@ static void m330(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m331(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 30u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetLanguage"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -3000,7 +3572,9 @@ static void m331(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m332(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, bool);
-    void *fn = steam_slot(c, self, 33u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetMatchAnyTag"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool a1 = (R8(args + 8u) != 0);
     bool r = ((F)fn)(self, a0, a1);
@@ -3010,7 +3584,9 @@ static void m332(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m333(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint32_t);
-    void *fn = steam_slot(c, self, 35u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetRankedByTrendDays"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -3020,7 +3596,9 @@ static void m333(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m334(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, bool);
-    void *fn = steam_slot(c, self, 27u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetReturnAdditionalPreviews"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool a1 = (R8(args + 8u) != 0);
     bool r = ((F)fn)(self, a0, a1);
@@ -3030,7 +3608,9 @@ static void m334(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m335(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, bool);
-    void *fn = steam_slot(c, self, 26u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetReturnChildren"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool a1 = (R8(args + 8u) != 0);
     bool r = ((F)fn)(self, a0, a1);
@@ -3040,7 +3620,9 @@ static void m335(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m336(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, bool);
-    void *fn = steam_slot(c, self, 23u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetReturnKeyValueTags"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool a1 = (R8(args + 8u) != 0);
     bool r = ((F)fn)(self, a0, a1);
@@ -3050,7 +3632,9 @@ static void m336(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m337(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, bool);
-    void *fn = steam_slot(c, self, 24u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetReturnLongDescription"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool a1 = (R8(args + 8u) != 0);
     bool r = ((F)fn)(self, a0, a1);
@@ -3060,7 +3644,9 @@ static void m337(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m338(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, bool);
-    void *fn = steam_slot(c, self, 25u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetReturnMetadata"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool a1 = (R8(args + 8u) != 0);
     bool r = ((F)fn)(self, a0, a1);
@@ -3070,7 +3656,9 @@ static void m338(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m339(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, bool);
-    void *fn = steam_slot(c, self, 22u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetReturnOnlyIDs"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool a1 = (R8(args + 8u) != 0);
     bool r = ((F)fn)(self, a0, a1);
@@ -3080,7 +3668,9 @@ static void m339(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m340(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint32_t);
-    void *fn = steam_slot(c, self, 29u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetReturnPlaytimeStats"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -3090,7 +3680,9 @@ static void m340(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m341(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, bool);
-    void *fn = steam_slot(c, self, 28u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetReturnTotalOnly"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool a1 = (R8(args + 8u) != 0);
     bool r = ((F)fn)(self, a0, a1);
@@ -3100,7 +3692,9 @@ static void m341(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m342(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 34u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetSearchText"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -3110,7 +3704,9 @@ static void m342(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m343(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint32_t, uint32_t);
-    void *fn = steam_slot(c, self, 36u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetTimeCreatedDateRange"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     uint32_t a2 = (uint32_t)R32(args + 12u);
@@ -3121,7 +3717,9 @@ static void m343(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m344(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint32_t, uint32_t);
-    void *fn = steam_slot(c, self, 37u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetTimeUpdatedDateRange"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     uint32_t a2 = (uint32_t)R32(args + 12u);
@@ -3132,7 +3730,9 @@ static void m344(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m345(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, bool);
-    void *fn = steam_slot(c, self, 61u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SetUserItemVote"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool a1 = (R8(args + 8u) != 0);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -3142,7 +3742,9 @@ static void m345(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m346(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 84u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_ShowWorkshopEULA"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -3150,7 +3752,9 @@ static void m346(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m347(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint32_t, uint64_t);
-    void *fn = steam_slot(c, self, 41u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_StartItemUpdate"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 4u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -3160,7 +3764,9 @@ static void m347(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m350(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *);
-    void *fn = steam_slot(c, self, 77u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_StopPlaytimeTrackingForAllItems"), __ATOMIC_RELAXED);
     uint64_t r = ((F)fn)(self);
     steam_ret64(c, (uint64_t)r);
 }
@@ -3168,7 +3774,9 @@ static void m350(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m351(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 59u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SubmitItemUpdate"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -3178,7 +3786,9 @@ static void m351(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m352(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 65u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SubscribeItem"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -3187,7 +3797,9 @@ static void m352(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m353(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 74u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_SuspendDownloads"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     ((F)fn)(self, a0);
 }
@@ -3195,7 +3807,9 @@ static void m353(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m354(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 66u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_UnsubscribeItem"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -3204,7 +3818,9 @@ static void m354(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m355(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint32_t, const char *);
-    void *fn = steam_slot(c, self, 56u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_UpdateItemPreviewFile"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     const char *a2 = steam_in_string(c, R32(args + 12u));
@@ -3215,7 +3831,9 @@ static void m355(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m356(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint32_t, const char *);
-    void *fn = steam_slot(c, self, 57u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUGC_UpdateItemPreviewVideo"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     const char *a2 = steam_in_string(c, R32(args + 12u));
@@ -4115,7 +4733,9 @@ static void m449(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m450(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, uint64_t);
-    void *fn = steam_slot(c, self, 32u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_AttachLeaderboardUGC"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -4125,7 +4745,9 @@ static void m450(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m451(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_ClearAchievement"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -4134,7 +4756,9 @@ static void m451(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m452(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, int32_t, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 28u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_DownloadLeaderboardEntries"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     int32_t a2 = (int32_t)R32(args + 12u);
@@ -4146,7 +4770,9 @@ static void m452(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m453(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, void *, int32_t);
-    void *fn = steam_slot(c, self, 29u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_DownloadLeaderboardEntriesForUsers"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_in_buffer(c, R32(args + 8u), (int64_t)(int32_t)R32(args + 12u), 8u);
     int32_t a2 = (int32_t)R32(args + 12u);
@@ -4157,7 +4783,9 @@ static void m453(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m454(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 23u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_FindLeaderboard"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -4166,7 +4794,9 @@ static void m454(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m455(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, const char *, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 22u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_FindOrCreateLeaderboard"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     int32_t a1 = (int32_t)R32(args + 4u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -4177,7 +4807,9 @@ static void m455(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m456(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *, void *);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetAchievement"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     void *a1 = steam_out(c, R32(args + 4u), 1u);
     bool r = ((F)fn)(self, a0, a1);
@@ -4187,7 +4819,9 @@ static void m456(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m457(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *, void *);
-    void *fn = steam_slot(c, self, 37u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetAchievementAchievedPercent"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     void *a1 = steam_out(c, R32(args + 4u), 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -4197,7 +4831,9 @@ static void m457(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m458(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *, void *, void *);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetAchievementAndUnlockTime"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     void *a1 = steam_out(c, R32(args + 4u), 1u);
     void *a2 = steam_out(c, R32(args + 8u), 4u);
@@ -4208,7 +4844,9 @@ static void m458(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m459(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, const char *, const char *);
-    void *fn = steam_slot(c, self, 12u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetAchievementDisplayAttribute"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     const char *a1 = steam_in_string(c, R32(args + 4u));
     const char * r = ((F)fn)(self, a0, a1);
@@ -4218,7 +4856,9 @@ static void m459(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m460(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetAchievementIcon"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -4227,7 +4867,9 @@ static void m460(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m461(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 15u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetAchievementName"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -4236,7 +4878,9 @@ static void m461(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m462(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *, void *, void *);
-    void *fn = steam_slot(c, self, 44u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetAchievementProgressLimitsFloat"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     void *a1 = steam_out(c, R32(args + 4u), 4u);
     void *a2 = steam_out(c, R32(args + 8u), 4u);
@@ -4247,7 +4891,9 @@ static void m462(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m463(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *, void *, void *);
-    void *fn = steam_slot(c, self, 43u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetAchievementProgressLimitsInt32"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     void *a1 = steam_out(c, R32(args + 4u), 4u);
     void *a2 = steam_out(c, R32(args + 8u), 4u);
@@ -4258,7 +4904,9 @@ static void m463(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m464(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, int32_t, void *, void *, int32_t);
-    void *fn = steam_slot(c, self, 30u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetDownloadedLeaderboardEntry"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     void *a2 = steam_out(c, R32(args + 12u), 28u);
@@ -4271,7 +4919,9 @@ static void m464(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m465(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *, void *);
-    void *fn = steam_slot(c, self, 40u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetGlobalStatDouble"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     void *a1 = steam_out(c, R32(args + 4u), 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -4281,7 +4931,9 @@ static void m465(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m466(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, const char *, void *, uint32_t);
-    void *fn = steam_slot(c, self, 42u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetGlobalStatHistoryDouble"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     void *a1 = steam_out_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 8u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -4292,7 +4944,9 @@ static void m466(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m467(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, const char *, void *, uint32_t);
-    void *fn = steam_slot(c, self, 41u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetGlobalStatHistoryInt64"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     void *a1 = steam_out_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 8u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -4303,7 +4957,9 @@ static void m467(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m468(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *, void *);
-    void *fn = steam_slot(c, self, 39u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetGlobalStatInt64"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     void *a1 = steam_out(c, R32(args + 4u), 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -4313,7 +4969,9 @@ static void m468(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m469(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 27u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetLeaderboardDisplayType"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -4322,7 +4980,9 @@ static void m469(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m470(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 25u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetLeaderboardEntryCount"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -4331,7 +4991,9 @@ static void m470(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m471(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 24u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetLeaderboardName"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -4340,7 +5002,9 @@ static void m471(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m472(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 26u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetLeaderboardSortMethod"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -4349,7 +5013,9 @@ static void m472(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m475(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 14u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetNumAchievements"), __ATOMIC_RELAXED);
     uint32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -4357,7 +5023,9 @@ static void m475(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m476(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *);
-    void *fn = steam_slot(c, self, 33u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetNumberOfCurrentPlayers"), __ATOMIC_RELAXED);
     uint64_t r = ((F)fn)(self);
     steam_ret64(c, (uint64_t)r);
 }
@@ -4365,7 +5033,9 @@ static void m476(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m477(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *, void *);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetStatFloat"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     void *a1 = steam_out(c, R32(args + 4u), 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -4375,7 +5045,9 @@ static void m477(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m478(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *, void *);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetStatInt32"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     void *a1 = steam_out(c, R32(args + 4u), 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -4385,7 +5057,9 @@ static void m478(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m479(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *, void *);
-    void *fn = steam_slot(c, self, 19u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetUserAchievement"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     void *a2 = steam_out(c, R32(args + 12u), 1u);
@@ -4396,7 +5070,9 @@ static void m479(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m480(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *, void *, void *);
-    void *fn = steam_slot(c, self, 20u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetUserAchievementAndUnlockTime"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     void *a2 = steam_out(c, R32(args + 12u), 1u);
@@ -4408,7 +5084,9 @@ static void m480(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m481(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *, void *);
-    void *fn = steam_slot(c, self, 18u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetUserStatFloat"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     void *a2 = steam_out(c, R32(args + 12u), 4u);
@@ -4419,7 +5097,9 @@ static void m481(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m482(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *, void *);
-    void *fn = steam_slot(c, self, 17u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_GetUserStatInt32"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     void *a2 = steam_out(c, R32(args + 12u), 4u);
@@ -4430,7 +5110,9 @@ static void m482(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m483(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *, uint32_t, uint32_t);
-    void *fn = steam_slot(c, self, 13u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_IndicateAchievementProgress"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     uint32_t a1 = (uint32_t)R32(args + 4u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -4441,7 +5123,9 @@ static void m483(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m484(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_RequestCurrentStats"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -4449,7 +5133,9 @@ static void m484(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m485(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *);
-    void *fn = steam_slot(c, self, 34u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_RequestGlobalAchievementPercentages"), __ATOMIC_RELAXED);
     uint64_t r = ((F)fn)(self);
     steam_ret64(c, (uint64_t)r);
 }
@@ -4457,7 +5143,9 @@ static void m485(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m486(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 38u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_RequestGlobalStats"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -4466,7 +5154,9 @@ static void m486(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m487(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 16u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_RequestUserStats"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -4475,7 +5165,9 @@ static void m487(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m488(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 21u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_ResetAllStats"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -4484,7 +5176,9 @@ static void m488(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m489(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_SetAchievement"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -4493,7 +5187,9 @@ static void m489(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m490(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *, float);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_SetStatFloat"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     float a1 = RF(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -4503,7 +5199,9 @@ static void m490(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m491(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *, int32_t);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_SetStatInt32"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     int32_t a1 = (int32_t)R32(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -4513,7 +5211,9 @@ static void m491(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m492(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 10u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_StoreStats"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -4521,7 +5221,9 @@ static void m492(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m493(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *, float, double);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_UpdateAvgRateStat"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     float a1 = RF(args + 4u);
     double a2 = RD(args + 8u);
@@ -4532,7 +5234,9 @@ static void m493(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m494(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, int32_t, int32_t, void *, int32_t);
-    void *fn = steam_slot(c, self, 31u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUserStats_UploadLeaderboardScore"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     int32_t a2 = (int32_t)R32(args + 12u);
@@ -4545,7 +5249,9 @@ static void m494(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m495(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamVideo_GetOPFSettings"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -4553,7 +5259,9 @@ static void m495(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m497(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamVideo_GetVideoURL"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -4561,7 +5269,9 @@ static void m497(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m498(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamVideo_IsBroadcasting"), __ATOMIC_RELAXED);
     void *a0 = steam_out(c, R32(args + 0u), 4u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -4595,7 +5305,9 @@ static void m502(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m503(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_BReleaseSteamPipe"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -4604,7 +5316,9 @@ static void m503(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m504(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 23u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_BShutdownIfAllPipesClosed"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -4612,7 +5326,9 @@ static void m504(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m505(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_ConnectToGlobalUser"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -4621,7 +5337,9 @@ static void m505(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m506(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, void *, int32_t);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_CreateLocalUser"), __ATOMIC_RELAXED);
     void *a0 = steam_out(c, R32(args + 0u), 4u);
     int32_t a1 = (int32_t)R32(args + 4u);
     int32_t r = ((F)fn)(self, a0, a1);
@@ -4631,7 +5349,9 @@ static void m506(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m507(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_CreateSteamPipe"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -4639,7 +5359,9 @@ static void m507(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m508(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 21u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetIPCCallCount"), __ATOMIC_RELAXED);
     uint32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -4647,7 +5369,9 @@ static void m508(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m509(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 28u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamAppList"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4658,7 +5382,9 @@ static void m509(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m510(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 15u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamApps"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4669,7 +5395,9 @@ static void m510(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m511(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 26u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamController"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4680,7 +5408,9 @@ static void m511(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m512(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamFriends"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4691,7 +5421,9 @@ static void m512(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m513(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 19u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamGameSearch"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4702,7 +5434,9 @@ static void m513(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m514(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamGameServer"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4713,7 +5447,9 @@ static void m514(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m515(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 14u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamGameServerStats"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4724,7 +5460,9 @@ static void m515(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m516(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 12u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamGenericInterface"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4735,7 +5473,9 @@ static void m516(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m517(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 31u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamHTMLSurface"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4746,7 +5486,9 @@ static void m517(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m518(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 24u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamHTTP"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4757,7 +5499,9 @@ static void m518(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m519(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 38u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamInput"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4768,7 +5512,9 @@ static void m519(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m520(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 35u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamInventory"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4779,7 +5525,9 @@ static void m520(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m521(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 10u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamMatchmaking"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4790,7 +5538,9 @@ static void m521(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m522(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamMatchmakingServers"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4801,7 +5551,9 @@ static void m522(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m523(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 29u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamMusic"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4812,7 +5564,9 @@ static void m523(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m524(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 30u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamMusicRemote"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4823,7 +5577,9 @@ static void m524(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m525(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 16u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamNetworking"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4834,7 +5590,9 @@ static void m525(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m526(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 37u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamParentalSettings"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4845,7 +5603,9 @@ static void m526(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m527(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 39u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamParties"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4856,7 +5616,9 @@ static void m527(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m528(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 40u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamRemotePlay"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4867,7 +5629,9 @@ static void m528(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m529(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 17u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamRemoteStorage"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4878,7 +5642,9 @@ static void m529(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m530(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 18u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamScreenshots"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4889,7 +5655,9 @@ static void m530(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m531(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 27u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamUGC"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4900,7 +5668,9 @@ static void m531(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m532(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamUser"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4911,7 +5681,9 @@ static void m532(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m533(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 13u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamUserStats"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4922,7 +5694,9 @@ static void m533(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m534(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, const char *);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamUtils"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 4u));
     void * r = ((F)fn)(self, a0, a1);
@@ -4932,7 +5706,9 @@ static void m534(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m535(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void * (*F)(void *, int32_t, int32_t, const char *);
-    void *fn = steam_slot(c, self, 36u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_GetISteamVideo"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -4943,7 +5719,9 @@ static void m535(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m536(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamClient_ReleaseUser"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     ((F)fn)(self, a0, a1);
@@ -5298,7 +6076,9 @@ static void m571(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m574(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, uint64_t);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_ActivateActionSet"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     ((F)fn)(self, a0, a1);
@@ -5307,7 +6087,9 @@ static void m574(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m575(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, uint64_t);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_ActivateActionSetLayer"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     ((F)fn)(self, a0, a1);
@@ -5316,7 +6098,9 @@ static void m575(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m576(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, uint64_t);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_DeactivateActionSetLayer"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     ((F)fn)(self, a0, a1);
@@ -5325,7 +6109,9 @@ static void m576(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m577(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_DeactivateAllActionSetLayers"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -5333,7 +6119,9 @@ static void m577(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m578(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, int32_t);
-    void *fn = steam_slot(c, self, 31u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_GetActionOriginFromXboxOrigin"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     int32_t r = ((F)fn)(self, a0, a1);
@@ -5343,7 +6131,9 @@ static void m578(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m579(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_GetActionSetHandle"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -5352,7 +6142,9 @@ static void m579(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m580(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, void *);
-    void *fn = steam_slot(c, self, 10u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_GetActiveActionSetLayers"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out_buffer(c, R32(args + 8u), 16, 8u);
     int32_t r = ((F)fn)(self, a0, a1);
@@ -5362,7 +6154,9 @@ static void m580(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m581(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 14u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_GetAnalogActionHandle"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -5371,7 +6165,9 @@ static void m581(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m582(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, uint64_t, uint64_t, void *);
-    void *fn = steam_slot(c, self, 16u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_GetAnalogActionOrigins"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     uint64_t a2 = (uint64_t)R64(args + 16u);
@@ -5383,7 +6179,9 @@ static void m582(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m583(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, void *);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_GetConnectedControllers"), __ATOMIC_RELAXED);
     void *a0 = steam_out_buffer(c, R32(args + 0u), 16, 8u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -5392,7 +6190,9 @@ static void m583(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m584(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, void *, void *);
-    void *fn = steam_slot(c, self, 33u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_GetControllerBindingRevision"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out(c, R32(args + 8u), 4u);
     void *a2 = steam_out(c, R32(args + 12u), 4u);
@@ -5403,7 +6203,9 @@ static void m584(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m585(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 27u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_GetControllerForGamepadIndex"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -5412,7 +6214,9 @@ static void m585(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m586(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_GetCurrentActionSet"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -5421,7 +6225,9 @@ static void m586(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m587(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_GetDigitalActionHandle"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -5430,7 +6236,9 @@ static void m587(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m588(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, uint64_t, uint64_t, void *);
-    void *fn = steam_slot(c, self, 13u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_GetDigitalActionOrigins"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     uint64_t a2 = (uint64_t)R64(args + 16u);
@@ -5442,7 +6250,9 @@ static void m588(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m589(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 28u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_GetGamepadIndexForController"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -5451,7 +6261,9 @@ static void m589(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m590(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 17u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_GetGlyphForActionOrigin"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -5460,7 +6272,9 @@ static void m590(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m591(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 30u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_GetGlyphForXboxOrigin"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -5469,7 +6283,9 @@ static void m591(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m592(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 26u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_GetInputTypeForHandle"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -5478,7 +6294,9 @@ static void m592(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m593(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 18u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_GetStringForActionOrigin"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -5487,7 +6305,9 @@ static void m593(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m594(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 29u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_GetStringForXboxOrigin"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -5496,7 +6316,9 @@ static void m594(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m595(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_Init"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -5504,14 +6326,18 @@ static void m595(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m596(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_RunFrame"), __ATOMIC_RELAXED);
     ((F)fn)(self);
 }
 /* SteamController008::SetLEDColor */
 static void m597(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, uint8_t, uint8_t, uint8_t, uint32_t);
-    void *fn = steam_slot(c, self, 24u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_SetLEDColor"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint8_t a1 = (uint8_t)R32(args + 8u);
     uint8_t a2 = (uint8_t)R32(args + 12u);
@@ -5523,7 +6349,9 @@ static void m597(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m598(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 25u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_ShowBindingPanel"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -5532,7 +6360,9 @@ static void m598(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m599(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_Shutdown"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -5540,7 +6370,9 @@ static void m599(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m600(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, uint64_t);
-    void *fn = steam_slot(c, self, 19u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_StopAnalogActionMomentum"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     ((F)fn)(self, a0, a1);
@@ -5549,7 +6381,9 @@ static void m600(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m601(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 32u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_TranslateActionOrigin"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     int32_t r = ((F)fn)(self, a0, a1);
@@ -5559,7 +6393,9 @@ static void m601(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m602(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, int32_t, uint16_t);
-    void *fn = steam_slot(c, self, 21u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_TriggerHapticPulse"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     uint16_t a2 = (uint16_t)R32(args + 12u);
@@ -5569,7 +6405,9 @@ static void m602(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m603(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, int32_t, uint16_t, uint16_t, uint16_t, uint32_t);
-    void *fn = steam_slot(c, self, 22u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_TriggerRepeatedHapticPulse"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     uint16_t a2 = (uint16_t)R32(args + 12u);
@@ -5582,7 +6420,9 @@ static void m603(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m604(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, uint16_t, uint16_t);
-    void *fn = steam_slot(c, self, 23u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamController_TriggerVibration"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint16_t a1 = (uint16_t)R32(args + 8u);
     uint16_t a2 = (uint16_t)R32(args + 12u);
@@ -5592,7 +6432,9 @@ static void m604(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m605(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 28u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_ActivateGameOverlay"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     ((F)fn)(self, a0);
 }
@@ -5600,7 +6442,9 @@ static void m605(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m606(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 33u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_ActivateGameOverlayInviteDialog"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -5608,7 +6452,9 @@ static void m606(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m607(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 75u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_ActivateGameOverlayInviteDialogConnectString"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     ((F)fn)(self, a0);
 }
@@ -5616,7 +6462,9 @@ static void m607(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m608(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 73u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_ActivateGameOverlayRemotePlayTogetherInviteDialog"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -5624,7 +6472,9 @@ static void m608(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m609(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, int32_t);
-    void *fn = steam_slot(c, self, 31u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_ActivateGameOverlayToStore"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     ((F)fn)(self, a0, a1);
@@ -5633,7 +6483,9 @@ static void m609(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m610(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *, uint64_t);
-    void *fn = steam_slot(c, self, 29u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_ActivateGameOverlayToUser"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     uint64_t a1 = (uint64_t)R64(args + 4u);
     ((F)fn)(self, a0, a1);
@@ -5642,7 +6494,9 @@ static void m610(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m611(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *, int32_t);
-    void *fn = steam_slot(c, self, 30u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_ActivateGameOverlayToWebPage"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     int32_t a1 = (int32_t)R32(args + 4u);
     ((F)fn)(self, a0, a1);
@@ -5651,14 +6505,18 @@ static void m611(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m612(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *);
-    void *fn = steam_slot(c, self, 44u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_ClearRichPresence"), __ATOMIC_RELAXED);
     ((F)fn)(self);
 }
 /* SteamFriends017::CloseClanChatWindowInSteam */
 static void m613(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 63u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_CloseClanChatWindowInSteam"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -5667,7 +6525,9 @@ static void m613(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m614(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, void *, int32_t);
-    void *fn = steam_slot(c, self, 23u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_DownloadClanActivityCounts"), __ATOMIC_RELAXED);
     void *a0 = steam_in_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 8u);
     int32_t a1 = (int32_t)R32(args + 4u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -5677,7 +6537,9 @@ static void m614(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m615(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 69u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_EnumerateFollowingList"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -5686,7 +6548,9 @@ static void m615(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m616(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, int32_t);
-    void *fn = steam_slot(c, self, 57u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetChatMemberByIndex"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -5696,7 +6560,9 @@ static void m616(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m617(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, void *, void *, void *);
-    void *fn = steam_slot(c, self, 22u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetClanActivityCounts"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out(c, R32(args + 8u), 4u);
     void *a2 = steam_out(c, R32(args + 12u), 4u);
@@ -5708,7 +6574,9 @@ static void m617(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m618(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 19u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetClanByIndex"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret_sret(c, sret, r);
@@ -5717,7 +6585,9 @@ static void m618(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m619(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 56u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetClanChatMemberCount"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -5726,7 +6596,9 @@ static void m619(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m620(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, int32_t, void *, int32_t, void *, void *);
-    void *fn = steam_slot(c, self, 59u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetClanChatMessage"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     void *a2 = steam_out_buffer(c, R32(args + 12u), (int64_t)(int32_t)R32(args + 16u), 1u);
@@ -5740,7 +6612,9 @@ static void m620(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m621(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 18u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetClanCount"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -5748,7 +6622,9 @@ static void m621(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m622(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 20u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetClanName"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -5757,7 +6633,9 @@ static void m622(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m623(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, int32_t);
-    void *fn = steam_slot(c, self, 41u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetClanOfficerByIndex"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -5767,7 +6645,9 @@ static void m623(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m624(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 40u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetClanOfficerCount"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -5776,7 +6656,9 @@ static void m624(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m625(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 39u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetClanOwner"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret_sret(c, sret, r);
@@ -5785,7 +6667,9 @@ static void m625(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m626(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 21u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetClanTag"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -5794,7 +6678,9 @@ static void m626(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m627(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 51u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetCoplayFriend"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret_sret(c, sret, r);
@@ -5803,7 +6689,9 @@ static void m627(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m628(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 50u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetCoplayFriendCount"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -5811,7 +6699,9 @@ static void m628(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m629(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 67u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFollowerCount"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -5820,7 +6710,9 @@ static void m629(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m630(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendByIndex"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -5830,7 +6722,9 @@ static void m630(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m631(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 53u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendCoplayGame"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -5839,7 +6733,9 @@ static void m631(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m632(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 52u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendCoplayTime"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -5848,7 +6744,9 @@ static void m632(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m633(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendCount"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -5857,7 +6755,9 @@ static void m633(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m634(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 24u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendCountFromSource"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -5866,7 +6766,9 @@ static void m634(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m635(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, int32_t);
-    void *fn = steam_slot(c, self, 25u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendFromSourceByIndex"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -5876,7 +6778,9 @@ static void m635(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m636(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, void *);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendGamePlayed"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out(c, R32(args + 8u), 24u);
     bool r = ((F)fn)(self, a0, a1);
@@ -5886,7 +6790,9 @@ static void m636(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m637(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, int32_t, void *, int32_t, void *);
-    void *fn = steam_slot(c, self, 66u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendMessage"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     void *a2 = steam_out_buffer(c, R32(args + 12u), (int64_t)(int32_t)R32(args + 16u), 1u);
@@ -5899,7 +6805,9 @@ static void m637(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m638(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendPersonaName"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -5908,7 +6816,9 @@ static void m638(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m639(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, uint64_t, int32_t);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendPersonaNameHistory"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     const char * r = ((F)fn)(self, a0, a1);
@@ -5918,7 +6828,9 @@ static void m639(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m640(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendPersonaState"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -5927,7 +6839,9 @@ static void m640(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m641(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendRelationship"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -5936,7 +6850,9 @@ static void m641(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m642(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 45u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendRichPresence"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     const char * r = ((F)fn)(self, a0, a1);
@@ -5946,7 +6862,9 @@ static void m642(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m643(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, uint64_t, int32_t);
-    void *fn = steam_slot(c, self, 47u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendRichPresenceKeyByIndex"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     const char * r = ((F)fn)(self, a0, a1);
@@ -5956,7 +6874,9 @@ static void m643(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m644(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 46u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendRichPresenceKeyCount"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -5965,7 +6885,9 @@ static void m644(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m645(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 10u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendSteamLevel"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -5974,7 +6896,9 @@ static void m645(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m646(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 12u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendsGroupCount"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -5982,7 +6906,9 @@ static void m646(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m647(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int16_t (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 13u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendsGroupIDByIndex"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int16_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -5991,7 +6917,9 @@ static void m647(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m648(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, int16_t);
-    void *fn = steam_slot(c, self, 15u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendsGroupMembersCount"), __ATOMIC_RELAXED);
     int16_t a0 = (int16_t)R32(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -6000,7 +6928,9 @@ static void m648(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m649(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, int16_t, void *, int32_t);
-    void *fn = steam_slot(c, self, 16u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendsGroupMembersList"), __ATOMIC_RELAXED);
     int16_t a0 = (int16_t)R32(args + 0u);
     void *a1 = steam_out_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 8u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -6010,7 +6940,9 @@ static void m649(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m650(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, int16_t);
-    void *fn = steam_slot(c, self, 14u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetFriendsGroupName"), __ATOMIC_RELAXED);
     int16_t a0 = (int16_t)R32(args + 0u);
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -6019,7 +6951,9 @@ static void m650(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m651(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 36u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetLargeFriendAvatar"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -6028,7 +6962,9 @@ static void m651(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m652(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 35u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetMediumFriendAvatar"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -6037,7 +6973,9 @@ static void m652(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m653(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 72u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetNumChatsWithUnreadPriorityMessages"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -6045,7 +6983,9 @@ static void m653(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m654(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetPersonaName"), __ATOMIC_RELAXED);
     const char * r = ((F)fn)(self);
     c->eax = steam_guest_string(c, r);
 }
@@ -6053,7 +6993,9 @@ static void m654(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m655(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetPersonaState"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -6061,7 +7003,9 @@ static void m655(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m656(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetPlayerNickname"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -6070,7 +7014,9 @@ static void m656(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m657(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 34u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetSmallFriendAvatar"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -6079,7 +7025,9 @@ static void m657(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m658(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 42u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_GetUserRestrictions"), __ATOMIC_RELAXED);
     uint32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -6087,7 +7035,9 @@ static void m658(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m659(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, int32_t);
-    void *fn = steam_slot(c, self, 17u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_HasFriend"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -6097,7 +7047,9 @@ static void m659(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m660(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 49u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_InviteUserToGame"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -6107,7 +7059,9 @@ static void m660(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m661(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint64_t);
-    void *fn = steam_slot(c, self, 60u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_IsClanChatAdmin"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -6117,7 +7071,9 @@ static void m661(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m662(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 61u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_IsClanChatWindowOpenInSteam"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -6126,7 +7082,9 @@ static void m662(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m663(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 71u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_IsClanOfficialGameGroup"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -6135,7 +7093,9 @@ static void m663(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m664(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 70u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_IsClanPublic"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -6144,7 +7104,9 @@ static void m664(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m665(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 68u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_IsFollowing"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -6153,7 +7115,9 @@ static void m665(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m666(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint64_t);
-    void *fn = steam_slot(c, self, 26u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_IsUserInSource"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -6163,7 +7127,9 @@ static void m666(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m667(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 54u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_JoinClanChatRoom"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -6172,7 +7138,9 @@ static void m667(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m668(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 55u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_LeaveClanChatRoom"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -6181,7 +7149,9 @@ static void m668(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m669(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 62u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_OpenClanChatWindowInSteam"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -6190,7 +7160,9 @@ static void m669(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m670(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 74u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_RegisterProtocolInOverlayBrowser"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -6199,7 +7171,9 @@ static void m670(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m671(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 65u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_ReplyToFriendMessage"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -6209,7 +7183,9 @@ static void m671(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m672(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 38u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_RequestClanOfficerList"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -6218,7 +7194,9 @@ static void m672(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m673(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 48u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_RequestFriendRichPresence"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -6226,7 +7204,9 @@ static void m673(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m674(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, bool);
-    void *fn = steam_slot(c, self, 37u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_RequestUserInformation"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool a1 = (R8(args + 8u) != 0);
     bool r = ((F)fn)(self, a0, a1);
@@ -6236,7 +7216,9 @@ static void m674(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m675(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 58u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_SendClanChatMessage"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -6246,7 +7228,9 @@ static void m675(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m676(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, bool);
-    void *fn = steam_slot(c, self, 27u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_SetInGameVoiceSpeaking"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool a1 = (R8(args + 8u) != 0);
     ((F)fn)(self, a0, a1);
@@ -6255,7 +7239,9 @@ static void m676(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m677(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 64u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_SetListenForFriendsMessages"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -6264,7 +7250,9 @@ static void m677(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m678(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_SetPersonaName"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -6273,7 +7261,9 @@ static void m678(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m679(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 32u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_SetPlayedWith"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -6281,7 +7271,9 @@ static void m679(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m680(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *, const char *);
-    void *fn = steam_slot(c, self, 43u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamFriends_SetRichPresence"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     const char *a1 = steam_in_string(c, R32(args + 4u));
     bool r = ((F)fn)(self, a0, a1);
@@ -6291,7 +7283,9 @@ static void m680(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m681(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 36u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_AssociateWithClan"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -6300,7 +7294,9 @@ static void m681(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m682(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_BLoggedOn"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -6308,7 +7304,9 @@ static void m682(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m683(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_BSecure"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -6316,7 +7314,9 @@ static void m683(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m684(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *, uint32_t);
-    void *fn = steam_slot(c, self, 41u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_BUpdateUserData"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     uint32_t a2 = (uint32_t)R32(args + 12u);
@@ -6327,7 +7327,9 @@ static void m684(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m685(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, void *, int32_t, uint64_t);
-    void *fn = steam_slot(c, self, 26u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_BeginAuthSession"), __ATOMIC_RELAXED);
     void *a0 = steam_in_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     int32_t a1 = (int32_t)R32(args + 4u);
     uint64_t a2 = (uint64_t)R64(args + 8u);
@@ -6338,7 +7340,9 @@ static void m685(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m686(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 28u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_CancelAuthTicket"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -6346,14 +7350,18 @@ static void m686(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m687(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *);
-    void *fn = steam_slot(c, self, 19u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_ClearAllKeyValues"), __ATOMIC_RELAXED);
     ((F)fn)(self);
 }
 /* SteamGameServer014::ComputeNewPlayerCompatibility */
 static void m688(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 37u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_ComputeNewPlayerCompatibility"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -6362,7 +7370,9 @@ static void m688(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m689(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *);
-    void *fn = steam_slot(c, self, 39u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_CreateUnauthenticatedUserConnection"), __ATOMIC_RELAXED);
     uint64_t r = ((F)fn)(self);
     steam_ret_sret(c, sret, r);
 }
@@ -6370,7 +7380,9 @@ static void m689(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m690(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 27u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_EndAuthSession"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -6378,7 +7390,9 @@ static void m690(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m691(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, void *, int32_t, void *);
-    void *fn = steam_slot(c, self, 25u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_GetAuthSessionTicket"), __ATOMIC_RELAXED);
     void *a0 = steam_out_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     int32_t a1 = (int32_t)R32(args + 4u);
     void *a2 = steam_out(c, R32(args + 8u), 4u);
@@ -6389,14 +7403,18 @@ static void m691(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m692(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *);
-    void *fn = steam_slot(c, self, 31u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_GetGameplayStats"), __ATOMIC_RELAXED);
     ((F)fn)(self);
 }
 /* SteamGameServer014::GetNextOutgoingPacket */
 static void m693(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, void *, int32_t, void *, void *);
-    void *fn = steam_slot(c, self, 35u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_GetNextOutgoingPacket"), __ATOMIC_RELAXED);
     void *a0 = steam_out_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     int32_t a1 = (int32_t)R32(args + 4u);
     void *a2 = steam_out(c, R32(args + 8u), 4u);
@@ -6408,7 +7426,9 @@ static void m693(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m694(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *);
-    void *fn = steam_slot(c, self, 32u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_GetServerReputation"), __ATOMIC_RELAXED);
     uint64_t r = ((F)fn)(self);
     steam_ret64(c, (uint64_t)r);
 }
@@ -6416,7 +7436,9 @@ static void m694(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m695(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *);
-    void *fn = steam_slot(c, self, 10u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_GetSteamID"), __ATOMIC_RELAXED);
     uint64_t r = ((F)fn)(self);
     steam_ret_sret(c, sret, r);
 }
@@ -6424,7 +7446,9 @@ static void m695(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m696(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, int32_t, uint32_t, uint16_t);
-    void *fn = steam_slot(c, self, 34u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_HandleIncomingPacket"), __ATOMIC_RELAXED);
     void *a0 = steam_in_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     int32_t a1 = (int32_t)R32(args + 4u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -6436,14 +7460,18 @@ static void m696(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m697(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_LogOff"), __ATOMIC_RELAXED);
     ((F)fn)(self);
 }
 /* SteamGameServer014::LogOn */
 static void m698(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_LogOn"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     ((F)fn)(self, a0);
 }
@@ -6451,14 +7479,18 @@ static void m698(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m699(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_LogOnAnonymous"), __ATOMIC_RELAXED);
     ((F)fn)(self);
 }
 /* SteamGameServer014::RequestUserGroupStatus */
 static void m700(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint64_t);
-    void *fn = steam_slot(c, self, 30u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_RequestUserGroupStatus"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -6468,7 +7500,9 @@ static void m700(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m701(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, void *, uint32_t, void *);
-    void *fn = steam_slot(c, self, 38u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SendUserConnectAndAuthenticate_DEPRECATED"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     void *a1 = steam_in_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 1u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -6480,7 +7514,9 @@ static void m701(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m702(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 40u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SendUserDisconnect_DEPRECATED"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -6488,7 +7524,9 @@ static void m702(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m703(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 24u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SetAdvertiseServerActive"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     ((F)fn)(self, a0);
 }
@@ -6496,7 +7534,9 @@ static void m703(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m704(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 13u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SetBotPlayerCount"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -6504,7 +7544,9 @@ static void m704(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m705(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SetDedicatedServer"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     ((F)fn)(self, a0);
 }
@@ -6512,7 +7554,9 @@ static void m705(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m706(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 22u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SetGameData"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     ((F)fn)(self, a0);
 }
@@ -6520,7 +7564,9 @@ static void m706(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m707(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SetGameDescription"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     ((F)fn)(self, a0);
 }
@@ -6528,7 +7574,9 @@ static void m707(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m708(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 21u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SetGameTags"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     ((F)fn)(self, a0);
 }
@@ -6536,7 +7584,9 @@ static void m708(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m709(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *, const char *);
-    void *fn = steam_slot(c, self, 20u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SetKeyValue"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     const char *a1 = steam_in_string(c, R32(args + 4u));
     ((F)fn)(self, a0, a1);
@@ -6545,7 +7595,9 @@ static void m709(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m710(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 15u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SetMapName"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     ((F)fn)(self, a0);
 }
@@ -6553,7 +7605,9 @@ static void m710(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m711(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 12u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SetMaxPlayerCount"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -6561,7 +7615,9 @@ static void m711(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m712(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SetModDir"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     ((F)fn)(self, a0);
 }
@@ -6569,7 +7625,9 @@ static void m712(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m713(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 16u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SetPasswordProtected"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     ((F)fn)(self, a0);
 }
@@ -6577,7 +7635,9 @@ static void m713(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m714(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SetProduct"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     ((F)fn)(self, a0);
 }
@@ -6585,7 +7645,9 @@ static void m714(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m715(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 23u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SetRegion"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     ((F)fn)(self, a0);
 }
@@ -6593,7 +7655,9 @@ static void m715(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m716(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 14u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SetServerName"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     ((F)fn)(self, a0);
 }
@@ -6601,7 +7665,9 @@ static void m716(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m717(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint16_t);
-    void *fn = steam_slot(c, self, 17u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SetSpectatorPort"), __ATOMIC_RELAXED);
     uint16_t a0 = (uint16_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -6609,7 +7675,9 @@ static void m717(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m718(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 18u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_SetSpectatorServerName"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     ((F)fn)(self, a0);
 }
@@ -6617,7 +7685,9 @@ static void m718(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m719(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, uint32_t);
-    void *fn = steam_slot(c, self, 29u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_UserHasLicenseForApp"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     int32_t r = ((F)fn)(self, a0, a1);
@@ -6627,7 +7697,9 @@ static void m719(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m720(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServer_WasRestartRequested"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -6968,7 +8040,9 @@ static void m760(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m761(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServerStats_ClearUserAchievement"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -6978,7 +8052,9 @@ static void m761(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m762(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *, void *);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServerStats_GetUserAchievement"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     void *a2 = steam_out(c, R32(args + 12u), 1u);
@@ -6989,7 +8065,9 @@ static void m762(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m763(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *, void *);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServerStats_GetUserStatFloat"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     void *a2 = steam_out(c, R32(args + 12u), 4u);
@@ -7000,7 +8078,9 @@ static void m763(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m764(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *, void *);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServerStats_GetUserStatInt32"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     void *a2 = steam_out(c, R32(args + 12u), 4u);
@@ -7011,7 +8091,9 @@ static void m764(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m765(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServerStats_RequestUserStats"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -7020,7 +8102,9 @@ static void m765(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m766(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServerStats_SetUserAchievement"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -7030,7 +8114,9 @@ static void m766(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m767(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *, float);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServerStats_SetUserStatFloat"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     float a2 = RF(args + 12u);
@@ -7041,7 +8127,9 @@ static void m767(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m768(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *, int32_t);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServerStats_SetUserStatInt32"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     int32_t a2 = (int32_t)R32(args + 12u);
@@ -7052,7 +8140,9 @@ static void m768(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m769(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServerStats_StoreUserStats"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -7061,7 +8151,9 @@ static void m769(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m770(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *, float, double);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameServerStats_UpdateUserAvgRateStat"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     float a2 = RF(args + 12u);
@@ -7073,7 +8165,9 @@ static void m770(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m771(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, uint64_t);
-    void *fn = steam_slot(c, self, 10u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_ActivateActionSet"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     ((F)fn)(self, a0, a1);
@@ -7082,7 +8176,9 @@ static void m771(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m772(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, uint64_t);
-    void *fn = steam_slot(c, self, 12u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_ActivateActionSetLayer"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     ((F)fn)(self, a0, a1);
@@ -7091,7 +8187,9 @@ static void m772(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m773(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_BNewDataAvailable"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -7099,7 +8197,9 @@ static void m773(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m774(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, bool, uint32_t);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_BWaitForData"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -7109,7 +8209,9 @@ static void m774(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m775(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, uint64_t);
-    void *fn = steam_slot(c, self, 13u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_DeactivateActionSetLayer"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     ((F)fn)(self, a0, a1);
@@ -7118,7 +8220,9 @@ static void m775(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m776(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 14u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_DeactivateAllActionSetLayers"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -7126,14 +8230,18 @@ static void m776(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m778(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_EnableDeviceCallbacks"), __ATOMIC_RELAXED);
     ((F)fn)(self);
 }
 /* SteamInput006::GetActionOriginFromXboxOrigin */
 static void m779(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, int32_t);
-    void *fn = steam_slot(c, self, 42u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetActionOriginFromXboxOrigin"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     int32_t r = ((F)fn)(self, a0, a1);
@@ -7143,7 +8251,9 @@ static void m779(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m780(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetActionSetHandle"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -7152,7 +8262,9 @@ static void m780(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m781(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, void *);
-    void *fn = steam_slot(c, self, 15u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetActiveActionSetLayers"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out_buffer(c, R32(args + 8u), 16, 8u);
     int32_t r = ((F)fn)(self, a0, a1);
@@ -7162,7 +8274,9 @@ static void m781(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m782(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 20u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetAnalogActionHandle"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -7171,7 +8285,9 @@ static void m782(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m783(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, uint64_t, uint64_t, void *);
-    void *fn = steam_slot(c, self, 22u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetAnalogActionOrigins"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     uint64_t a2 = (uint64_t)R64(args + 16u);
@@ -7183,7 +8299,9 @@ static void m783(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m784(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, void *);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetConnectedControllers"), __ATOMIC_RELAXED);
     void *a0 = steam_out_buffer(c, R32(args + 0u), 16, 8u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -7192,7 +8310,9 @@ static void m784(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m785(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 38u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetControllerForGamepadIndex"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -7201,7 +8321,9 @@ static void m785(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m786(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetCurrentActionSet"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -7210,7 +8332,9 @@ static void m786(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m787(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, void *, void *);
-    void *fn = steam_slot(c, self, 44u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetDeviceBindingRevision"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out(c, R32(args + 8u), 4u);
     void *a2 = steam_out(c, R32(args + 12u), 4u);
@@ -7221,7 +8345,9 @@ static void m787(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m788(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 16u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetDigitalActionHandle"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -7230,7 +8356,9 @@ static void m788(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m789(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, uint64_t, uint64_t, void *);
-    void *fn = steam_slot(c, self, 18u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetDigitalActionOrigins"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     uint64_t a2 = (uint64_t)R64(args + 16u);
@@ -7242,7 +8370,9 @@ static void m789(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m790(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 39u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetGamepadIndexForController"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -7251,7 +8381,9 @@ static void m790(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m791(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 25u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetGlyphForActionOrigin_Legacy"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -7260,7 +8392,9 @@ static void m791(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m792(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 41u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetGlyphForXboxOrigin"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -7269,7 +8403,9 @@ static void m792(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m793(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, int32_t, int32_t, uint32_t);
-    void *fn = steam_slot(c, self, 23u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetGlyphPNGForActionOrigin"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -7280,7 +8416,9 @@ static void m793(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m794(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, int32_t, uint32_t);
-    void *fn = steam_slot(c, self, 24u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetGlyphSVGForActionOrigin"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     const char * r = ((F)fn)(self, a0, a1);
@@ -7290,7 +8428,9 @@ static void m794(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m795(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 37u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetInputTypeForHandle"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -7299,7 +8439,9 @@ static void m795(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m796(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 45u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetRemotePlaySessionID"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -7308,7 +8450,9 @@ static void m796(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m797(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint16_t (*F)(void *);
-    void *fn = steam_slot(c, self, 46u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetSessionInputConfigurationSettings"), __ATOMIC_RELAXED);
     uint16_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -7316,7 +8460,9 @@ static void m797(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m798(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 26u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetStringForActionOrigin"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -7325,7 +8471,9 @@ static void m798(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m799(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 27u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetStringForAnalogActionName"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -7334,7 +8482,9 @@ static void m799(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m800(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 19u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetStringForDigitalActionName"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -7343,7 +8493,9 @@ static void m800(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m801(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 40u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_GetStringForXboxOrigin"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     const char * r = ((F)fn)(self, a0);
     c->eax = steam_guest_string(c, r);
@@ -7352,7 +8504,9 @@ static void m801(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m802(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_Init"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -7361,7 +8515,9 @@ static void m802(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m803(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, int32_t, uint16_t);
-    void *fn = steam_slot(c, self, 34u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_Legacy_TriggerHapticPulse"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     uint16_t a2 = (uint16_t)R32(args + 12u);
@@ -7371,7 +8527,9 @@ static void m803(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m804(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, int32_t, uint16_t, uint16_t, uint16_t, uint32_t);
-    void *fn = steam_slot(c, self, 35u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_Legacy_TriggerRepeatedHapticPulse"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     uint16_t a2 = (uint16_t)R32(args + 12u);
@@ -7384,7 +8542,9 @@ static void m804(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m805(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_RunFrame"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     ((F)fn)(self, a0);
 }
@@ -7392,7 +8552,9 @@ static void m805(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m806(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_SetInputActionManifestFilePath"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -7401,7 +8563,9 @@ static void m806(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m807(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, uint8_t, uint8_t, uint8_t, uint32_t);
-    void *fn = steam_slot(c, self, 33u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_SetLEDColor"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint8_t a1 = (uint8_t)R32(args + 8u);
     uint8_t a2 = (uint8_t)R32(args + 12u);
@@ -7413,7 +8577,9 @@ static void m807(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m808(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 36u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_ShowBindingPanel"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -7422,7 +8588,9 @@ static void m808(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m809(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_Shutdown"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -7430,7 +8598,9 @@ static void m809(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m810(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, uint64_t);
-    void *fn = steam_slot(c, self, 28u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_StopAnalogActionMomentum"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     ((F)fn)(self, a0, a1);
@@ -7439,7 +8609,9 @@ static void m810(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m811(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 43u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_TranslateActionOrigin"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     int32_t r = ((F)fn)(self, a0, a1);
@@ -7449,7 +8621,9 @@ static void m811(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m813(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, uint16_t, uint16_t);
-    void *fn = steam_slot(c, self, 30u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_TriggerVibration"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint16_t a1 = (uint16_t)R32(args + 8u);
     uint16_t a2 = (uint16_t)R32(args + 12u);
@@ -7459,7 +8633,9 @@ static void m813(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m814(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, uint16_t, uint16_t, uint16_t, uint16_t);
-    void *fn = steam_slot(c, self, 31u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamInput_TriggerVibrationExtended"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint16_t a1 = (uint16_t)R32(args + 8u);
     uint16_t a2 = (uint16_t)R32(args + 12u);
@@ -7471,7 +8647,9 @@ static void m814(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m815(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameSearch_AcceptGame"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -7479,7 +8657,9 @@ static void m815(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m816(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, const char *, const char *);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameSearch_AddGameSearchParams"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     const char *a1 = steam_in_string(c, R32(args + 4u));
     int32_t r = ((F)fn)(self, a0, a1);
@@ -7489,7 +8669,9 @@ static void m816(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m817(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameSearch_CancelRequestPlayersForGame"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -7497,7 +8679,9 @@ static void m817(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m818(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameSearch_DeclineGame"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -7505,7 +8689,9 @@ static void m818(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m819(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 13u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameSearch_EndGame"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -7514,7 +8700,9 @@ static void m819(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m820(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameSearch_EndGameSearch"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -7522,7 +8710,9 @@ static void m820(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m821(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 10u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameSearch_HostConfirmGameStart"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -7531,7 +8721,9 @@ static void m821(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m822(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, int32_t, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameSearch_RequestPlayersForGame"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -7542,7 +8734,9 @@ static void m822(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m823(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, void *, int32_t);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameSearch_RetrieveConnectionDetails"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out_buffer(c, R32(args + 8u), (int64_t)(int32_t)R32(args + 12u), 1u);
     int32_t a2 = (int32_t)R32(args + 12u);
@@ -7553,7 +8747,9 @@ static void m823(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m824(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameSearch_SearchForGameSolo"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     int32_t r = ((F)fn)(self, a0, a1);
@@ -7563,7 +8759,9 @@ static void m824(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m825(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameSearch_SearchForGameWithLobby"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     int32_t a2 = (int32_t)R32(args + 12u);
@@ -7574,7 +8772,9 @@ static void m825(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m826(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, const char *, int32_t);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameSearch_SetConnectionDetails"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     int32_t a1 = (int32_t)R32(args + 4u);
     int32_t r = ((F)fn)(self, a0, a1);
@@ -7584,7 +8784,9 @@ static void m826(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m827(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, const char *, const char *);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameSearch_SetGameHostParams"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     const char *a1 = steam_in_string(c, R32(args + 4u));
     int32_t r = ((F)fn)(self, a0, a1);
@@ -7594,7 +8796,9 @@ static void m827(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m828(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, uint64_t, int32_t);
-    void *fn = steam_slot(c, self, 12u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamGameSearch_SubmitPlayerResult"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     int32_t a2 = (int32_t)R32(args + 16u);
@@ -7605,7 +8809,9 @@ static void m828(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m829(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint32_t, uint32_t, uint16_t, uint16_t, uint32_t, uint32_t);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_AddFavoriteGame"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     uint16_t a2 = (uint16_t)R32(args + 8u);
@@ -7619,7 +8825,9 @@ static void m829(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m830(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_AddRequestLobbyListCompatibleMembersFilter"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -7627,7 +8835,9 @@ static void m830(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m831(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_AddRequestLobbyListDistanceFilter"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -7635,7 +8845,9 @@ static void m831(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m832(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_AddRequestLobbyListFilterSlotsAvailable"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -7643,7 +8855,9 @@ static void m832(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m833(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *, int32_t);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_AddRequestLobbyListNearValueFilter"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     int32_t a1 = (int32_t)R32(args + 4u);
     ((F)fn)(self, a0, a1);
@@ -7652,7 +8866,9 @@ static void m833(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m834(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_AddRequestLobbyListNumericalFilter"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     int32_t a1 = (int32_t)R32(args + 4u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -7662,7 +8878,9 @@ static void m834(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m835(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 10u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_AddRequestLobbyListResultCountFilter"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -7670,7 +8888,9 @@ static void m835(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m836(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, const char *, const char *, int32_t);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_AddRequestLobbyListStringFilter"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     const char *a1 = steam_in_string(c, R32(args + 4u));
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -7680,7 +8900,9 @@ static void m836(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m837(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 13u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_CreateLobby"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -7690,7 +8912,9 @@ static void m837(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m838(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 23u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_DeleteLobbyData"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     bool r = ((F)fn)(self, a0, a1);
@@ -7700,7 +8924,9 @@ static void m838(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m839(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t, void *, void *, void *, void *, void *, void *);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_GetFavoriteGame"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     void *a1 = steam_out(c, R32(args + 4u), 4u);
     void *a2 = steam_out(c, R32(args + 8u), 4u);
@@ -7715,7 +8941,9 @@ static void m839(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m840(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_GetFavoriteGameCount"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -7723,7 +8951,9 @@ static void m840(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m841(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 12u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_GetLobbyByIndex"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret_sret(c, sret, r);
@@ -7732,7 +8962,9 @@ static void m841(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m842(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, int32_t, void *, void *, int32_t, void *);
-    void *fn = steam_slot(c, self, 27u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_GetLobbyChatEntry"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     void *a2 = steam_out(c, R32(args + 12u), 8u);
@@ -7746,7 +8978,9 @@ static void m842(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m843(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 19u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_GetLobbyData"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     const char * r = ((F)fn)(self, a0, a1);
@@ -7756,7 +8990,9 @@ static void m843(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m844(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, int32_t, void *, int32_t, void *, int32_t);
-    void *fn = steam_slot(c, self, 22u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_GetLobbyDataByIndex"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     void *a2 = steam_out_buffer(c, R32(args + 12u), (int64_t)(int32_t)R32(args + 16u), 1u);
@@ -7770,7 +9006,9 @@ static void m844(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m845(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 21u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_GetLobbyDataCount"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -7779,7 +9017,9 @@ static void m845(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m846(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, void *, void *, void *);
-    void *fn = steam_slot(c, self, 30u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_GetLobbyGameServer"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out(c, R32(args + 8u), 4u);
     void *a2 = steam_out(c, R32(args + 12u), 2u);
@@ -7791,7 +9031,9 @@ static void m846(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m847(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t, int32_t);
-    void *fn = steam_slot(c, self, 18u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_GetLobbyMemberByIndex"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -7801,7 +9043,9 @@ static void m847(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m848(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *, uint64_t, uint64_t, const char *);
-    void *fn = steam_slot(c, self, 24u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_GetLobbyMemberData"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     const char *a2 = steam_in_string(c, R32(args + 16u));
@@ -7812,7 +9056,9 @@ static void m848(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m849(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 32u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_GetLobbyMemberLimit"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -7821,7 +9067,9 @@ static void m849(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m850(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 35u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_GetLobbyOwner"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret_sret(c, sret, r);
@@ -7830,7 +9078,9 @@ static void m850(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m851(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 17u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_GetNumLobbyMembers"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -7839,7 +9089,9 @@ static void m851(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m852(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint64_t);
-    void *fn = steam_slot(c, self, 16u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_InviteUserToLobby"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -7849,7 +9101,9 @@ static void m852(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m853(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 14u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_JoinLobby"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -7858,7 +9112,9 @@ static void m853(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m854(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 15u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_LeaveLobby"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -7866,7 +9122,9 @@ static void m854(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m855(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, uint32_t, uint16_t, uint16_t, uint32_t);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_RemoveFavoriteGame"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     uint16_t a2 = (uint16_t)R32(args + 8u);
@@ -7879,7 +9137,9 @@ static void m855(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m856(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 28u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_RequestLobbyData"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -7888,7 +9148,9 @@ static void m856(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m857(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_RequestLobbyList"), __ATOMIC_RELAXED);
     uint64_t r = ((F)fn)(self);
     steam_ret64(c, (uint64_t)r);
 }
@@ -7896,7 +9158,9 @@ static void m857(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m858(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, void *, int32_t);
-    void *fn = steam_slot(c, self, 26u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_SendLobbyChatMsg"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_in_buffer(c, R32(args + 8u), (int64_t)(int32_t)R32(args + 12u), 1u);
     int32_t a2 = (int32_t)R32(args + 12u);
@@ -7907,7 +9171,9 @@ static void m858(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m859(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint64_t);
-    void *fn = steam_slot(c, self, 37u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_SetLinkedLobby"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -7917,7 +9183,9 @@ static void m859(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m860(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, const char *, const char *);
-    void *fn = steam_slot(c, self, 20u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_SetLobbyData"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     const char *a2 = steam_in_string(c, R32(args + 12u));
@@ -7928,7 +9196,9 @@ static void m860(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m861(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, uint32_t, uint16_t, uint64_t);
-    void *fn = steam_slot(c, self, 29u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_SetLobbyGameServer"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     uint16_t a2 = (uint16_t)R32(args + 12u);
@@ -7939,7 +9209,9 @@ static void m861(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m862(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, bool);
-    void *fn = steam_slot(c, self, 34u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_SetLobbyJoinable"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool a1 = (R8(args + 8u) != 0);
     bool r = ((F)fn)(self, a0, a1);
@@ -7949,7 +9221,9 @@ static void m862(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m863(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, const char *, const char *);
-    void *fn = steam_slot(c, self, 25u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_SetLobbyMemberData"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     const char *a1 = steam_in_string(c, R32(args + 8u));
     const char *a2 = steam_in_string(c, R32(args + 12u));
@@ -7959,7 +9233,9 @@ static void m863(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m864(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, int32_t);
-    void *fn = steam_slot(c, self, 31u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_SetLobbyMemberLimit"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -7969,7 +9245,9 @@ static void m864(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m865(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, uint64_t);
-    void *fn = steam_slot(c, self, 36u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_SetLobbyOwner"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -7979,7 +9257,9 @@ static void m865(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m866(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, int32_t);
-    void *fn = steam_slot(c, self, 33u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmaking_SetLobbyType"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -7989,7 +9269,9 @@ static void m866(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m868(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 16u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamMatchmakingServers_CancelServerQuery"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -7997,7 +9279,9 @@ static void m868(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m884(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamNetworking_AcceptP2PSessionWithUser"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -8006,7 +9290,9 @@ static void m884(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m885(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamNetworking_AllowP2PPacketRelay"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -8015,7 +9301,9 @@ static void m885(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m886(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, int32_t);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamNetworking_CloseP2PChannelWithUser"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     bool r = ((F)fn)(self, a0, a1);
@@ -8025,7 +9313,9 @@ static void m886(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m887(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamNetworking_CloseP2PSessionWithUser"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -8034,7 +9324,9 @@ static void m887(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m888(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, uint64_t, int32_t, int32_t, bool);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamNetworking_CreateP2PConnectionSocket"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t a1 = (int32_t)R32(args + 8u);
     int32_t a2 = (int32_t)R32(args + 12u);
@@ -8046,7 +9338,9 @@ static void m888(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m889(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, bool);
-    void *fn = steam_slot(c, self, 12u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamNetworking_DestroyListenSocket"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     bool a1 = (R8(args + 4u) != 0);
     bool r = ((F)fn)(self, a0, a1);
@@ -8056,7 +9350,9 @@ static void m889(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m890(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, bool);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamNetworking_DestroySocket"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     bool a1 = (R8(args + 4u) != 0);
     bool r = ((F)fn)(self, a0, a1);
@@ -8066,7 +9362,9 @@ static void m890(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m892(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 21u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamNetworking_GetMaxPacketSize"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -8075,7 +9373,9 @@ static void m892(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m894(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 20u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamNetworking_GetSocketConnectionType"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -8084,7 +9384,9 @@ static void m894(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m896(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, void *, void *);
-    void *fn = steam_slot(c, self, 16u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamNetworking_IsDataAvailable"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     void *a1 = steam_out(c, R32(args + 4u), 4u);
     void *a2 = steam_out(c, R32(args + 8u), 4u);
@@ -8095,7 +9397,9 @@ static void m896(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m897(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, void *);
-    void *fn = steam_slot(c, self, 14u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamNetworking_IsDataAvailableOnSocket"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     void *a1 = steam_out(c, R32(args + 4u), 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -8105,7 +9409,9 @@ static void m897(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m898(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, int32_t);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamNetworking_IsP2PPacketAvailable"), __ATOMIC_RELAXED);
     void *a0 = steam_out(c, R32(args + 0u), 4u);
     int32_t a1 = (int32_t)R32(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -8115,7 +9421,9 @@ static void m898(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m899(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, uint32_t, void *, void *, int32_t);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamNetworking_ReadP2PPacket"), __ATOMIC_RELAXED);
     void *a0 = steam_out_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     void *a2 = steam_out(c, R32(args + 8u), 4u);
@@ -8128,7 +9436,9 @@ static void m899(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m900(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, void *, uint32_t, void *, void *);
-    void *fn = steam_slot(c, self, 17u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamNetworking_RetrieveData"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     void *a1 = steam_out_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 1u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -8141,7 +9451,9 @@ static void m900(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m901(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, void *, uint32_t, void *);
-    void *fn = steam_slot(c, self, 15u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamNetworking_RetrieveDataFromSocket"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     void *a1 = steam_out_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 1u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -8153,7 +9465,9 @@ static void m901(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m902(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t, void *, uint32_t, bool);
-    void *fn = steam_slot(c, self, 13u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamNetworking_SendDataOnSocket"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     void *a1 = steam_in_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 1u);
     uint32_t a2 = (uint32_t)R32(args + 8u);
@@ -8165,7 +9479,9 @@ static void m902(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m903(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, void *, uint32_t, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamNetworking_SendP2PPacket"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_in_buffer(c, R32(args + 8u), (int64_t)(int32_t)R32(args + 12u), 1u);
     uint32_t a2 = (uint32_t)R32(args + 12u);
@@ -8551,7 +9867,9 @@ static void m990(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m991(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t, uint32_t, uint16_t);
-    void *fn = steam_slot(c, self, 19u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_AdvertiseGame"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     uint16_t a2 = (uint16_t)R32(args + 12u);
@@ -8561,7 +9879,9 @@ static void m991(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m992(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 18u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_BIsBehindNAT"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -8569,7 +9889,9 @@ static void m992(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m993(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 27u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_BIsPhoneIdentifying"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -8577,7 +9899,9 @@ static void m993(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m994(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 28u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_BIsPhoneRequiringVerification"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -8585,7 +9909,9 @@ static void m994(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m995(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 25u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_BIsPhoneVerified"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -8593,7 +9919,9 @@ static void m995(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m996(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 26u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_BIsTwoFactorEnabled"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -8601,7 +9929,9 @@ static void m996(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m997(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_BLoggedOn"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -8609,7 +9939,9 @@ static void m997(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m998(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 31u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_BSetDurationControlOnlineState"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -8618,7 +9950,9 @@ static void m998(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m999(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, void *, int32_t, uint64_t);
-    void *fn = steam_slot(c, self, 14u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_BeginAuthSession"), __ATOMIC_RELAXED);
     void *a0 = steam_in_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     int32_t a1 = (int32_t)R32(args + 4u);
     uint64_t a2 = (uint64_t)R64(args + 8u);
@@ -8629,7 +9963,9 @@ static void m999(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1000(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 16u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_CancelAuthTicket"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -8637,7 +9973,9 @@ static void m1000(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1001(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, void *, uint32_t, void *, uint32_t, void *, uint32_t);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_DecompressVoice"), __ATOMIC_RELAXED);
     void *a0 = steam_in_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     void *a2 = steam_out_buffer(c, R32(args + 8u), (int64_t)(int32_t)R32(args + 12u), 1u);
@@ -8651,7 +9989,9 @@ static void m1001(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1002(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 15u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_EndAuthSession"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -8659,7 +9999,9 @@ static void m1002(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1003(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *, void *, int32_t, void *);
-    void *fn = steam_slot(c, self, 13u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_GetAuthSessionTicket"), __ATOMIC_RELAXED);
     void *a0 = steam_out_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     int32_t a1 = (int32_t)R32(args + 4u);
     void *a2 = steam_out(c, R32(args + 8u), 4u);
@@ -8670,7 +10012,9 @@ static void m1003(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1005(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *);
-    void *fn = steam_slot(c, self, 30u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_GetDurationControl"), __ATOMIC_RELAXED);
     uint64_t r = ((F)fn)(self);
     steam_ret64(c, (uint64_t)r);
 }
@@ -8678,7 +10022,9 @@ static void m1005(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1006(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, int32_t, void *);
-    void *fn = steam_slot(c, self, 21u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_GetEncryptedAppTicket"), __ATOMIC_RELAXED);
     void *a0 = steam_out_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     int32_t a1 = (int32_t)R32(args + 4u);
     void *a2 = steam_out(c, R32(args + 8u), 4u);
@@ -8689,7 +10035,9 @@ static void m1006(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1007(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, int32_t, bool);
-    void *fn = steam_slot(c, self, 22u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_GetGameBadgeLevel"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     bool a1 = (R8(args + 4u) != 0);
     int32_t r = ((F)fn)(self, a0, a1);
@@ -8699,7 +10047,9 @@ static void m1007(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1008(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_GetHSteamUser"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -8707,7 +10057,9 @@ static void m1008(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1009(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *);
-    void *fn = steam_slot(c, self, 29u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_GetMarketEligibility"), __ATOMIC_RELAXED);
     uint64_t r = ((F)fn)(self);
     steam_ret64(c, (uint64_t)r);
 }
@@ -8715,7 +10067,9 @@ static void m1009(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1010(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 23u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_GetPlayerSteamLevel"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -8723,7 +10077,9 @@ static void m1010(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1011(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_GetSteamID"), __ATOMIC_RELAXED);
     uint64_t r = ((F)fn)(self);
     steam_ret_sret(c, sret, r);
 }
@@ -8731,7 +10087,9 @@ static void m1011(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1012(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, int32_t);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_GetUserDataFolder"), __ATOMIC_RELAXED);
     void *a0 = steam_out_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     int32_t a1 = (int32_t)R32(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -8741,7 +10099,9 @@ static void m1012(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1013(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 12u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_GetVoiceOptimalSampleRate"), __ATOMIC_RELAXED);
     uint32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -8749,7 +10109,9 @@ static void m1013(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1014(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, void *, int32_t, uint64_t, uint32_t, uint16_t, bool);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_InitiateGameConnection_DEPRECATED"), __ATOMIC_RELAXED);
     void *a0 = steam_out_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     int32_t a1 = (int32_t)R32(args + 4u);
     uint64_t a2 = (uint64_t)R64(args + 8u);
@@ -8763,7 +10125,9 @@ static void m1014(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1015(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, void *, int32_t);
-    void *fn = steam_slot(c, self, 20u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_RequestEncryptedAppTicket"), __ATOMIC_RELAXED);
     void *a0 = steam_in_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     int32_t a1 = (int32_t)R32(args + 4u);
     uint64_t r = ((F)fn)(self, a0, a1);
@@ -8773,7 +10137,9 @@ static void m1015(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1016(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 24u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_RequestStoreAuthURL"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -8782,21 +10148,27 @@ static void m1016(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1017(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *);
-    void *fn = steam_slot(c, self, 7u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_StartVoiceRecording"), __ATOMIC_RELAXED);
     ((F)fn)(self);
 }
 /* SteamUser021::StopVoiceRecording */
 static void m1018(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_StopVoiceRecording"), __ATOMIC_RELAXED);
     ((F)fn)(self);
 }
 /* SteamUser021::TerminateGameConnection_DEPRECATED */
 static void m1019(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, uint32_t, uint16_t);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_TerminateGameConnection_DEPRECATED"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     uint16_t a1 = (uint16_t)R32(args + 4u);
     ((F)fn)(self, a0, a1);
@@ -8805,7 +10177,9 @@ static void m1019(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1020(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t, uint32_t);
-    void *fn = steam_slot(c, self, 17u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUser_UserHasLicenseForApp"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     uint32_t a1 = (uint32_t)R32(args + 8u);
     int32_t r = ((F)fn)(self, a0, a1);
@@ -9077,7 +10451,9 @@ static void m1051(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1052(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 18u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_BOverlayNeedsPresent"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -9085,7 +10461,9 @@ static void m1052(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1053(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint64_t (*F)(void *, const char *);
-    void *fn = steam_slot(c, self, 19u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_CheckFileSignature"), __ATOMIC_RELAXED);
     const char *a0 = steam_in_string(c, R32(args + 0u));
     uint64_t r = ((F)fn)(self, a0);
     steam_ret64(c, (uint64_t)r);
@@ -9094,7 +10472,9 @@ static void m1053(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1054(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 37u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_DismissFloatingGamepadTextInput"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -9102,7 +10482,9 @@ static void m1054(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1055(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, int32_t, uint64_t, const char *, void *, uint32_t);
-    void *fn = steam_slot(c, self, 32u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_FilterText"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     uint64_t a1 = (uint64_t)R64(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 12u));
@@ -9115,7 +10497,9 @@ static void m1055(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1056(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, uint64_t);
-    void *fn = steam_slot(c, self, 12u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_GetAPICallFailureReason"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -9124,7 +10508,9 @@ static void m1056(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1057(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, void *, int32_t, int32_t, void *);
-    void *fn = steam_slot(c, self, 13u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_GetAPICallResult"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out_buffer(c, R32(args + 8u), (int64_t)(int32_t)R32(args + 12u), 1u);
     int32_t a2 = (int32_t)R32(args + 12u);
@@ -9137,7 +10523,9 @@ static void m1057(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1058(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 9u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_GetAppID"), __ATOMIC_RELAXED);
     uint32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -9145,7 +10533,9 @@ static void m1058(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1059(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 2u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_GetConnectedUniverse"), __ATOMIC_RELAXED);
     int32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -9153,7 +10543,9 @@ static void m1059(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1060(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint8_t (*F)(void *);
-    void *fn = steam_slot(c, self, 8u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_GetCurrentBatteryPower"), __ATOMIC_RELAXED);
     uint8_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -9161,7 +10553,9 @@ static void m1060(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1061(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, void *, uint32_t);
-    void *fn = steam_slot(c, self, 22u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_GetEnteredGamepadTextInput"), __ATOMIC_RELAXED);
     void *a0 = steam_out_buffer(c, R32(args + 0u), (int64_t)(int32_t)R32(args + 4u), 1u);
     uint32_t a1 = (uint32_t)R32(args + 4u);
     bool r = ((F)fn)(self, a0, a1);
@@ -9171,7 +10565,9 @@ static void m1061(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1062(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 21u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_GetEnteredGamepadTextLength"), __ATOMIC_RELAXED);
     uint32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -9179,7 +10575,9 @@ static void m1062(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1063(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 15u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_GetIPCCallCount"), __ATOMIC_RELAXED);
     uint32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -9187,7 +10585,9 @@ static void m1063(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1064(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *);
-    void *fn = steam_slot(c, self, 4u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_GetIPCountry"), __ATOMIC_RELAXED);
     const char * r = ((F)fn)(self);
     c->eax = steam_guest_string(c, r);
 }
@@ -9195,7 +10595,9 @@ static void m1064(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1065(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef int32_t (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 33u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_GetIPv6ConnectivityState"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t r = ((F)fn)(self, a0);
     c->eax = (uint32_t)r;
@@ -9204,7 +10606,9 @@ static void m1065(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1066(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t, void *, int32_t);
-    void *fn = steam_slot(c, self, 6u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_GetImageRGBA"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     void *a1 = steam_out_buffer(c, R32(args + 4u), (int64_t)(int32_t)R32(args + 8u), 1u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -9215,7 +10619,9 @@ static void m1066(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1067(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t, void *, void *);
-    void *fn = steam_slot(c, self, 5u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_GetImageSize"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     void *a1 = steam_out(c, R32(args + 4u), 4u);
     void *a2 = steam_out(c, R32(args + 8u), 4u);
@@ -9226,7 +10632,9 @@ static void m1067(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1068(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 0u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_GetSecondsSinceAppActive"), __ATOMIC_RELAXED);
     uint32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -9234,7 +10642,9 @@ static void m1068(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1069(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 1u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_GetSecondsSinceComputerActive"), __ATOMIC_RELAXED);
     uint32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -9242,7 +10652,9 @@ static void m1069(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1070(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef uint32_t (*F)(void *);
-    void *fn = steam_slot(c, self, 3u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_GetServerRealTime"), __ATOMIC_RELAXED);
     uint32_t r = ((F)fn)(self);
     c->eax = (uint32_t)r;
 }
@@ -9250,7 +10662,9 @@ static void m1070(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1071(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef const char * (*F)(void *);
-    void *fn = steam_slot(c, self, 23u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_GetSteamUILanguage"), __ATOMIC_RELAXED);
     const char * r = ((F)fn)(self);
     c->eax = steam_guest_string(c, r);
 }
@@ -9258,7 +10672,9 @@ static void m1071(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1072(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint32_t);
-    void *fn = steam_slot(c, self, 31u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_InitFilterText"), __ATOMIC_RELAXED);
     uint32_t a0 = (uint32_t)R32(args + 0u);
     bool r = ((F)fn)(self, a0);
     c->eax = r ? 1u : 0u;
@@ -9267,7 +10683,9 @@ static void m1072(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1073(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, uint64_t, void *);
-    void *fn = steam_slot(c, self, 11u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_IsAPICallCompleted"), __ATOMIC_RELAXED);
     uint64_t a0 = (uint64_t)R64(args + 0u);
     void *a1 = steam_out(c, R32(args + 8u), 1u);
     bool r = ((F)fn)(self, a0, a1);
@@ -9277,7 +10695,9 @@ static void m1073(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1074(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 17u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_IsOverlayEnabled"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -9285,7 +10705,9 @@ static void m1074(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1075(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 30u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_IsSteamChinaLauncher"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -9293,7 +10715,9 @@ static void m1075(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1076(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 26u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_IsSteamInBigPictureMode"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -9301,7 +10725,9 @@ static void m1076(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1077(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 24u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_IsSteamRunningInVR"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -9309,7 +10735,9 @@ static void m1077(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1078(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 34u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_IsSteamRunningOnSteamDeck"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -9317,7 +10745,9 @@ static void m1078(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1079(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *);
-    void *fn = steam_slot(c, self, 28u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_IsVRHeadsetStreamingEnabled"), __ATOMIC_RELAXED);
     bool r = ((F)fn)(self);
     c->eax = r ? 1u : 0u;
 }
@@ -9325,7 +10755,9 @@ static void m1079(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1080(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 36u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_SetGameLauncherMode"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     ((F)fn)(self, a0);
 }
@@ -9333,7 +10765,9 @@ static void m1080(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1081(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 25u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_SetOverlayNotificationInset"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     ((F)fn)(self, a0, a1);
@@ -9342,7 +10776,9 @@ static void m1081(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1082(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, int32_t);
-    void *fn = steam_slot(c, self, 10u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_SetOverlayNotificationPosition"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     ((F)fn)(self, a0);
 }
@@ -9350,7 +10786,9 @@ static void m1082(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1083(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *, bool);
-    void *fn = steam_slot(c, self, 29u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_SetVRHeadsetStreamingEnabled"), __ATOMIC_RELAXED);
     bool a0 = (R8(args + 0u) != 0);
     ((F)fn)(self, a0);
 }
@@ -9358,7 +10796,9 @@ static void m1083(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1085(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t, int32_t, int32_t, int32_t, int32_t);
-    void *fn = steam_slot(c, self, 35u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_ShowFloatingGamepadTextInput"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     int32_t a2 = (int32_t)R32(args + 8u);
@@ -9371,7 +10811,9 @@ static void m1085(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1086(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef bool (*F)(void *, int32_t, int32_t, const char *, uint32_t, const char *);
-    void *fn = steam_slot(c, self, 20u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_ShowGamepadTextInput"), __ATOMIC_RELAXED);
     int32_t a0 = (int32_t)R32(args + 0u);
     int32_t a1 = (int32_t)R32(args + 4u);
     const char *a2 = steam_in_string(c, R32(args + 8u));
@@ -9384,7 +10826,9 @@ static void m1086(CPU *c, void *self, uint32_t args, uint32_t sret) {
 static void m1087(CPU *c, void *self, uint32_t args, uint32_t sret) {
     (void)args; (void)sret;
     typedef void (*F)(void *);
-    void *fn = steam_slot(c, self, 27u);
+    static void *cache;
+    void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);
+    if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "SteamAPI_ISteamUtils_StartVRDashboard"), __ATOMIC_RELAXED);
     ((F)fn)(self);
 }
 const SteamInterfaceInfo steam_interfaces[] = {

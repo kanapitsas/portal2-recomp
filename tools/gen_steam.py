@@ -264,10 +264,17 @@ def plan_method(flat, method, ret, params, wrapper, types, gprs, slot):
         rproto, store = 'void *', f'c->eax = steam_proxy(c, r, a{names.index("pchVersion")});'
     else:
         raise Unsupported(f'retour {ret} ({wrapper})')
-    # La fonction flat de la dylib n'est que `ldr x8,[x0]; ldr xN,[x8,#off]; br xN` (vérifié
-    # par disassemble) : on appelle directement l'emplacement de la vtable de l'objet hôte.
-    # La disposition dépend alors de la version demandée, pas du SDK de la dylib chargée.
-    body = [f'typedef {rproto} (*F)({", ".join(proto)});', f'void *fn = steam_slot(c, self, {slot}u);', *lines]
+    if slot is None:
+        # Version du SDK de la dylib chargée par Portal 2 : appel de la fonction flat par son nom
+        # (le bouchon Steam d'iOS, runtime/ios/steam_stub.c, définit ces mêmes noms).
+        body = [f'typedef {rproto} (*F)({", ".join(proto)});', 'static void *cache;',
+                'void *fn = __atomic_load_n(&cache, __ATOMIC_RELAXED);',
+                f'if (!fn) __atomic_store_n(&cache, fn = steam_flat(c, "{flat}"), __ATOMIC_RELAXED);', *lines]
+    else:
+        # Version d'un autre SDK : la fonction flat n'est que `ldr x8,[x0]; ldr xN,[x8,#off]; br xN`
+        # (vérifié par disassemble) avec la disposition du SDK de sa dylib. On appelle donc
+        # directement l'emplacement de la vtable de l'objet hôte, propre à la version demandée.
+        body = [f'typedef {rproto} (*F)({", ".join(proto)});', f'void *fn = steam_slot(c, self, {slot}u);', *lines]
     body.append(f'{"" if rproto == "void" else rproto + " r = "}((F)fn)({", ".join(call)});')
     body.extend(post)
     if store:
@@ -280,11 +287,11 @@ def generate(sources):
     methods, interfaces, stats = [], [], {}
     for pkg, dylib, versions in sources:
         wanted = {k: v for k, v in versions.items() if v not in {i[0] for i in interfaces}}
-        generate_source(pkg, dylib, wanted, methods, interfaces, stats)
+        generate_source(pkg, dylib, wanted, methods, interfaces, stats, direct=bool(interfaces))
     return emit(methods, interfaces), stats, methods
 
 
-def generate_source(pkg, dylib, versions, methods, interfaces, stats):
+def generate_source(pkg, dylib, versions, methods, interfaces, stats, direct):
     files = sdk_files(pkg)
     types = typedefs(files)
     slots, symbols = disassemble(dylib)
@@ -321,7 +328,7 @@ def generate_source(pkg, dylib, versions, methods, interfaces, stats):
                 if flat not in natives:
                     raise Unsupported('signature absente de Steamworks.NET')
                 ret, params = natives[flat]
-                entry['body'], entry['sret'] = plan_method(flat, method, ret, params, wrappers.get(flat), types, gprs, slot)
+                entry['body'], entry['sret'] = plan_method(flat, method, ret, params, wrappers.get(flat), types, gprs, slot if direct else None)
             except Unsupported as exc:
                 entry['why'] = str(exc)
             methods.append(entry)
