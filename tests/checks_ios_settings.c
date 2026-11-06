@@ -20,10 +20,11 @@ RT_CHECK(ios_settings_become_environment) {
     clear_env();
     Pref prefs[] = {{"P2ResolutionScale", "1.5"}, {"P2ShowFPS", "0"}, {"P2BackTap", "1"}, {"P2TouchControls", "auto"},
                     {"P2PortalButtons", "1"}, {"P2Log", "0"}, {"P2BackTapInvert", "1"}, {"P2Renderer", "d3d9"},
-                    {"P2BackTapRecord", "1"}, {"P2Haptics", "0"}, {"P2MaxFPS", "40"}, {"P2PowerSave", "0"}, {NULL, NULL}};
+                    {"P2BackTapRecord", "1"}, {"P2Haptics", "0"}, {"P2MaxFPS", "40"}, {"P2PowerSave", "0"}, {"P2Upscale", "0.75"}, {NULL, NULL}};
     char summary[512];
     int n = rt_ios_settings_apply(fake_get, prefs, summary, sizeof(summary));
-    assert(n == 10);
+    assert(n == 11);
+    assert(!strcmp(getenv("P2_IOS_UPSCALE"), "0.75"));
     assert(!strcmp(getenv("P2_IOS_MAX_FPS"), "40"));
     assert(!strcmp(getenv("P2_IOS_POWER_SAVE"), "0"));           // économie d'énergie automatique coupée
     assert(!strcmp(getenv("P2_HAPTICS"), "0"));                   // vibration au tir coupée
@@ -125,4 +126,22 @@ RT_CHECK(ios_settings_choices_match_code) {
     // P2_IOS_MAX_FPS : 60 par défaut (power_ios.m), 40 demande l'écran à 120 Hz (gl_ios.m).
     assert_choices("P2MaxFPS", "60", (const char *const[]){"30", "40", "60", "120", NULL});
     assert_choices("P2ResolutionScale", "2", (const char *const[]){"native", "2", "1.5", "1", NULL});
+    assert_choices("P2Upscale", "1", (const char *const[]){"1", "0.75", "0.5", NULL});
+}
+
+// Agrandissement MetalFX : render.scale seulement pour une fraction de ]0, 1[.
+RT_CHECK(ios_metal_keys_add_render_scale) {
+    char keys[128];
+    double scale = 0;
+    rt_ios_metal_keys(keys, sizeof(keys), 60, "0.75", &scale);
+    assert(!strcmp(keys, "present.maxFps=60;render.scale=0.75") && scale == 0.75);
+    rt_ios_metal_keys(keys, sizeof(keys), 30, "0.5", &scale);
+    assert(!strcmp(keys, "present.maxFps=30;render.scale=0.5"));
+    const char *none[] = {"1", "", "0", "-0.5", "1.5", "abc", "0.75x"};
+    for (size_t i = 0; i < sizeof(none) / sizeof(*none); ++i) {
+        rt_ios_metal_keys(keys, sizeof(keys), 120, none[i], &scale);
+        assert(!strcmp(keys, "present.maxFps=120") && scale == 1);
+    }
+    rt_ios_metal_keys(keys, sizeof(keys), 60, NULL, NULL);
+    assert(!strcmp(keys, "present.maxFps=60"));
 }

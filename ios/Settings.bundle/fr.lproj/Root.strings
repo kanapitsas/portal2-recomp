@@ -10,7 +10,11 @@
 "Auto power saving" = "Économie d'énergie auto";
 "FPS counter" = "Compteur d’images";
 "Rendering" = "Rendu";
-"Metal: the game's native Direct3D 9 rendering (libd3d9metal), faster and more faithful than OpenGL. Without the library in the app, or if the device does not support it, the game stays on OpenGL." = "Metal : rendu Direct3D 9 natif du jeu (libd3d9metal), plus rapide et plus fidèle qu'OpenGL. Sans la bibliothèque dans l'app, ou si l'appareil ne la prend pas en charge, le jeu reste en OpenGL.";
+"Metal: the game's native Direct3D 9 rendering (libd3d9metal), faster and more faithful than OpenGL. Without the library in the app, or if the device does not support it, the game stays on OpenGL. Upscaling (Metal only) renders the scene at a fraction of the Resolution above and enlarges it with MetalFX: Quality with Native resolution renders as many pixels as ×2.25 and lets MetalFX fill the full screen; with ×2 it is faster but softer." = "Metal : rendu Direct3D 9 natif du jeu (libd3d9metal), plus rapide et plus fidèle qu'OpenGL. Sans la bibliothèque dans l'app, ou si l'appareil ne la prend pas en charge, le jeu reste en OpenGL. L'agrandissement (Metal seulement) rend la scène à une fraction de la Résolution ci-dessus et l'agrandit avec MetalFX : Qualité avec la résolution Native rend autant de pixels que ×2,25 et laisse MetalFX remplir tout l'écran ; avec ×2, c'est plus rapide mais plus flou.";
+"Upscaling (MetalFX)" = "Agrandissement (MetalFX)";
+"Off" = "Désactivé";
+"Quality (×0.75)" = "Qualité (×0,75)";
+"Performance (×0.5)" = "Performance (×0,5)";
 "Renderer" = "Moteur de rendu";
 "Metal (recommended)" = "Metal (recommandé)";
 "Touch controls" = "Commandes tactiles";

@@ -60,6 +60,20 @@ Journal setting) then shows `[ios] renderer: Metal (...)`,
   auto power saving, see "Frame rate cap"; the 120 Hz display request is the
   same as on OpenGL. The FPS counter and
   back taps count frames on `Present` (`rt_d3d9_on_present`).
+- Upscaling (MetalFX): Settings > Upscaling puts `render.scale=0.75` or
+  `0.5` in `MTLD3D_CONFIG` (`P2_IOS_UPSCALE`; a `render.scale` you set in
+  `MTLD3D_CONFIG` yourself comes later and wins). mtld3d then rasterizes the
+  scene at that fraction of the game's back buffer and enlarges it with the
+  MetalFX spatial scaler, with a texture LOD bias so textures keep their
+  detail (`render.lodBias`, on by default). It multiplies on top of
+  Resolution: the back buffer is the screen in points × the Resolution scale,
+  so ×2 with Quality renders 1398×645 on an iPhone 15 Pro Max, upscaled to
+  1864×860, which the display then stretches to 2796×1290; Native with
+  Quality renders 2097×968 (about the pixel count of ×2.25) and MetalFX
+  produces the full native image. The interface is scaled with the world.
+  Ignored with OpenGL (`[ios] MetalFX : agrandissement … ignoré`); the log
+  says `[ios] MetalFX : rendu à 75 % du tampon arrière` when it is active.
+  Not measured yet on the phone.
 - Shader/pipeline cache: `Library/Caches/d3d9metal` (`P2_D3D9_CACHE` to
   move it). Memory caps: the same `MTLD3D_CONFIG` defaults as on macOS.
 - Simulator: not available. mtld3d links MetalFX, which the iOS Simulator
@@ -139,6 +153,7 @@ The page is in English, and in French on a device set to French
 | Frames per second | `P2_IOS_MAX_FPS` | 30, 40, 60 (default), 120; see "Frame rate cap" |
 | Auto power saving | `P2_IOS_POWER_SAVE` | on by default: at most 30 fps in Low Power Mode or when the phone is hot |
 | Renderer | `P2_RENDERER` | Metal: `d3d9` (default), `opengl`; see "Metal renderer" |
+| Upscaling (MetalFX) | `P2_IOS_UPSCALE` | Off (1, default), Quality (0.75), Performance (0.5); Metal only, see "Metal renderer" |
 | FPS counter | `P2_SHOW_FPS` | shown by default; tapping the top-left corner shows or hides it (choice is remembered) |
 | On-screen controls | `P2_TOUCH_CONTROLS` | automatic (hidden when a controller is connected), always, never |
 | Trackpad camera | key `P2TouchTrackpad` | also toggled by the button at the bottom left |

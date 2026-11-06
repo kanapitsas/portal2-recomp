@@ -19,6 +19,7 @@ const rt_ios_setting rt_ios_settings[] = {
     {"P2PowerSave", "P2_IOS_POWER_SAVE", "1", "0"},             // 30 i/s au plus si économie d'énergie ou chaleur (power_ios.m)
     {"P2ShowFPS", "P2_SHOW_FPS", "1", "0"},
     {"P2Renderer", "P2_RENDERER", NULL, NULL},                 // opengl, d3d9 (src/main.c)
+    {"P2Upscale", "P2_IOS_UPSCALE", NULL, NULL},                // 1, 0.75, 0.5 : render.scale de mtld3d (Metal)
     {"P2TouchControls", "P2_TOUCH_CONTROLS", NULL, NULL},       // auto, 1, 0
     {"P2TouchLook", "P2_TOUCH_LOOK", NULL, NULL},               // vitesse de la caméra
     {"P2TouchAccel", "P2_TOUCH_ACCEL", NULL, NULL},             // accélération du trackpad (1 : aucune)
@@ -52,6 +53,19 @@ int rt_ios_settings_apply(rt_ios_settings_get get, void *ctx, char *summary, siz
         }
     }
     return applied;
+}
+
+// Clés MTLD3D_CONFIG de l'app iOS (metal_ios.m) : plafond d'images et, si
+// upscale est une fraction dans ]0, 1[, rendu à cette fraction du tampon
+// arrière, agrandi par MetalFX (render.scale de mtld3d). 1, vide, NULL ou une
+// valeur illisible : pas de clé render.scale (1,0 par défaut chez mtld3d).
+int rt_ios_metal_keys(char *out, size_t size, int max_fps, const char *upscale, double *scale) {
+    char *end = NULL;
+    double v = upscale && *upscale ? strtod(upscale, &end) : 1;
+    if (!end || *end || !(v > 0 && v < 1)) v = 1;
+    if (scale) *scale = v;
+    if (v < 1) return snprintf(out, size, "present.maxFps=%d;render.scale=%g", max_fps, v);
+    return snprintf(out, size, "present.maxFps=%d", max_fps);
 }
 
 #if defined(__APPLE__)
