@@ -181,6 +181,7 @@ Environment variables read by the runtime on Mac (the iPhone list is in
 | `P2_FAKE_FOCUS=1` | with a hidden window, tells the game once that it has focus |
 | `P2_RETINA=0` | screen reported in points instead of pixels |
 | `P2_RENDERER=opengl` / `d3d9` | force OpenGL, or make a missing Metal library an explicit message |
+| `MTLD3D_CONFIG=render.scale=0.75` | Metal renderer: render the scene at 75 % of the back buffer (the Video menu resolution) and upscale it with MetalFX; `0.5` is faster and softer, any value in (0, 1] works, and other mtld3d keys can follow after `;`. From the app: `MTLD3D_CONFIG=render.scale=0.75 "~/Applications/Portal 2 Natif.app/Contents/MacOS/launcher"` |
 | `P2_INPUT_LOG=1` | timestamped mouse and keyboard events as the game receives them |
 | `P2_SDL_TRACE=1` | every SDL video call made by the game, with arguments and result (`RT_SDL_TRACE` is the older name) |
 | `P2_TRACE_WAIT=1` | `SDL_WaitEventTimeout` calls with their timeout and caller |

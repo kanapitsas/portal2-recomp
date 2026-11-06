@@ -6,7 +6,7 @@
 	<array>
 		<dict>
 			<key>FooterText</key>
-			<string>Changes apply the next time the game starts (close it from the app switcher). A lower resolution gives more frames per second.</string>
+			<string>Changes apply the next time the game starts (close it from the app switcher). A lower resolution gives more frames per second. Auto power saving caps the game at 30 frames per second in Low Power Mode or when the phone is hot (checked at launch with Metal, at any time with OpenGL).</string>
 			<key>Title</key>
 			<string>Display</string>
 			<key>Type</key>
@@ -45,6 +45,8 @@
 			<string>Frames per second</string>
 			<key>Titles</key>
 			<array>
+				<string>30 (battery saver)</string>
+				<string>40 (ProMotion)</string>
 				<string>60 (recommended)</string>
 				<string>120 (ProMotion)</string>
 			</array>
@@ -52,9 +54,21 @@
 			<string>PSMultiValueSpecifier</string>
 			<key>Values</key>
 			<array>
+				<string>30</string>
+				<string>40</string>
 				<string>60</string>
 				<string>120</string>
 			</array>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<true/>
+			<key>Key</key>
+			<string>P2PowerSave</string>
+			<key>Title</key>
+			<string>Auto power saving</string>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
 		</dict>
 		<dict>
 			<key>DefaultValue</key>
@@ -68,7 +82,7 @@
 		</dict>
 		<dict>
 			<key>FooterText</key>
-			<string>Metal: the game's native Direct3D 9 rendering (libd3d9metal), faster and more faithful than OpenGL. Without the library in the app, or if the device does not support it, the game stays on OpenGL.</string>
+			<string>Metal: the game's native Direct3D 9 rendering (libd3d9metal), faster and more faithful than OpenGL. Without the library in the app, or if the device does not support it, the game stays on OpenGL. Upscaling (Metal only) renders the scene at a fraction of the Resolution above and enlarges it with MetalFX: Quality with Native resolution renders as many pixels as ×2.25 and lets MetalFX fill the full screen; with ×2 it is faster but softer.</string>
 			<key>Title</key>
 			<string>Rendering</string>
 			<key>Type</key>
@@ -92,6 +106,28 @@
 			<array>
 				<string>d3d9</string>
 				<string>opengl</string>
+			</array>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<string>1</string>
+			<key>Key</key>
+			<string>P2Upscale</string>
+			<key>Title</key>
+			<string>Upscaling (MetalFX)</string>
+			<key>Titles</key>
+			<array>
+				<string>Off</string>
+				<string>Quality (×0.75)</string>
+				<string>Performance (×0.5)</string>
+			</array>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Values</key>
+			<array>
+				<string>1</string>
+				<string>0.75</string>
+				<string>0.5</string>
 			</array>
 		</dict>
 		<dict>
@@ -201,6 +237,16 @@
 			<string>P2BackTap</string>
 			<key>Title</key>
 			<string>Back taps</string>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<true/>
+			<key>Key</key>
+			<string>P2Haptics</string>
+			<key>Title</key>
+			<string>Vibrate when firing</string>
 			<key>Type</key>
 			<string>PSToggleSwitchSpecifier</string>
 		</dict>

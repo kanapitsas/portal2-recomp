@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "lifecycle_ios.h"
 #include "settings.h"
 
 // Échelle points -> pixels. Sur simulateur (rendu OpenGL ES logiciel,
@@ -59,6 +60,7 @@ void rt_ios_touch_controls_attach(SDL_Window *window);
 void rt_ios_game_state_poll(void);
 SDL_Window *rt_ios_create_window(const char *title, int x, int y, int w, int h, Uint32 flags) {
     if (rt_ios_render_scale() > 1) flags |= SDL_WINDOW_ALLOW_HIGHDPI;
+    rt_ios_lifecycle_init();   // pause en arrière-plan (lifecycle_ios.m)
     SDL_Window *window = SDL_CreateWindow(title, x, y, down(w), down(h), flags);
     rt_ios_touch_controls_attach(window);   // commandes tactiles (touch_controls.m)
     return window;
@@ -102,6 +104,7 @@ void rt_ios_warp_mouse_in_window(SDL_Window *window, int x, int y) { SDL_WarpMou
 // Positions absolues et tailles de fenêtre en pixels ; les déplacements
 // relatifs (visée) gardent leur échelle, pour ne pas tripler la sensibilité.
 int rt_ios_poll_event(SDL_Event *event) {
+    rt_ios_pause_while_inactive();   // app quittée : attendre son retour (lifecycle_ios.m)
     rt_ios_game_state_poll();   // menus/chargement ou partie (game_state.c), pour les commandes tactiles
     int got = SDL_PollEvent(event);
     if (!got || !event || rt_ios_render_scale() <= 1) return got;

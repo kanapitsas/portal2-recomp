@@ -12,8 +12,11 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include "env_ios.h"
 #include "gl4esinit.h"
+#include "lifecycle_ios.h"
+#include "power_ios.h"
 
 void gl4es_pre_swap(void);
 void gl4es_post_swap(void);
@@ -763,7 +766,9 @@ void *rt_ios_gl_share_group(void *context) {
 // qui demande jusqu'à 120 Hz fait monter la fréquence de l'écran ; il ne fait
 // rien d'autre. Avec CADisableMinimumFrameDurationOnPhone (Info.plist).
 // Désactivé par défaut : pour jouer, 60 i/s réguliers (avec MSAA) valent mieux
-// que des sauts entre 60 et 120 ; P2_IOS_MAX_FPS=120 le réactive.
+// que des sauts entre 60 et 120 ; P2_IOS_MAX_FPS=120 le réactive. Un plafond
+// qui ne divise pas 60 (40) le demande aussi : à 120 Hz, 40 i/s tombent
+// toutes les trois rafraîchissements, à 60 Hz ils alterneraient 1 et 2.
 @interface P2FrameRate : NSObject
 - (void)tick:(CADisplayLink *)link;
 @end
@@ -784,8 +789,11 @@ void *rt_ios_gl_share_group(void *context) {
 void rt_ios_request_frame_rate(void) {
     static CADisplayLink *link;
     if (link) return;
-    const char *e = getenv("P2_IOS_MAX_FPS");
-    float wanted = e && atof(e) > 0 ? fminf((float)atof(e), (float)UIScreen.mainScreen.maximumFramesPerSecond) : 60;
+    const char *renderer = getenv("P2_RENDERER");
+    rt_ios_power_watch(renderer && !strcmp(renderer, "d3d9"));   // économie d'énergie suivie (power_ios.m)
+    float screen = (float)UIScreen.mainScreen.maximumFramesPerSecond, cap = (float)rt_ios_max_fps();
+    float wanted = fminf(cap, screen);
+    if (wanted < 60 && fmodf(60, wanted) != 0 && screen >= 120) wanted = 120;   // 40 i/s : écran à 120 Hz
     if (wanted <= 60) return;
     link = [CADisplayLink displayLinkWithTarget:[P2FrameRate new] selector:@selector(tick:)];
     link.preferredFrameRateRange = CAFrameRateRangeMake(wanted, wanted, wanted);   // avec un minimum de 60, iOS restait à 60
@@ -848,9 +856,38 @@ static void probe_frame(void) {
             p[3][0], p[3][1], p[3][2], p[4][0], p[4][1], p[4][2]);
 }
 
+// Avant l'arrière-plan (lifecycle_ios.m) : le travail GPU déjà soumis par le
+// contexte courant de ce thread est terminé. Sans contexte (Metal) : rien.
+void rt_ios_gl_finish(void) {
+    if (!gles || ![EAGLContext currentContext]) return;
+    static void (*finish)(void);
+    if (!finish) finish = dlsym(gles, "glFinish");
+    if (finish) finish();
+}
+
+// Plafond sous 60 i/s (30, 40, économie d'énergie) : l'écran ne cadence
+// qu'à 60 ou 120 Hz, la présentation attend donc l'échéance de l'image.
+// Appelé verrou invité relâché (SDL_GL_SwapWindow, runtime/sdl_video.c).
+// Suit rt_ios_max_fps en cours de partie.
+static void limit_frame_rate(void) {
+    static CFTimeInterval next;
+    int fps = rt_ios_max_fps();
+    if (fps <= 0 || fps >= 60) { next = 0; return; }
+    CFTimeInterval now = CACurrentMediaTime(), period = 1.0 / fps;
+    if (next > now) {
+        struct timespec wait = {0, (long)((next - now) * 1e9)};
+        nanosleep(&wait, NULL);
+        now = CACurrentMediaTime();
+    }
+    next = next > 0 && now - next < period ? next + period : now + period;   // en retard d'une image : on repart
+}
+
 void rt_ios_draws_frame_end(void);
 _Atomic unsigned long rt_ios_frames;   // images présentées (thread du jeu ; lues par touch_controls.m, thread principal)
 void rt_ios_gl_swap_window(SDL_Window *window) {
+    // En arrière-plan (image d'un autre thread que le principal, arrêté par
+    // lifecycle_ios.m) : aucun appel GL, pas même un vidage : iOS tuerait l'app.
+    if (rt_ios_app_state() == 2) return;
     ++rt_ios_frames;
     rt_ios_draws_frame_end();
     gl4es_pre_swap();
@@ -871,6 +908,7 @@ void rt_ios_gl_swap_window(SDL_Window *window) {
         gl4es_post_swap();
         return;
     }
+    limit_frame_rate();
     bind_rb(GL_RENDERBUFFER, system_colorbuffer);
     SDL_GL_SwapWindow(window);
     bind_rb(GL_RENDERBUFFER, (GLuint)renderbuffer);
