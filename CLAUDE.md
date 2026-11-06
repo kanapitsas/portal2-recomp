@@ -45,4 +45,7 @@
 - **Tests**: `tests/checks_<domain>.c` with `RT_CHECK(name) { ... }`, linked
   automatically into `abi-smoke` (and its UBSan variant).
 - **Host libraries**: `HOST_CFLAGS`/`HOST_LIBS` in the Makefile, mirrored in
-  `tools/build_game.py` (SDL2, FreeType, Fontconfig, iconv, OpenGL, OpenAL).
+  `tools/localconfig.py` (`host_flags`, used by `tools/build_game.py`): SDL2,
+  FreeType, Fontconfig, iconv, OpenGL, OpenAL, under `host_prefix` (Homebrew
+  or the prebuilt bundle of `tools/build_host_deps.sh`). A new host library
+  goes in both and in the bundle.
