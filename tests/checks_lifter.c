@@ -112,6 +112,44 @@ RT_CHECK(lifter_sse2_integer) {
     assert(R64(OUT + 0x3a0) == UINT64_MAX && R64(OUT + 0x3a8) == UINT64_MAX);
 }
 
+RT_CHECK(lifter_ssse3) {
+    clear();
+    uint8_t a[16], b[16], control[16] = {15, 0x80, 3, 3, 0x8f, 0, 1, 2, 0x10, 14, 13, 0xff, 7, 6, 5, 4};
+    for (int i = 0; i < 16; ++i) { a[i] = (uint8_t)i; b[i] = (uint8_t)(0x10 + i); }
+    memcpy(GPTR(IN + 0xf00), a, 16); memcpy(GPTR(IN + 0xf10), control, 16); memcpy(GPTR(IN + 0xf20), b, 16);
+    int8_t sb[16]; uint8_t ub[16];
+    for (int i = 0; i < 16; ++i) { sb[i] = (int8_t)(i * 37 - 128); ub[i] = (uint8_t)(255 - i * 3); }
+    sb[0] = 127; sb[1] = 127; ub[0] = 255; ub[1] = 255;            // 2 * 255 * 127 saturates
+    memcpy(GPTR(IN + 0xf30), sb, 16); memcpy(GPTR(IN + 0xf40), ub, 16);
+    int16_t words[8] = {-5, 5, -32768, 0, 32767, -1, 1, -300};
+    memcpy(GPTR(IN + 0xf50), words, 16);
+    W64(IN + 0xf60, UINT64_C(0x1122334455667788));
+    WD(IN + 0xf70, 10); WD(IN + 0xf78, 20); WD(IN + 0xf80, 1); WD(IN + 0xf88, 2);
+    W16(IN + 0xf90, 0x4321);
+    run_named("lf_ssse3");
+    for (int i = 0; i < 16; ++i)                                   // PSHUFB: bit 7 zeroes, low 4 bits index
+        assert(R8(OUT + 0xf00 + i) == ((control[i] & 0x80) ? 0 : a[control[i] & 15]));
+    for (int i = 0; i < 16; ++i) {                                 // PALIGNR: b:a >> n bytes
+        assert(R8(OUT + 0xf10 + i) == (i + 5 < 16 ? a[i + 5] : b[i + 5 - 16]));
+        assert(R8(OUT + 0xf20 + i) == (i + 4 < 16 ? b[i + 4] : 0));
+    }
+    for (int i = 0; i < 8; ++i) {
+        int v = ub[2 * i] * sb[2 * i] + ub[2 * i + 1] * sb[2 * i + 1];
+        v = v < -32768 ? -32768 : v > 32767 ? 32767 : v;
+        assert(R16(OUT + 0xf30 + 2 * i) == (uint16_t)v);
+        int w = words[i] < 0 ? -words[i] : words[i];               // PABSW: |-32768| stays 0x8000
+        assert(R16(OUT + 0xf40 + 2 * i) == (uint16_t)w);
+    }
+    assert(R16(OUT + 0xf30) == 0x7fff);
+    assert(R64(OUT + 0xf50) == UINT64_C(0x1122334455667788) && R64(OUT + 0xf58) == UINT64_C(0x1122334455667788));
+    assert(RD(OUT + 0xf60) == 9 && RD(OUT + 0xf68) == 22);          // ADDSUBPD: low -, high +
+    assert(R64(OUT + 0xf70) == 8 * 16 && R64(OUT + 0xf78) == 8 * 16);  // PSADBW per 64-bit half
+    assert(R32(OUT + 0xf80) == 0x0706u && R32(OUT + 0xf84) == 0x1b1a1918u);
+    assert(R64(OUT + 0xf88) == UINT64_C(0x07060504beef0100));       // PINSRW mm, then MOVNTQ
+    assert(R16(OUT + 0xf9e) == 0x4321 && R8(OUT + 0xf90) == 0);       // PINSRW xmm, word 7
+    for (int i = 0; i < 15; ++i) assert(R8(OUT + 0xfa0 + i) == a[i + 1]);  // LDDQU unaligned
+}
+
 RT_CHECK(lifter_mmx) {
     clear();
     W64(IN + 0x400, UINT64_C(0x0000800000010001)); W64(IN + 0x408, 4);

@@ -433,3 +433,47 @@ lf_cvtps2pi:                               # packed float -> MMX integers
     movq qword ptr [0x20019e50], mm2
     emms
     ret
+
+.globl lf_ssse3
+lf_ssse3:                                   # SSE3/SSSE3 and missing SSE2 ops (Half-Life 2)
+    movdqu xmm0, xmmword ptr [0x20018f00]   # a: bytes 0x00..0x0f
+    movdqu xmm1, xmmword ptr [0x20018f10]   # pshufb control
+    movdqa xmm2, xmm0
+    pshufb xmm2, xmm1
+    movdqu xmmword ptr [0x20019f00], xmm2
+    movdqu xmm3, xmmword ptr [0x20018f20]   # b: bytes 0x10..0x1f
+    movdqa xmm2, xmm3
+    palignr xmm2, xmm0, 5                   # (b:a) >> 5 bytes
+    movdqu xmmword ptr [0x20019f10], xmm2
+    movdqa xmm2, xmm3
+    palignr xmm2, xmm0, 20                  # beyond 16: high part shifted, zero filled
+    movdqu xmmword ptr [0x20019f20], xmm2
+    movdqu xmm4, xmmword ptr [0x20018f30]   # signed bytes for pmaddubsw
+    movdqu xmm5, xmmword ptr [0x20018f40]   # unsigned bytes
+    pmaddubsw xmm5, xmm4
+    movdqu xmmword ptr [0x20019f30], xmm5
+    pabsw xmm6, xmmword ptr [0x20018f50]
+    movdqu xmmword ptr [0x20019f40], xmm6
+    movddup xmm7, qword ptr [0x20018f60]
+    movdqu xmmword ptr [0x20019f50], xmm7
+    movupd xmm6, xmmword ptr [0x20018f70]
+    movupd xmm7, xmmword ptr [0x20018f80]
+    addsubpd xmm6, xmm7
+    movupd xmmword ptr [0x20019f60], xmm6
+    movdqa xmm2, xmm0
+    psadbw xmm2, xmm3
+    movdqu xmmword ptr [0x20019f70], xmm2
+    pextrw eax, xmm0, 3
+    mov dword ptr [0x20019f80], eax
+    pextrd ecx, xmm3, 2
+    mov dword ptr [0x20019f84], ecx
+    movq mm0, qword ptr [0x20018f00]
+    mov edx, 0xbeef
+    pinsrw mm0, edx, 1
+    movntq qword ptr [0x20019f88], mm0
+    pinsrw xmm0, word ptr [0x20018f90], 7
+    movdqu xmmword ptr [0x20019f90], xmm0
+    lddqu xmm1, xmmword ptr [0x20018f01]
+    movdqu xmmword ptr [0x20019fa0], xmm1
+    emms
+    ret
