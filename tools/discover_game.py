@@ -18,13 +18,14 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--steps', type=int, default=10)
 parser.add_argument('--timeout', type=int, default=30)
 parser.add_argument('--opt', default='0', choices=['0','1','2','3'])
+parser.add_argument('game_args', nargs=argparse.REMAINDER, help='after --: game arguments (e.g. +load save)')
 args = parser.parse_args()
 layout = json.loads(Path('build/game/prep/layout.json').read_text())
 roots_path = Path(games.profile(localconfig.load())['roots'])
 for attempt in range(args.steps):
     built = subprocess.run([sys.executable, '-u', 'tools/build_game.py', '--opt', args.opt])
     if built.returncode: sys.exit(built.returncode)
-    result = subprocess.run([sys.executable, 'tools/run_game.py', '--timeout', str(args.timeout)])
+    result = subprocess.run([sys.executable, 'tools/run_game.py', '--timeout', str(args.timeout), *args.game_args])
     if not result.returncode:
         print('The native process returned normally; this is not a launch-success claim.')
         break

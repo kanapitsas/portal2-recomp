@@ -148,5 +148,13 @@
   "engine.so:code:0x261190",
   "engine.so:code:0x261118",
   "client.so:code:0x3975d8",
-  "vphysics.so:code:0x422e0"
+  "vphysics.so:code:0x422e0",
+  "shaderapivk.so:code:0x25424",
+  "shaderapivk.so:code:0x25444",
+  "shaderapivk.so:code:0x2551d",
+  "shaderapivk.so:code:0x252ce",
+  "shaderapivk.so:code:0x252a4",
+  "shaderapivk.so:code:0x253c8",
+  "shaderapivk.so:code:0x252ea",
+  "shaderapivk.so:code:0x253a8"
 ]

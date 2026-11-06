@@ -48,6 +48,11 @@ log = Path('build/game/launch.log')
 with log.open('w') as output:
     try:
         env = dict(os.environ)
+        # Rendu Metal : la bibliothèque déclarée par setup.sh (config d3d9metal_dylib),
+        # sauf si P2_D3D9METAL est déjà fixé ; absente, le runtime reste en OpenGL.
+        metal = config.get('d3d9metal_dylib')
+        if metal and Path(metal).expanduser().is_file():
+            env.setdefault('P2_D3D9METAL', str(Path(metal).expanduser()))
         if not args.show:
             env.setdefault('P2_HIDDEN_WINDOWS', '1')
             # Lancement de diagnostic : jamais de son sur les haut-parleurs de l'utilisateur.
