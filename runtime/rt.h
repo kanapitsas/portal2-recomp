@@ -445,6 +445,7 @@ const char *rt_proc_path(const char *path);          // NULL + errno si non ému
 void rt_procfs_set_cmdline(const char *bytes, size_t size);
 const char *rt_write_path(const char *path, int preserve_existing);
 const char *rt_program_path(void);
+void rt_paths_set_program(const char *name);   // défaut : portal2_linux
 int rt_stat_shim(CPU *c, const char *name);
 void rt_set_errno(CPU *c, int value);
 void rt_save_errno(CPU *c);

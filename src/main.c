@@ -58,6 +58,7 @@ int main(int argc, char **argv) {
     if (rt_init() || rt_load_images(images) || rt_map(0x70000000, 0x800000)) {
         fputs("native runtime initialization failed\n", stderr); return 2;
     }
+    rt_paths_set_program(RT_GAME_PROGRAM);
     if (linux && user && rt_paths_init(game, linux, user)) { perror("game paths"); rt_destroy(); return 2; }
     if (chdir(game)) { perror(game); rt_destroy(); return 2; }
     CPU cpu; rt_cpu_reset(&cpu); cpu.esp = 0x70800000;

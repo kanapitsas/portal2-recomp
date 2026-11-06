@@ -449,6 +449,9 @@ static const char *write_path(const char *path,int preserve_existing,int follow_
     }
     return result;
 }
+// Nom du programme du jeu (tools/games.py), fixé par main.c avant le premier lancement.
+static char program_name[64]="portal2_linux";
+void rt_paths_set_program(const char *name) { snprintf(program_name,sizeof(program_name),"%s",name); }
 const char *rt_program_path(void) {
-    char *result=buffer();snprintf(result,PATH_MAX,"%s/portal2_linux",game_root);return result;
+    char *result=buffer();snprintf(result,PATH_MAX,"%s/%s",game_root,program_name);return result;
 }

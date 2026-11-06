@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import games  # noqa: E402
 import localconfig  # noqa: E402
 
 parser = argparse.ArgumentParser(description=__doc__)
@@ -25,7 +26,7 @@ config = localconfig.load()
 if not config: sys.exit('config/local.json missing: run ./setup.sh')
 game_args = args.arguments
 if game_args[:1] == ['--']: game_args = game_args[1:]
-if not game_args: game_args = ['-game', 'portal2', '-novid', '-windowed', '-w', '1280', '-h', '720']
+if not game_args: game_args = ['-game', games.profile(config)['mod'], '-novid', '-windowed', '-w', '1280', '-h', '720']
 # Langue du jeu (P2_LANGUAGE, config/local.json, Steam, système) : voir tools/language.py.
 language_args = subprocess.run([sys.executable, str(Path(__file__).with_name('language.py')), '--', *game_args],
                                capture_output=True, text=True).stdout.split()
