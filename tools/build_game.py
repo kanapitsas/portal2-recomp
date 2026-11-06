@@ -21,13 +21,12 @@ import subprocess
 import sys
 import time
 import lift
+import localconfig
 import peprep
 
-# Identique à HOST_CFLAGS/HOST_LIBS du Makefile (tools/bench.py les importe d'ici).
-HOST_CFLAGS = ['-I/opt/homebrew/include', '-I/opt/homebrew/include/freetype2', '-DGL_SILENCE_DEPRECATION',
-               '-DOPENAL_DEPRECATED=', '-DAL_SILENCE_DEPRECATION']
-HOST_LIBS = ['-L/opt/homebrew/lib', '-lSDL2', '-lfreetype', '-lfontconfig', '-liconv',
-             '-framework', 'OpenGL', '-framework', 'OpenAL', '-lobjc']
+# Identique à HOST_CFLAGS/HOST_LIBS du Makefile (tools/bench.py les importe d'ici) ;
+# préfixe Homebrew ou bundle précompilé, voir localconfig.host_prefix.
+HOST_CFLAGS, HOST_LIBS = localconfig.host_flags()
 WARNINGS = ['-Wall', '-Wextra', '-Werror']
 DEBUG = {'full': '-g', 'lines': '-gline-tables-only', 'none': '-g0'}
 # Scripts whose content enters the generation keys (a change regenerates the C).

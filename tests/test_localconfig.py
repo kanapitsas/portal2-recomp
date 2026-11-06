@@ -1,8 +1,10 @@
 """tools/localconfig.py: config/local.json access and the saves folder default."""
 import json
+import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'tools'))
@@ -32,6 +34,19 @@ class LocalConfigTests(unittest.TestCase):
             mine = Path(tmp).resolve() / 'mine'
             self.assertEqual(localconfig.user_dir({'user_dir': str(mine)}), mine)
             self.assertEqual(localconfig.user_dir({'user_dir': ''}), localconfig.SUPPORT / 'userdata')
+
+    def test_host_prefix_env_then_config_then_homebrew(self):
+        with mock.patch.dict('os.environ', {}, clear=False):
+            os.environ.pop('P2_HOST_PREFIX', None)
+            self.assertEqual(localconfig.host_prefix({}), Path('/opt/homebrew'))
+            self.assertEqual(localconfig.host_prefix({'host_prefix': '/b'}), Path('/b'))
+            os.environ['P2_HOST_PREFIX'] = '/e'
+            self.assertEqual(localconfig.host_prefix({'host_prefix': '/b'}), Path('/e'))
+
+    def test_host_flags_name_the_prefix_and_its_rpath(self):
+        cflags, libs = localconfig.host_flags(Path('/p q'))
+        self.assertIn('-I/p q/include/freetype2', cflags)
+        self.assertEqual(libs[:2], ['-L/p q/lib', '-Wl,-rpath,/p q/lib'])
 
 
 if __name__ == '__main__':

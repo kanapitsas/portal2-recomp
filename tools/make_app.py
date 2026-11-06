@@ -57,7 +57,7 @@ export SteamAppId=620 SteamGameId=620
 # libsteam_api.dylib de Valve, copiée dans l'app : le runtime la cherche sinon
 # à côté du dépôt, absent ici.
 export P2_STEAM_API_DYLIB="$HERE/../Frameworks/libsteam_api.dylib"
-# Configuration Fontconfig embarquée (sinon cherchée dans /opt/homebrew/etc/fonts).
+# Configuration Fontconfig embarquée (sinon cherchée dans le préfixe de compilation).
 [ -d "$HERE/../Resources/fonts" ] && export FONTCONFIG_PATH="$HERE/../Resources/fonts"
 mkdir -p "$(dirname "$LOG")" {user_dir}
 # Langue : P2_LANGUAGE, "language" de config/local.json, Steam, système (tools/language.py).
@@ -69,18 +69,17 @@ exec "$HERE/portal2-native" --images "$(dirname "$HERE")/Resources/prep" --game-
 
 
 # --- Bibliothèques embarquées ----------------------------------------------
-# On compile contre Homebrew (SDL2 = sdl2-compat, FreeType, Fontconfig), mais
+# On compile contre Homebrew ou le bundle précompilé de setup.sh (SDL2 =
+# sdl2-compat, FreeType, Fontconfig ; localconfig.host_prefix), mais
 # l'app ne doit pas en dépendre à l'exécution : ces dylibs et leurs dépendances
 # non système sont copiées dans Contents/Frameworks, référencées par @rpath.
 # @executable_path suit les liens symboliques : l'exécutable est donc copié
 # (~300 Mo ; install_name_tool et codesign réécrivent tout le fichier, un clone
 # APFS n'économiserait rien).
-HOMEBREW = Path('/opt/homebrew')
 SYSTEM_PREFIXES = ('/usr/lib/', '/System/')
 FRAMEWORKS_RPATH = '@executable_path/../Frameworks'
 # sdl2-compat ne lie pas SDL3 : il le charge par dlopen, en cherchant d'abord
 # @loader_path/libSDL3.dylib, donc à côté de lui dans Frameworks.
-SDL3 = HOMEBREW / 'opt/sdl3/lib/libSDL3.0.dylib'
 SDL3_NAME = 'libSDL3.dylib'
 
 
@@ -114,7 +113,14 @@ def resolve_dep(dep, loader, executable):
     sys.exit(f'make_app: {dep} (dépendance de {loader}) introuvable')
 
 
-def bundle_libraries(app, binary):
+def sdl3_library(prefix):
+    """SDL3 under `prefix`: Homebrew keeps it in its own keg, the bundle in lib/."""
+    for candidate in (prefix / 'opt/sdl3/lib/libSDL3.0.dylib', prefix / 'lib/libSDL3.0.dylib'):
+        if candidate.exists(): return candidate.resolve()
+    sys.exit(f'make_app: libSDL3.0.dylib introuvable sous {prefix} (brew install sdl3, ou relancer ./setup.sh)')
+
+
+def bundle_libraries(app, binary, prefix):
     """Copy the executable into the app with its non-system dylibs, rewritten to @rpath."""
     frameworks = app / 'Contents/Frameworks'
     frameworks.mkdir(parents=True, exist_ok=True)
@@ -138,25 +144,30 @@ def bundle_libraries(app, binary):
             shutil.copy2(source, dest)
             dest.chmod(0o755)  # Homebrew les installe en lecture seule
             changes = ['-id', f'@rpath/{dest.name}'] + changes
-            if b'SDL2COMPAT' in source.read_bytes() and SDL3.resolve() not in bundled:
-                if not SDL3.exists(): sys.exit(f'make_app: {SDL3} introuvable (brew install sdl3)')
-                bundled[SDL3.resolve()] = SDL3_NAME
-                queue.append((SDL3.resolve(), frameworks / SDL3_NAME))
+            if b'SDL2COMPAT' in source.read_bytes():
+                sdl3 = sdl3_library(prefix)
+                if sdl3 not in bundled:
+                    bundled[sdl3] = SDL3_NAME
+                    queue.append((sdl3, frameworks / SDL3_NAME))
             # Les rpath Homebrew (@loader_path/../lib...) ne veulent plus rien dire ici.
             rpaths = macho_rpaths(source)
             changes += [arg for r in rpaths if r != '@loader_path' for arg in ('-delete_rpath', r)]
             if '@loader_path' not in rpaths: changes += ['-add_rpath', '@loader_path']
-        elif FRAMEWORKS_RPATH not in macho_rpaths(source):
-            changes += ['-add_rpath', FRAMEWORKS_RPATH]
+        else:
+            # Seul rpath de l'exécutable : celui du préfixe de compilation ferait
+            # charger les bibliothèques hors de l'app quand elles y sont encore.
+            rpaths = macho_rpaths(source)
+            changes += [arg for r in rpaths if r != FRAMEWORKS_RPATH for arg in ('-delete_rpath', r)]
+            if FRAMEWORKS_RPATH not in rpaths: changes += ['-add_rpath', FRAMEWORKS_RPATH]
         if changes: run('install_name_tool', *changes, str(dest))
 
     leftovers = [f'{f.name}: {d}' for f in [target, *frameworks.iterdir()] for d in macho_deps(f)
                  if not d.startswith(SYSTEM_PREFIXES + ('@rpath/',))]
     if leftovers: sys.exit('make_app: dépendances hors de l\'app :\n  ' + '\n  '.join(leftovers))
 
-    # Fontconfig lit sa configuration dans /opt/homebrew/etc/fonts ; le lanceur
+    # Fontconfig lit sa configuration dans <préfixe>/etc/fonts ; le lanceur
     # pointe FONTCONFIG_PATH vers cette copie (liens de conf.d résolus).
-    fonts = HOMEBREW / 'etc/fonts'
+    fonts = prefix / 'etc/fonts'
     if fonts.is_dir():
         shutil.copytree(fonts, app / 'Contents/Resources/fonts', symlinks=False, dirs_exist_ok=True,
                         ignore=shutil.ignore_patterns('*.default'))
@@ -233,7 +244,7 @@ def build_app(app, binary, prep, config, paths, game_args):
         name=NAME, game_args=shlex.join(game_args or DEFAULT_ARGS),
         **{key: shlex.quote(str(value)) for key, value in paths.items()}))
     launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    bundle_libraries(app, binary)
+    bundle_libraries(app, binary, localconfig.host_prefix(config))
     bundle_steam_api(app, config)
     bundle_d3d9metal(app, config)
 
