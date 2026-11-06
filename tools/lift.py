@@ -265,6 +265,16 @@ def translate(pc, insn, entries=frozenset(), callees=None, cases=None, rebase=Fa
         if target.imm is not None:
             call = 'c->flags = f; ' + call
         return f'{call} if (c->eip != {after}) goto resume; f = c->flags; {end}', [nxt]
+    if op in ('jecxz', 'jcxz'):
+        # Saut court si ECX (CX) vaut 0, sans lire ni modifier les indicateurs.
+        target = int(args.split()[0], 0)
+        test = 'c->ecx == 0' if op == 'jecxz' else '(c->ecx & 0xffffu) == 0'
+        if target in entries:
+            callees.add(target)
+            branch = f'c->flags = f; rt_jump_fn(c, fn_{target:x}, {code_address(target, rebase)}); return;'
+            return f'if ({test}) {{ {branch} }} {end}', [nxt]
+        branch = ('rt_poll(); ' if target <= pc else '') + f'goto L{target:x};'
+        return f'if ({test}) {{ {branch} }} {end}', [target, nxt]
     if op == 'jmp' or (op.startswith('j') and op[1:] in CC):
         target = Operand(args)
         if target.imm is None:

@@ -150,6 +150,12 @@ RT_CHECK(lifter_ssse3) {
     for (int i = 0; i < 15; ++i) assert(R8(OUT + 0xfa0 + i) == a[i + 1]);  // LDDQU unaligned
 }
 
+RT_CHECK(lifter_jecxz) {
+    clear();
+    W32(IN + 0xff0, 0); run_named("lf_jecxz"); assert(R32(OUT + 0xff0) == 1);
+    W32(IN + 0xff0, 0x10000); run_named("lf_jecxz"); assert(R32(OUT + 0xff0) == 2);   // ECX entier, pas CX
+}
+
 RT_CHECK(lifter_mmx) {
     clear();
     W64(IN + 0x400, UINT64_C(0x0000800000010001)); W64(IN + 0x408, 4);

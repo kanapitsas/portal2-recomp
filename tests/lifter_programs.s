@@ -477,3 +477,13 @@ lf_ssse3:                                   # SSE3/SSSE3 and missing SSE2 ops (H
     movdqu xmmword ptr [0x20019fa0], xmm1
     emms
     ret
+
+.globl lf_jecxz
+lf_jecxz:                                   # JECXZ: branch on ECX == 0, flags untouched
+    mov ecx, dword ptr [0x20018ff0]
+    mov eax, 1
+    jecxz 1f
+    mov eax, 2
+1:
+    mov dword ptr [0x20019ff0], eax
+    ret
