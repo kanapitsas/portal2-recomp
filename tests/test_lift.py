@@ -178,6 +178,24 @@ class LifterTests(unittest.TestCase):
         other.module, other.read32 = tables.module, tables.read32
         self.assertIsNone(other(base + 0x1c))
 
+    def test_pic_jump_table_with_prescaled_index(self):
+        # HL2 shaderapivk.so 0x25299: `mov ecx, [edi + ebx - D]; add ecx, edi; jmp ecx`,
+        # EBX = 4*index computed in another block: entries read while they are code.
+        got, base = 0x10020000, 0x10000000
+        insns = {0x15: (0x1c, 'mov', 'ecx, dword ptr [edi + ebx - 0x100]'), 0x1c: (0x1e, 'add', 'ecx, edi'),
+                 0x1e: (0x20, 'jmp', 'ecx'), 0x30: (0x31, 'ret', ''), 0x31: (0x32, 'ret', '')}
+        insns = {pc + base: (nxt + base, op, args) for pc, (nxt, op, args) in insns.items()}
+        tables = lift.JumpTables({'modules': []}, insns)
+        module = {'gotplt': got}
+        tables.module = lambda address: module
+        entries = {got - 0x100: base + 0x30 - got, got - 0xfc: base + 0x31 - got, got - 0xf8: 0x7fff0000}
+        tables.read32 = lambda address: (entries[address] & 0xffffffff) if address in entries else None
+        self.assertEqual(tables(base + 0x1e), [base + 0x30, base + 0x31])
+        insns[base + 0x15] = (base + 0x1c, 'mov', 'ecx, dword ptr [esi + ebx - 0x100]')   # neither is the added base
+        other = lift.JumpTables({'modules': []}, insns)
+        other.module, other.read32 = tables.module, tables.read32
+        self.assertIsNone(other(base + 0x1e))
+
     def test_jump_table_with_bad_declared_case_is_not_guessed(self):
         insns = {0x10: (0x13, 'cmp', 'eax, 0x1'), 0x13: (0x15, 'ja', '0x40'),
                  0x15: (0x1c, 'jmp', 'dword ptr [4*eax + 0x1000]'), 0x40: (0x41, 'ret', ''),

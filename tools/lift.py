@@ -33,6 +33,7 @@ _MEMORY_OPERAND = re.compile(r'(?:(byte|word|dword|qword|xmmword) ptr )?(?:(gs|f
 _RELOCATED_IMMEDIATE = re.compile(r'@c?0x[0-9a-f]+')
 _HEX_LITERAL = re.compile(r'0x[0-9a-f]+')
 _PIC_TABLE_LOAD = re.compile(r'dword ptr \[(\w+) \+ 4\*(\w+) ([+-]) (0x[0-9a-f]+)\]')
+_PIC_TABLE_LOAD_PRESCALED = re.compile(r'dword ptr \[(\w+) \+ (\w+) ([+-]) (0x[0-9a-f]+)\]')
 _SWITCH_TABLE = re.compile(r'(?:dword ptr )?\[(?:4\*(\w+) \+ (0x[0-9a-f]+)|(0x[0-9a-f]+) \+ 4\*(\w+))\]')
 CC = dict(o='O', no='NO', b='B', c='B', nae='B', ae='AE', nb='AE', nc='AE',
           e='E', z='E', ne='NE', nz='NE', be='BE', na='BE', a='A', nbe='A',
@@ -677,6 +678,7 @@ class JumpTables:
       jmp dword ptr [4*I + T]                          absolute table (relocated)
       mov R, dword ptr [B + 4*I + D]; add R, B; jmp R  PIC table of GOT offsets, B = GOT
       add R, dword ptr [R + 4*I + D]; jmp R            same, fused (R = GOT)
+      mov R, dword ptr [B + I + D]; add R, B; jmp R    same, I already scaled (bound unknown)
     with up to MAX_NEUTRAL unrelated moves scheduled between the PIC steps.
     The bound comes from a preceding `cmp I, N; ja/jae`; otherwise entries are
     read while they remain plausible code addresses. Candidates are only an
@@ -751,6 +753,21 @@ class JumpTables:
                 return i
         return None
 
+    @staticmethod
+    def table_load(operand, base_register):
+        """(index register, scaled, displacement) of `dword ptr [B + 4*I +- D]` or
+        `dword ptr [B + I +- D]` (I pre-scaled) with B = base_register; None otherwise."""
+        m = _PIC_TABLE_LOAD.fullmatch(operand)
+        if m:
+            if m[1] != base_register:
+                return None
+            return m[2], True, int(m[4], 16) * (-1 if m[3] == '-' else 1)
+        m = _PIC_TABLE_LOAD_PRESCALED.fullmatch(operand)
+        if not m or base_register not in (m[1], m[2]):
+            return None
+        index = m[2] if m[1] == base_register else m[1]
+        return index, False, int(m[4], 16) * (-1 if m[3] == '-' else 1)
+
     def bound(self, history, index):
         """Number of table entries implied by `cmp index, N; ja` (None if unknown)."""
         aliases = {index}
@@ -797,12 +814,10 @@ class JumpTables:
             add = [x.strip() for x in add_args.split(',', 1)]
             if not (add_op == 'add' and len(add) == 2 and add[0] == args):
                 return None
-            fused = _PIC_TABLE_LOAD.fullmatch(add[1])
+            fused = self.table_load(add[1], args)
             if fused:
                 # `add R, [R + 4*I - D]; jmp R`: R already holds the GOT.
-                if fused[1] != args:
-                    return None
-                m = fused
+                load = fused
             else:
                 if add[1] not in REGS:
                     return None
@@ -810,13 +825,17 @@ class JumpTables:
                 if at is None:
                     return None
                 _, _, mov_op, mov_args = history[at]
-                m = _PIC_TABLE_LOAD.fullmatch(mov_args.split(',', 1)[-1].strip())
-                if not (mov_op == 'mov' and m and mov_args.split(',')[0].strip() == args and add[1] == m[1]):
+                load = self.table_load(mov_args.split(',', 1)[-1].strip(), add[1])
+                if not (mov_op == 'mov' and load and mov_args.split(',')[0].strip() == args):
                     return None
             mod = self.module(pc)
             base = mod['gotplt'] if mod else 0
-            displacement = int(m[4], 16) * (-1 if m[3] == '-' else 1)
-            table, index, rest = (base + displacement) & 0xffffffff, m[2], history[at + 1:]
+            index, scaled, displacement = load
+            table, rest = (base + displacement) & 0xffffffff, history[at + 1:]
+            if not scaled:
+                # Index already multiplied by 4 earlier (`mov R, [B + I - D]`):
+                # its bound is not tracked, entries are read while plausible.
+                rest = []
         else:
             return None
         if index not in REGS:
