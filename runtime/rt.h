@@ -295,13 +295,17 @@ RT_ALWAYS_INLINE void rt_poll(void) {
 // adresse de retour. Chaque chemin rapide cède le verrou comme rt_dispatch
 // (rt_poll) : un cycle d'appels ou de sauts terminaux entre fonctions, sans
 // branche arrière, ne doit pas affamer les autres threads invités.
-RT_ALWAYS_INLINE void rt_call_fn(CPU *c, gfn fn, uint32_t target, uint32_t expected_return) {
+// Base mémoire passée par les macros ci-dessous : RT_MEM s'y développe au
+// site d'appel (`mem_` dans le code généré) et non à la définition (M, global
+// relu après chaque appel opaque).
+RT_ALWAYS_INLINE void rt_call_fn_mem(uint8_t *mem, CPU *c, gfn fn, uint32_t target, uint32_t expected_return) {
 #ifdef RT_TRACED_CALLS
-    (void)fn; rt_call(c, target, expected_return);
+    (void)mem; (void)fn; rt_call(c, target, expected_return);
 #else
-    rt_poll(); PUSH(c, expected_return); c->eip = target; fn(c);
+    rt_poll(); c->esp -= 4; rt_w32(mem, c->esp, expected_return); c->eip = target; fn(c);
 #endif
 }
+#define rt_call_fn(c, fn, target, expected_return) rt_call_fn_mem(RT_MEM, (c), (fn), (target), (expected_return))
 // Appels et sauts indirects (fonctions virtuelles, pointeurs de fonction) :
 // une cible traduite est appelée directement ; toute autre (import, adresse
 // dynamique, cible inconnue) prend le chemin complet de rt_call/rt_dispatch.
@@ -315,12 +319,12 @@ RT_ALWAYS_INLINE gfn rt_site_lookup(RtSiteCache *site, uint32_t target) {
     if (fn) { site->target = target; site->fn = fn; }
     return fn;
 }
-static inline void rt_call_any_site(CPU *c, uint32_t target, uint32_t expected_return, RtSiteCache *site) {
+static inline void rt_call_any_site(uint8_t *mem, CPU *c, uint32_t target, uint32_t expected_return, RtSiteCache *site) {
 #ifndef RT_TRACED_CALLS
     gfn fn = rt_site_lookup(site, target);
-    if (fn) { rt_poll(); PUSH(c, expected_return); c->eip = target; fn(c); return; }
+    if (fn) { rt_poll(); c->esp -= 4; rt_w32(mem, c->esp, expected_return); c->eip = target; fn(c); return; }
 #else
-    (void)site;
+    (void)mem; (void)site;
 #endif
     rt_call(c, target, expected_return);
 }
@@ -334,7 +338,7 @@ static inline void rt_jump_any_site(CPU *c, uint32_t target, RtSiteCache *site) 
     rt_dispatch(c, target);
 }
 #define rt_call_any(c, target, expected_return) \
-    do { static RtSiteCache rt_site_; rt_call_any_site((c), (target), (expected_return), &rt_site_); } while (0)
+    do { static RtSiteCache rt_site_; rt_call_any_site(RT_MEM, (c), (target), (expected_return), &rt_site_); } while (0)
 #define rt_jump_any(c, target) \
     do { static RtSiteCache rt_site_; rt_jump_any_site((c), (target), &rt_site_); } while (0)
 // Appel direct d'un import (shim) depuis le code généré, qui tient déjà le
