@@ -750,7 +750,7 @@ int rt_libc_shim(CPU *c, const char *name) {
         a = argument(c, 0); b = argument(c, 1);
         const char *source = string(c, a); char *end;
         errno = 0; double value = strtod(source, &end);
-        if (b) W32(b, a + (uint32_t)(end - source));
+        if (b) { uint32_t at = a + (uint32_t)(end - source); memcpy(rt_write_span(c, b, 4), &at, 4); }
         if (errno) save_errno(c);
         fpush(c, value);
     } else if (!strcmp(name, "strerror")) {

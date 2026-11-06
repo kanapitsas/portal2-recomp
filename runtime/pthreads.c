@@ -190,6 +190,7 @@ static int pthread_objects(CPU *c, const char *name) {
     uint32_t address = argument(c, 0);
     int error = 0;
     if (!strcmp(name, "pthread_key_create")) {
+        rt_write_span(c, address, 4);   // avant de réserver une clé qui fuirait
         uint32_t id = 1; while (id <= KEYS_MAX && keys[id - 1].used) ++id;
         if (id > KEYS_MAX) error = EAGAIN;
         else {

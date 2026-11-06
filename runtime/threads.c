@@ -164,12 +164,16 @@ int rt_thread_shim(CPU *c,const char *name) {
         struct sched_param param;int policy;
         if(!strcmp(name,"pthread_getschedparam")){
             error=pthread_getschedparam(native,&policy,&param);
-            if(!error){W32(argument(c,1),policy==SCHED_FIFO?1:policy==SCHED_RR?2:0);W32(argument(c,2),(uint32_t)param.sched_priority);}
+            if(!error){
+                uint32_t guest_policy=policy==SCHED_FIFO?1:policy==SCHED_RR?2:0,priority=(uint32_t)param.sched_priority;
+                uint8_t *policy_out=rt_write_span(c,argument(c,1),4),*param_out=rt_write_span(c,argument(c,2),4);
+                memcpy(policy_out,&guest_policy,4);memcpy(param_out,&priority,4);
+            }
         } else {
             uint32_t guest_policy=argument(c,1);
             if(guest_policy>2){c->eax=EINVAL;return 1;}
             policy=guest_policy==1?SCHED_FIFO:guest_policy==2?SCHED_RR:SCHED_OTHER;
-            memset(&param,0,sizeof(param));param.sched_priority=(int32_t)R32(argument(c,2));
+            memset(&param,0,sizeof(param));int32_t priority;memcpy(&priority,rt_span(c,argument(c,2),4),4);param.sched_priority=priority;
             error=pthread_setschedparam(native,policy,&param);
         }
         c->eax=(uint32_t)error;

@@ -496,7 +496,8 @@ static int sdl_input_shim(CPU *c, const char *name) {
         uint32_t guest = argument(c, 0);
         SDL_Event event;
         event_to_host(c, guest, &event);
-        W32(guest + 4, SDL_GetTicks());
+        uint32_t ticks = SDL_GetTicks();
+        memcpy(rt_write_span(c, guest + 4, 4), &ticks, 4);
         event.common.timestamp = 0;
         c->eax = (uint32_t)SDL_PushEvent(&event);
     } else if (!strcmp(n, "AddEventWatch")) {

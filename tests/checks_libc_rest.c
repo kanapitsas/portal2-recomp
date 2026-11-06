@@ -2,6 +2,7 @@
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -160,4 +161,26 @@ RT_CHECK(libc_rest_strlen_strcmp_by_page) {
     if (!pid) { freopen("/dev/null", "w", stderr); call("strlen", 1, m + 4096); _exit(0); }
     assert(waitpid(pid, &status, 0) == pid && WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT);
     assert(!rt_munmap(m, 3 * 4096));
+}
+
+// Pointeur de sortie invalide : piège invité (SIGABRT), pas de faute hôte
+// (SIGSEGV/SIGBUS) même sans contrôle par accès (RT_FAST_MEMORY).
+static void expect_trap(const char *name, unsigned n, uint32_t a0, uint32_t a1, uint32_t a2) {
+    pid_t pid = fork();
+    if (!pid) { freopen("/dev/null", "w", stderr); call(name, n, a0, a1, a2); _exit(0); }
+    int status; assert(waitpid(pid, &status, 0) == pid);
+    if (!WIFSIGNALED(status) || WTERMSIG(status) != SIGABRT) {
+        fprintf(stderr, "%s: status %#x, expected a guest trap\n", name, status); abort();
+    }
+}
+RT_CHECK(libc_rest_output_pointers_are_span_checked) {
+    next_data = DATA;
+    uint32_t self = call("pthread_self", 0), number = str("1.5");
+    expect_trap("sigaddset", 2, 0, 2, 0);
+    expect_trap("pthread_key_create", 2, 0, 0, 0);
+    expect_trap("pthread_getschedparam", 3, self, 0, 0);
+    uint32_t page = rt_mmap(NULL, 0, 4096, 1, 0x22, -1, 0);   // lecture seule
+    assert(page != UINT32_MAX);
+    expect_trap("strtod", 2, number, page, 0);
+    assert(!rt_munmap(page, 4096));
 }
