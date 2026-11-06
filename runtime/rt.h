@@ -493,6 +493,7 @@ uint32_t rt_handle_find(const void *host, uint32_t kind);
 void *rt_handle_free(uint32_t handle, uint32_t kind);
 // Adresse invitée d'une fonction GL hôte, 0 si non prise en charge (gl.c).
 uint32_t rt_gl_proc_address(const char *name);
+const char *rt_gl_sampler_argument(int count, char *const *args);   // runtime/gl.c
 // Valeur de retour flottante i386 (float/double/long double) : dans ST(0).
 static inline void rt_return_st0(CPU *c, double value) { fpush(c, value); }
 // Contrat : la réponse d'un fournisseur (accepter ou non) ne dépend que du

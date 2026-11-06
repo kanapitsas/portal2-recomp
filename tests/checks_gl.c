@@ -443,3 +443,13 @@ RT_CHECK(gl_stream_keeps_native_error_semantics) {
     W32(DATA, buffer); gl("glDeleteBuffersARB", 2, 1, DATA);
     CGLSetCurrentContext(saved);
 }
+
+RT_CHECK(gl_sampler_objects_are_disabled_unless_chosen) {
+    char *none[] = {"-game", "hl2_complete"};
+    assert(!strcmp(rt_gl_sampler_argument(2, none), "-gl_disablesamplerobjects"));
+    char *enabled[] = {"-game", "hl2_complete", "-gl_enablesamplerobjects"};
+    assert(rt_gl_sampler_argument(3, enabled) == NULL);   // explicit choice of the player
+    char *disabled[] = {"-gl_disablesamplerobjects"};
+    assert(rt_gl_sampler_argument(1, disabled) == NULL);  // not added twice
+    assert(!strcmp(rt_gl_sampler_argument(0, NULL), "-gl_disablesamplerobjects"));
+}

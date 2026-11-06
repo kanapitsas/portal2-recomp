@@ -63,12 +63,15 @@ int main(int argc, char **argv) {
     if (chdir(game)) { perror(game); rt_destroy(); return 2; }
     CPU cpu; rt_cpu_reset(&cpu); cpu.esp = 0x70800000;
     int renderer = wants_d3d9(first, argc, argv);
-    uint32_t count = 1, vector = rt_alloc(((uint32_t)(argc - first) + 3) * 4);
+    // OpenGL : sans sampler objects sur macOS, togl doit filtrer par texture (runtime/gl.c).
+    const char *sampler = renderer > 0 ? NULL : rt_gl_sampler_argument(argc - first, argv + first);
+    uint32_t count = 1, vector = rt_alloc(((uint32_t)(argc - first) + 4) * 4);
     if (!vector) { rt_destroy(); return 2; }
     W32(vector, guest_string(RT_GAME_PROGRAM));
     for (int i = first; i < argc; ++i)
         if (renderer >= 0 || strcmp(argv[i], "-vulkan")) W32(vector + count++ * 4, guest_string(argv[i]));
     if (renderer > 0) W32(vector + count++ * 4, guest_string("-vulkan"));
+    if (sampler) { W32(vector + count++ * 4, guest_string(sampler)); fprintf(stderr, "renderer: OpenGL without sampler objects, adding %s\n", sampler); }
     W32(vector + count * 4, 0);
     {   // /proc/self/cmdline : arguments invités séparés par des NUL
         size_t total = 0;
