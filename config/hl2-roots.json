@@ -137,5 +137,16 @@
   "client.so:code:0x37f36b",
   "libtogl.so:code:0x248e0",
   "shaderapidx9.so:code:0x2722a",
-  "shaderapidx9.so:code:0x2733d"
+  "shaderapidx9.so:code:0x2733d",
+  "client.so:code:0x3e7ec1",
+  "client.so:code:0x4f19f0",
+  "materialsystem.so:code:0xd33c5",
+  "vguimatsurface.so:code:0x7283c",
+  "client.so:code:0x3982c0",
+  "client.so:code:0x43eab1",
+  "vphysics.so:code:0x42590",
+  "engine.so:code:0x261190",
+  "engine.so:code:0x261118",
+  "client.so:code:0x3975d8",
+  "vphysics.so:code:0x422e0"
 ]
