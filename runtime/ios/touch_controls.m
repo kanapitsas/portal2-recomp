@@ -145,13 +145,15 @@ static float trackpad_gain(double speed) {
     return 1 + (accel.max - 1) * (float)(t * t * (3 - 2 * t));
 }
 
+// Dessin : des calques fixes (un CAShapeLayer par stick et par bouton, l'icône
+// en sous-calque, le compteur dans un petit calque bitmap) déplacés ou recolorés
+// sans animation, au lieu d'une vue plein écran redessinée à l'échelle native
+// (×3) à chaque mouvement de doigt. Un changement marque la surcouche
+// (setNeedsRender) ; elle est mise à jour une fois par passage de la boucle
+// d'événements (observateur de fin de passage, et minuterie step à défaut).
 // La boucle de SDL (CFRunLoopRunInMode à délai nul) ne laisse jamais UIKit
-// valider ses transactions : un dessin demandé n'apparaîtrait pas. Forcé ici.
-static void redraw(UIView *view) {
-    [view setNeedsDisplay];
-    [view.layer displayIfNeeded];
-    [CATransaction flush];
-}
+// valider ses transactions : la mise à jour se termine par un CATransaction
+// flush, qui n'envoie plus que quelques propriétés de calques.
 
 // ---- tapes au dos (CoreMotion) ----
 // Échantillons de mouvement (accélération utilisateur, rotation, gravité) sur
@@ -405,13 +407,21 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
     int backtapHeld;          // tape au dos : bouton enfoncé (Action), -1 aucun
     CFTimeInterval backtapAt; // tape au dos : instant de l'appui
     unsigned long backtapFrames; // tape au dos : images présentées à l'appui
+    BOOL needsRender;         // calques à mettre à jour (renderIfNeeded)
+    CAShapeLayer *stickRing[2], *stickKnob[2];   // gauche, droit
+    CGFloat ringRadius[2];
+    CAShapeLayer *buttonLayer[MAX_BUTTONS];
+    CALayer *iconLayer[MAX_BUTTONS];
+    CGFloat buttonSize[MAX_BUTTONS], iconSize[MAX_BUTTONS];
+    NSString *iconSymbol[MAX_BUTTONS];
+    CALayer *fpsLayer;        // compteur d'images (bitmap de la taille de son cadre)
+    NSString *fpsKey;         // ce qu'il montre : redessiné seulement quand cela change
 }
 
 - (instancetype)initWithWindow:(SDL_Window *)sdlWindow {
     if ((self = [super initWithFrame:CGRectZero])) {
         window = sdlWindow;
         self.multipleTouchEnabled = YES; self.backgroundColor = UIColor.clearColor; self.opaque = NO;
-        self.contentMode = UIViewContentModeRedraw;
         fingers = [NSMapTable strongToStrongObjectsMapTable];
         trackpad = [NSUserDefaults.standardUserDefaults boolForKey:kTrackpadKey];
         NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
@@ -424,7 +434,14 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
         const char *show = getenv("P2_SHOW_FPS");   // posée par les Réglages (runtime/ios/settings.c)
         fpsHidden = show && !strcmp(show, "0");
         backtap_start();
+        [self setupLayers];
         __weak P2TouchControls *weakSelf = self;
+        // Fin de chaque passage de la boucle (SDL la fait tourner à chaque
+        // lecture d'événements) : les touchers de ce passage sont affichés d'un coup.
+        CFRunLoopObserverRef observer = CFRunLoopObserverCreateWithHandler(NULL, kCFRunLoopBeforeWaiting | kCFRunLoopExit, true, 0,
+            ^(CFRunLoopObserverRef o, CFRunLoopActivity activity) { (void)o; (void)activity; [weakSelf renderIfNeeded]; });
+        CFRunLoopAddObserver(CFRunLoopGetMain(), observer, kCFRunLoopCommonModes);
+        CFRelease(observer);
         tick = [NSTimer scheduledTimerWithTimeInterval:1.0 / 60 repeats:YES block:^(NSTimer *timer) {
             (void)timer; [weakSelf step];
         }];
@@ -440,7 +457,7 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
     BOOL any = gamepad || GCKeyboard.coalescedKeyboard != nil;
     const char *force = getenv("P2_TOUCH_CONTROLS");   // 1 : jamais cachée (essais sur simulateur)
     if (force && *force == '1') any = NO;
-    if (any != concealed) { concealed = any; redraw(self); }
+    if (any != concealed) { concealed = any; [self setNeedsRender]; }
 }
 
 // À chaque image : rester devant la vue OpenGL de SDL (ajoutée après la
@@ -451,7 +468,7 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
     if (ui != menu) {
         menu = ui;
         if (menu) [self releaseAll];
-        redraw(self);
+        [self setNeedsRender];
     }
     [self updateFPS];
     [self syncPad];
@@ -459,7 +476,8 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
     [self testStep];
     [self backTapStep];
     if (host.subviews.lastObject != self) [host bringSubviewToFront:self];
-    if (!CGRectEqualToRect(self.frame, host.bounds)) { self.frame = host.bounds; redraw(self); }
+    if (!CGRectEqualToRect(self.frame, host.bounds)) { self.frame = host.bounds; [self setNeedsRender]; }
+    [self renderIfNeeded];
     if (trackpad) return;   // trackpad : mouvements envoyés au glissement (touchesMoved)
     for (P2Finger *f in fingers.objectEnumerator) {
         if (f.role != ROLE_LOOK) continue;
@@ -494,7 +512,7 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
         backtapHeld = side < 0 ? MOUSE_LEFT : MOUSE_RIGHT;
         backtapAt = CACurrentMediaTime(); backtapFrames = rt_ios_frames;
         [self action:(Action)backtapHeld down:YES];
-        redraw(self);   // le bouton du portail s'allume
+        [self setNeedsRender];   // le bouton du portail s'allume
     }
     [self backTapRelease:NO];
 }
@@ -503,7 +521,7 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
     if (!now && (CACurrentMediaTime() - backtapAt < backtap_hold || rt_ios_frames < backtapFrames + 2)) return;
     [self action:(Action)backtapHeld down:NO];
     backtapHeld = -1;
-    redraw(self);
+    [self setNeedsRender];
 }
 - (void)toggleLookMode {
     trackpad = !trackpad;
@@ -552,7 +570,7 @@ static void backtap_touch(NSSet<UITouch *> *touches) {
     case MOUSE_LEFT: [self mouseButton:SDL_BUTTON_LEFT down:down at:centre]; break;
     case MOUSE_RIGHT: [self mouseButton:SDL_BUTTON_RIGHT down:down at:centre]; break;
     case LOOK_MODE: if (down) [self toggleLookMode]; break;
-    case FLAG_ERROR: if (down) { backtap_flag(); flagAt = CACurrentMediaTime(); flagLit = YES; redraw(self); } break;
+    case FLAG_ERROR: if (down) { backtap_flag(); flagAt = CACurrentMediaTime(); flagLit = YES; [self setNeedsRender]; } break;
     default: break;
     }
 }
@@ -575,7 +593,7 @@ static BOOL portal_buttons(void) {
     if (e && *e == '0') return NO;
     return backtap_motion == nil;
 }
-// Couleurs et icônes de la surcouche, créées une fois : buttons: et drawRect:
+// Couleurs et icônes de la surcouche, créées une fois : buttons: et renderIfNeeded
 // sont appelés à chaque mouvement de doigt (jusqu'à 120 fois par seconde).
 static UIColor *blue, *orange, *ink, *icon_tint, *stick_ink, *line_ink;
 static void palette_init(void) {
@@ -584,6 +602,14 @@ static void palette_init(void) {
     ink = [UIColor colorWithWhite:0 alpha:.35];   // fond sombre : icônes lisibles sur un mur clair
     icon_tint = [UIColor colorWithWhite:1 alpha:.85];
     stick_ink = [UIColor colorWithWhite:1 alpha:.3]; line_ink = [UIColor colorWithWhite:1 alpha:.45];
+}
+// Bitmap transparent de cette taille (points), à l'échelle de l'écran.
+static UIImage *render_bitmap(CGSize size, void (^draw)(CGContextRef c)) {
+    UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];
+    format.scale = UIScreen.mainScreen.scale; format.opaque = NO;
+    format.preferredRange = UIGraphicsImageRendererFormatRangeStandard;
+    UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:size format:format];
+    return [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) { draw(context.CGContext); }];
 }
 // Icône SF Symbols teintée, par (nom, taille en points) : au plus une par
 // bouton et par taille (deux pour le mode de la caméra).
@@ -594,8 +620,13 @@ static UIImage *icon_image(NSString *symbol, CGFloat point_size) {
         if (cache[i].size == point_size && [cache[i].symbol isEqualToString:symbol]) return cache[i].image;
     UIImageSymbolConfiguration *config = [UIImageSymbolConfiguration configurationWithPointSize:point_size
                                                                                          weight:UIImageSymbolWeightBold];
-    UIImage *image = [[UIImage systemImageNamed:symbol withConfiguration:config]
-                      imageWithTintColor:icon_tint renderingMode:UIImageRenderingModeAlwaysOriginal];
+    UIImage *tinted = [[UIImage systemImageNamed:symbol withConfiguration:config]
+                       imageWithTintColor:icon_tint renderingMode:UIImageRenderingModeAlwaysOriginal];
+    // Rendue une fois en bitmap à l'échelle de l'écran : le CGImage d'une icône
+    // SF Symbols n'a pas sa teinte, et c'est lui que prend le calque.
+    UIImage *image = render_bitmap(tinted.size, ^(CGContextRef c) {
+        (void)c; [tinted drawInRect:CGRectMake(0, 0, tinted.size.width, tinted.size.height)];
+    });
     if (count < (int)(sizeof(cache) / sizeof(*cache))) cache[count++] = (typeof(cache[0])){symbol, point_size, image};
     return image;
 }
@@ -788,7 +819,7 @@ static Sint16 axis_value(CGFloat speed, int response) {
             fpsHidden = !fpsHidden;
             [NSUserDefaults.standardUserDefaults setBool:!fpsHidden forKey:@"P2ShowFPS"];
             fps = 0; fpsAt = 0;
-            redraw(self);
+            [self setNeedsRender];
             continue;
         }
         int button = [self buttonAt:f.start];
@@ -799,7 +830,7 @@ static Sint16 axis_value(CGFloat speed, int response) {
         else continue;   // second doigt sur un stick déjà tenu : ignoré
         [fingers setObject:f forKey:t];
     }
-    [self updateMove]; redraw(self);
+    [self updateMove]; [self setNeedsRender];
 }
 - (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     (void)event;
@@ -823,7 +854,7 @@ static Sint16 axis_value(CGFloat speed, int response) {
         f.at = p;
     }
     [self updateMove];
-    if (changed) redraw(self);
+    if (changed) [self setNeedsRender];
 }
 - (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     (void)event;
@@ -833,23 +864,12 @@ static Sint16 axis_value(CGFloat speed, int response) {
         if (f.role == ROLE_BUTTON) [self action:f.action down:NO];
         [fingers removeObjectForKey:t];
     }
-    [self updateMove]; redraw(self);
+    [self updateMove]; [self setNeedsRender];
 }
 - (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event { [self touchesEnded:touches withEvent:event]; }
-- (void)safeAreaInsetsDidChange { [super safeAreaInsetsDidChange]; redraw(self); }
+- (void)safeAreaInsetsDidChange { [super safeAreaInsetsDidChange]; [self setNeedsRender]; }
 
 // ---- dessin ----
-- (void)drawStick:(CGContextRef)c right:(BOOL)right ink:(UIColor *)ink {
-    CGFloat r = self.stickRadius;
-    CGPoint origin = [self restingStick:right], knob = origin;
-    for (P2Finger *f in fingers.objectEnumerator)
-        if (f.role == (right ? ROLE_LOOK : ROLE_MOVE)) { origin = f.start; knob = f.at; }
-    CGFloat dx = knob.x - origin.x, dy = knob.y - origin.y, dist = hypot(dx, dy);
-    if (dist > r) knob = CGPointMake(origin.x + dx * r / dist, origin.y + dy * r / dist);
-    CGContextSetStrokeColorWithColor(c, ink.CGColor); CGContextSetFillColorWithColor(c, ink.CGColor);
-    CGContextStrokeEllipseInRect(c, CGRectMake(origin.x - r, origin.y - r, 2 * r, 2 * r));
-    CGContextFillEllipseInRect(c, CGRectMake(knob.x - kButtonSize / 2, knob.y - kButtonSize / 2, kButtonSize, kButtonSize));
-}
 // Compteur d'images, relevé deux fois par seconde (redessiner l'incrustation
 // coûte : seulement quand la valeur change). P2_SHOW_FPS=0 (Réglages) le masque.
 - (void)updateFPS {
@@ -864,7 +884,7 @@ static Sint16 axis_value(CGFloat speed, int response) {
     BOOL lit = now - flagAt < 1;
     BOOL data = taps != dataTaps || fixes != dataFixes || reported != dataReported || lit != flagLit;
     dataTaps = taps; dataFixes = fixes; dataReported = reported; flagLit = lit;
-    if (value != fps || data) { fps = value; redraw(self); }
+    if (value != fps || data) { fps = value; [self setNeedsRender]; }
 }
 // Police pixel 5×7 du compteur : chiffres et « FPS », une ligne par octet
 // (bit 4 : colonne de gauche), dessinée carré par carré sans lissage.
@@ -916,13 +936,8 @@ static void draw_pixel_text(CGContextRef c, const char *text, CGPoint at) {
     CGRect box = [self fpsBox:@"OPENGL" fps:@"000 FPS" data:dataTaps < 0 ? @"" : @"DATA 0000/000 X00"];
     return CGRectMake(0, 0, CGRectGetMaxX(box) + 20, CGRectGetMaxY(box) + 20);
 }
-- (void)drawFPS {
-    if (fps <= 0) return;
-    NSString *text = [NSString stringWithFormat:@"%d FPS", fps];
-    NSString *renderer = rt_ios_metal_active ? @"METAL" : @"OPENGL";   // runtime/ios/metal_ios.m
-    NSString *data = [self dataText];
-    CGRect box = [self fpsBox:renderer fps:text data:data];
-    CGContextRef c = UIGraphicsGetCurrentContext();
+// Compteur dans le contexte c, aux coordonnées de la vue (cadre box).
+- (void)drawFPSIn:(CGContextRef)c box:(CGRect)box renderer:(NSString *)renderer fps:(NSString *)text data:(NSString *)data {
     CGContextSaveGState(c);
     CGContextSetShouldAntialias(c, NO);
     CGContextSetFillColorWithColor(c, [UIColor colorWithWhite:0 alpha:.5].CGColor);
@@ -950,27 +965,108 @@ static void draw_pixel_text(CGContextRef c, const char *text, CGPoint at) {
     draw_pixel_text(c, text.UTF8String, below);
     CGContextRestoreGState(c);
 }
-- (void)drawRect:(CGRect)rect {
-    (void)rect;
-    if (!concealed) [self drawFPS];   // aussi dans les menus
-    if (concealed || menu || getenv("P2_TOUCH_TEST_MOVE")) return;   // essai : écran dégagé
-    CGContextRef c = UIGraphicsGetCurrentContext();
+// Calques, créés une fois (initWithWindow:) : ordre de l'ancien dessin,
+// compteur, sticks, puis boutons par-dessus.
+static CAShapeLayer *shape_layer(CALayer *parent, UIColor *fill, UIColor *stroke) {
+    CAShapeLayer *l = [CAShapeLayer layer];
+    l.fillColor = fill.CGColor; l.strokeColor = stroke.CGColor; l.lineWidth = 2;
+    l.contentsScale = UIScreen.mainScreen.scale;
+    [parent addSublayer:l];
+    return l;
+}
+// Cercle de ce diamètre centré sur la position du calque.
+static void set_circle(CAShapeLayer *l, CGFloat diameter) {
+    CGPathRef path = CGPathCreateWithEllipseInRect(CGRectMake(-diameter / 2, -diameter / 2, diameter, diameter), NULL);
+    l.path = path;
+    CGPathRelease(path);
+}
+- (void)setupLayers {
     palette_init();
-    CGContextSetLineWidth(c, 2);
-    [self drawStick:c right:NO ink:stick_ink];
-    if (!trackpad) [self drawStick:c right:YES ink:stick_ink];
-    Button b[MAX_BUTTONS]; int n = [self buttons:b];
-    for (int i = 0; i < n; ++i) {
-        CGFloat s = b[i].size;
-        CGRect box = CGRectMake(b[i].at.x - s / 2, b[i].at.y - s / 2, s, s);
-        UIColor *fill = held[b[i].action] ? [b[i].color colorWithAlphaComponent:.9] : b[i].color;
-        CGContextSetFillColorWithColor(c, fill.CGColor); CGContextFillEllipseInRect(c, box);
-        CGContextSetStrokeColorWithColor(c, line_ink.CGColor); CGContextStrokeEllipseInRect(c, box);
-        if (!b[i].symbol) continue;
-        UIImage *icon = icon_image(b[i].symbol, s * .38);
-        CGSize z = icon.size;
-        [icon drawInRect:CGRectMake(b[i].at.x - z.width / 2, b[i].at.y - z.height / 2, z.width, z.height)];
+    [CATransaction begin]; [CATransaction setDisableActions:YES];
+    fpsLayer = [CALayer layer];
+    fpsLayer.contentsScale = UIScreen.mainScreen.scale; fpsLayer.hidden = YES;
+    [self.layer addSublayer:fpsLayer];
+    for (int i = 0; i < 2; ++i) {
+        stickRing[i] = shape_layer(self.layer, nil, stick_ink);
+        stickKnob[i] = shape_layer(self.layer, stick_ink, nil);
+        set_circle(stickKnob[i], kButtonSize);
+        stickRing[i].hidden = stickKnob[i].hidden = YES;
     }
+    for (int i = 0; i < MAX_BUTTONS; ++i) {
+        buttonLayer[i] = shape_layer(self.layer, nil, line_ink);
+        buttonLayer[i].hidden = YES;
+        iconLayer[i] = [CALayer layer];
+        iconLayer[i].anchorPoint = CGPointZero; iconLayer[i].hidden = YES;
+        [buttonLayer[i] addSublayer:iconLayer[i]];
+    }
+    [CATransaction commit];
+}
+- (void)setNeedsRender { needsRender = YES; }
+- (void)renderIfNeeded {
+    if (!needsRender) return;
+    needsRender = NO;
+    [CATransaction begin]; [CATransaction setDisableActions:YES];
+    [self renderFPS];
+    BOOL shown = !concealed && !menu && !getenv("P2_TOUCH_TEST_MOVE");   // essai : écran dégagé
+    for (int right = 0; right < 2; ++right) {
+        BOOL hidden = !shown || (right && trackpad);
+        stickRing[right].hidden = stickKnob[right].hidden = hidden;
+        if (hidden) continue;
+        CGFloat r = self.stickRadius;
+        CGPoint origin = [self restingStick:right], knob = origin;
+        for (P2Finger *f in fingers.objectEnumerator)
+            if (f.role == (right ? ROLE_LOOK : ROLE_MOVE)) { origin = f.start; knob = f.at; }
+        CGFloat dx = knob.x - origin.x, dy = knob.y - origin.y, dist = hypot(dx, dy);
+        if (dist > r) knob = CGPointMake(origin.x + dx * r / dist, origin.y + dy * r / dist);
+        if (r != ringRadius[right]) { ringRadius[right] = r; set_circle(stickRing[right], 2 * r); }
+        stickRing[right].position = origin; stickKnob[right].position = knob;
+    }
+    Button b[MAX_BUTTONS];
+    int n = shown ? [self buttons:b] : 0;
+    CGFloat scale = UIScreen.mainScreen.scale;
+    for (int i = 0; i < MAX_BUTTONS; ++i) {
+        CAShapeLayer *l = buttonLayer[i];
+        l.hidden = i >= n;
+        if (i >= n) continue;
+        CGFloat s = b[i].size;
+        if (s != buttonSize[i]) { buttonSize[i] = s; set_circle(l, s); }
+        l.position = b[i].at;
+        l.fillColor = (held[b[i].action] ? [b[i].color colorWithAlphaComponent:.9] : b[i].color).CGColor;
+        CALayer *icon = iconLayer[i];
+        icon.hidden = !b[i].symbol;
+        if (!b[i].symbol) continue;
+        if (![b[i].symbol isEqualToString:iconSymbol[i]] || iconSize[i] != s) {
+            UIImage *image = icon_image(b[i].symbol, s * .38);
+            iconSymbol[i] = b[i].symbol; iconSize[i] = s;
+            icon.contents = (__bridge id)image.CGImage; icon.contentsScale = image.scale;
+            icon.bounds = CGRectMake(0, 0, image.size.width, image.size.height);
+        }
+        // Centrée sur le bouton, coin calé sur un pixel de l'écran (pas de flou).
+        CGSize z = icon.bounds.size;
+        CGPoint corner = CGPointMake(round((b[i].at.x - z.width / 2) * scale) / scale,
+                                     round((b[i].at.y - z.height / 2) * scale) / scale);
+        icon.position = CGPointMake(corner.x - b[i].at.x, corner.y - b[i].at.y);
+    }
+    [CATransaction commit];
+    [CATransaction flush];
+}
+// Bitmap du compteur, refait seulement quand son texte, sa couleur ou son cadre change.
+- (void)renderFPS {
+    fpsLayer.hidden = concealed || fps <= 0;   // le compteur reste dans les menus
+    if (fpsLayer.hidden) return;
+    NSString *text = [NSString stringWithFormat:@"%d FPS", fps];
+    NSString *renderer = rt_ios_metal_active ? @"METAL" : @"OPENGL";   // runtime/ios/metal_ios.m
+    NSString *data = [self dataText];
+    CGRect box = [self fpsBox:renderer fps:text data:data];
+    NSString *key = [NSString stringWithFormat:@"%@|%@|%@|%d|%@", renderer, text, data, flagLit, NSStringFromCGRect(box)];
+    if ([key isEqualToString:fpsKey]) return;
+    fpsKey = key;
+    UIImage *image = render_bitmap(box.size, ^(CGContextRef c) {
+        CGContextTranslateCTM(c, -box.origin.x, -box.origin.y);
+        [self drawFPSIn:c box:box renderer:renderer fps:text data:data];
+    });
+    fpsLayer.contents = (__bridge id)image.CGImage;
+    fpsLayer.frame = box;
 }
 @end
 
