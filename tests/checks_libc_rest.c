@@ -124,3 +124,40 @@ RT_CHECK(libc_rest_trace_files_filter) {
     assert(rt_trace_files_match("1", path) && rt_trace_files_match("save/auto", path));
     assert(!rt_trace_files_match("maps", path) && !rt_trace_files_match("1", NULL));
 }
+
+// strlen/strcmp lisent par page : résultats de strcmp hôte, NUL de part et
+// d'autre d'une frontière de page, et strcmp s'arrête au premier écart sans
+// lire la suite (glibc), même si elle déborde sur une page interdite.
+RT_CHECK(libc_rest_strlen_strcmp_by_page) {
+    uint32_t m = rt_mmap(NULL, 0, 3 * 4096, 3, 0x22, -1, 0);
+    assert(m != UINT32_MAX && !rt_mprotect(m + 2 * 4096, 4096, 0));
+    uint8_t *h = GPTR(m);
+    memset(h, 'x', 2 * 4096);
+    h[4096 + 5] = 0;                                    // chaîne à cheval sur deux pages
+    assert(call("strlen", 1, m + 4090) == 11);
+    assert(call("strlen", 1, m + 4096 + 5) == 0);
+    assert(call("strlen", 1, m) == 4096 + 5);
+    static const char *pairs[][2] = {{"", ""}, {"a", ""}, {"", "a"}, {"abc", "abd"}, {"a\xff", "a"},
+                                     {"a", "a\xff"}, {"\x80", "\x7f"}, {"same", "same"}, {"ab", "abc"}};
+    for (unsigned i = 0; i < sizeof(pairs) / sizeof(*pairs); ++i)
+        for (uint32_t shift = 0; shift < 3; ++shift) {   // la première chaîne finit sur la frontière
+            uint32_t a = m + 4096 - (uint32_t)strlen(pairs[i][0]) - shift, b = m + 2 * 4096 - 64;
+            memcpy(GPTR(a), pairs[i][0], strlen(pairs[i][0]) + 1);
+            memcpy(GPTR(b), pairs[i][1], strlen(pairs[i][1]) + 1);
+            assert((int32_t)call("strcmp", 2, a, b) == strcmp(pairs[i][0], pairs[i][1]));
+            assert((int32_t)call("strcmp", 2, b, a) == strcmp(pairs[i][1], pairs[i][0]));
+        }
+    // Seconde chaîne non terminée avant la page interdite : l'écart vient avant.
+    memset(h + 4096, 'b', 4096);
+    uint32_t a = m + 4096 - 2; memcpy(GPTR(a), "a", 2);
+    assert((int32_t)call("strcmp", 2, a, m + 4096) == 'a' - 'b');
+    assert((int32_t)call("strcmp", 2, m + 4096, a) == 'b' - 'a');
+    // Chaînes égales jusqu'à la page interdite : piège, comme strlen.
+    pid_t pid = fork();
+    if (!pid) { freopen("/dev/null", "w", stderr); call("strcmp", 2, m + 4096, m + 4096); _exit(0); }
+    int status; assert(waitpid(pid, &status, 0) == pid && WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT);
+    pid = fork();
+    if (!pid) { freopen("/dev/null", "w", stderr); call("strlen", 1, m + 4096); _exit(0); }
+    assert(waitpid(pid, &status, 0) == pid && WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT);
+    assert(!rt_munmap(m, 3 * 4096));
+}
