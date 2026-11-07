@@ -47,6 +47,14 @@ class LocalConfigTests(unittest.TestCase):
         cflags, libs = localconfig.host_flags(Path('/p q'))
         self.assertIn('-I/p q/include/freetype2', cflags)
         self.assertEqual(libs[:2], ['-L/p q/lib', '-Wl,-rpath,/p q/lib'])
+    def test_each_game_has_its_own_data_folder(self):
+        # Portal 2 keeps its folder; HL2 must not share it (overlapping whiteouts, cfg, platform/).
+        self.assertEqual(localconfig.support_dir({}), localconfig.SUPPORT)
+        self.assertEqual(localconfig.support_dir({'game': 'portal2'}), localconfig.SUPPORT)
+        hl2 = localconfig.support_dir({'game': 'hl2'})
+        self.assertEqual(hl2, Path.home() / 'Library/Application Support/Half-Life 2 Natif')
+        self.assertEqual(localconfig.user_dir({'game': 'hl2'}), hl2 / 'userdata')
+        self.assertEqual(localconfig.user_dir({'game': 'hl2', 'user_dir': '/x'}), Path('/x').resolve())
 
 
 if __name__ == '__main__':

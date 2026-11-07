@@ -3,14 +3,17 @@ linux_root, steam_api_dylib, user_dir...) written by ./setup.sh.
 
 Keeps the single default for the saves folder (user_dir), the one the app
 made by tools/make_app.py uses; the other tools derive their copies from it.
+Each game has its own folder (games.py app_name); Portal 2's is unchanged.
 """
 import json
 import os
 from pathlib import Path
 
+import games
+
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PATH = ROOT / 'config/local.json'
-APP_NAME = 'Portal 2 Natif'
+APP_NAME = games.GAMES['portal2']['app_name']
 # App-owned data, outside the repository: ./uninstall.sh removes this folder.
 SUPPORT = Path.home() / 'Library/Application Support' / APP_NAME
 HOMEBREW = Path('/opt/homebrew')
@@ -22,11 +25,19 @@ def load(path=None):
     return json.loads(path.read_text()) if path.exists() else {}
 
 
-def user_dir(config, support=SUPPORT):
-    """Saves and settings folder: user_dir of the config, else <support>/userdata."""
+def support_dir(config):
+    """App-owned data folder of the configured game:
+    ~/Library/Application Support/<app name> (SUPPORT for Portal 2)."""
+    name = games.profile(config)['app_name']
+    return SUPPORT if name == APP_NAME else SUPPORT.with_name(name)
+
+
+def user_dir(config, support=None):
+    """Saves and settings folder: user_dir of the config, else
+    <support>/userdata, by default in the game's own support_dir."""
     if config.get('user_dir'):
         return Path(config['user_dir']).expanduser().resolve()
-    return support / 'userdata'
+    return (support_dir(config) if support is None else support) / 'userdata'
 
 
 def host_prefix(config=None):

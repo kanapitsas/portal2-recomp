@@ -1,6 +1,8 @@
 """Per-game layout of the Linux depot: which modules to prepare and how the
-program is named. `game` in config/local.json picks the profile (default
-portal2, so existing configurations keep working).
+program is named, plus what setup.sh and tools/make_app.py need to install it
+(Steam depot, Steamworks.NET release, app name, data folder). `game` in
+config/local.json picks the profile (default portal2, so existing
+configurations keep working). One checkout builds one game: build/ is shared.
 """
 from pathlib import Path
 
@@ -20,6 +22,14 @@ GAMES = {
         excluded=_COMMON_EXCLUDED | {'puzzlemaker_dll.so'},
         roots='config/game-roots.json',
         steam_appid=620,
+        depot_id=661,
+        # Installed app and its data: unchanged since the first release, so
+        # existing installs, saves and settings stay where they are.
+        app_name='Portal 2 Natif',
+        log_name='Portal2Natif.log',
+        bundle_id='fr.kanapitsas.portal2-native',
+        icon='portal2/resource/game.icns',
+        renderer=None,   # Metal when libd3d9metal is there
     ),
     # Half-Life 2 since the 20th anniversary update (depot 224): episodes and
     # Lost Coast live in the hl2_complete mod; hl2/ and hl2mp/ hold other
@@ -42,6 +52,15 @@ GAMES = {
                                      'sourcevr.so'},
         roots='config/hl2-roots.json',
         steam_appid=220,
+        depot_id=224,
+        app_name='Half-Life 2 Natif',
+        log_name='HalfLife2Natif.log',
+        bundle_id='fr.kanapitsas.hl2-native',
+        icon='hl2/resource/game.icns',
+        # OpenGL is faster than Metal for HL2 (77 vs 60-67 fps, docs/hl2.md)
+        # and Metal still draws the HDR sky wrong: the app starts on OpenGL
+        # unless P2_RENDERER says otherwise.
+        renderer='opengl',
     ),
 }
 
@@ -52,3 +71,4 @@ def profile(config):
     if name not in GAMES:
         raise SystemExit(f'unknown game {name!r} in config/local.json (known: {", ".join(GAMES)})')
     return dict(GAMES[name], name=name)
+
