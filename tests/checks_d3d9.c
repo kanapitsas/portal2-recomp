@@ -710,8 +710,14 @@ static int32_t event_get_data(Fake *self, void *data, uint32_t size, uint32_t fl
     if (data && size >= 4) memset(data, 0, 4);
     return 1;   // S_FALSE : jamais atteint côté bibliothèque
 }
+static uint32_t event_issue_during_present;   // mandataire à émettre pendant le Present (verrou relâché)
 static int32_t event_present(Fake *self, const void *a, const void *b, void *w, const void *r) {
-    (void)self; (void)a; (void)b; (void)w; (void)r; return 0;
+    (void)self; (void)a; (void)b; (void)w; (void)r;
+    if (event_issue_during_present) {
+        uint32_t end = 1;
+        call(event_issue_during_present, slot_of("IDirect3DQuery9", "Issue"), 1, &end);
+    }
+    return 0;
 }
 RT_CHECK(d3d9_event_query_reached_after_present) {
     fill(event_query_vtbl, 8);
@@ -738,7 +744,16 @@ RT_CHECK(d3d9_event_query_reached_after_present) {
     assert(CALL(o, IDirect3DQuery9, GetData, data, 4, 1).eax == 1);                    // occlusion : inchangée
     assert(CALL(q, IDirect3DQuery9, Issue, 1).eax == 0);                                // nouvel événement
     assert(CALL(q, IDirect3DQuery9, GetData, data, 4, 1).eax == 1);
-    assert(event_seen.issues == 3 && event_seen.get_data == 5);
+    W32(data, 0xaaaaaaaa);
+    assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0);
+    assert(CALL(q, IDirect3DQuery9, GetData, data, 1, 1).eax == 0 && R32(data) == 0xaaaaaa01u);   // BOOL tronqué
+    event_issue_during_present = q;              // émis pendant ce Present : attend le suivant
+    assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0);
+    event_issue_during_present = 0;
+    assert(CALL(q, IDirect3DQuery9, GetData, data, 4, 1).eax == 1);
+    assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0);
+    assert(CALL(q, IDirect3DQuery9, GetData, data, 4, 1).eax == 0);
+    assert(event_seen.issues == 4 && event_seen.get_data == 8);
     CALL0(q, IUnknown, Release); CALL0(o, IUnknown, Release); CALL0(dev, IUnknown, Release);
 }
 
