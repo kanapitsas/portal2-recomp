@@ -87,6 +87,28 @@ class UninstallTests(unittest.TestCase):
             self.assertTrue(self.game.is_dir(), path)
             self.assertTrue(path.exists(), path)
 
+    def test_hl2_checkout_removes_only_hl2(self):
+        # An HL2 checkout must never offer Portal 2's app or saves.
+        hl2_app = self.home / 'Applications/Half-Life 2 Natif.app'
+        (hl2_app / 'Contents/MacOS').mkdir(parents=True)
+        hl2_log = self.home / 'Library/Logs/HalfLife2Natif.log'
+        hl2_log.write_text('log')
+        hl2_support = self.home / 'Library/Application Support/Half-Life 2 Natif'
+        (hl2_support / 'userdata/hl2_complete/save').mkdir(parents=True)
+        hl2_game = self.home / 'Steam/steamapps/common/Half-Life 2'
+        hl2_game.mkdir(parents=True)
+        self.config.write_text(json.dumps({'game': 'hl2', 'game_root': str(hl2_game),
+                                           'linux_root': str(self.home / 'depot_224')}))
+        out = self.run_script('y\ny\n')
+        for path in (hl2_app, hl2_log, hl2_support):
+            self.assertFalse(path.exists(), path)
+        self.assertTrue((self.home / '.Trash/Half-Life 2 Natif/userdata/hl2_complete/save').is_dir())
+        for path in (self.app, self.log, self.support, self.explicit, self.game, hl2_game):
+            self.assertTrue(path.exists(), path)
+        self.assertIn('Half-Life 2 game files', out)
+        self.assertIn('depot 224', out)
+        self.assertNotIn('Portal 2 Natif', out)
+
     def test_nothing_installed(self):
         self.run_script('y\ny\n')
         out = self.run_script('y\ny\n')

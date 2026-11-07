@@ -6,6 +6,9 @@
 #
 # usage: ./uninstall.sh
 #
+# In a checkout set up with ./setup.sh --game hl2, the same for
+# "Half-Life 2 Natif.app" and its own saves folder.
+#
 # The Steam game files and the Linux depot are never touched: they may be your
 # real Steam install. Their paths (from config/local.json) are printed with
 # what to do about them. This folder itself (build/, deps/) is left too.
@@ -26,6 +29,14 @@ config_get() {  # key -> value from config/local.json, empty if absent
     [ -f "$CONFIG" ] || return 0
     python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get(sys.argv[2]) or "")' "$CONFIG" "$1"
 }
+# Half-Life 2 checkout: its own app, log and data folder (tools/games.py).
+TITLE="Portal 2"; GAME_SIZE=" (about 12 GB)"; DEPOT="depot 661 (about 90 MB)"
+if [ "$(config_get game)" = hl2 ]; then
+    NAME="Half-Life 2 Natif"
+    SUPPORT="$H/Library/Application Support/$NAME"
+    LOG="$H/Library/Logs/HalfLife2Natif.log"
+    TITLE="Half-Life 2"; GAME_SIZE=""; DEPOT="depot 224 (about 320 MB)"
+fi
 ask() {  # question -> 0 only for an explicit yes
     local answer=""
     printf '%s [y/N] ' "$1"
@@ -43,7 +54,7 @@ trash() {  # path -> moved into the Trash under a free name
 }
 
 if pgrep -qx portal2-native 2>/dev/null; then
-    echo "Portal 2 Natif is running: quit the game first." >&2
+    echo "A recompiled game (portal2-native) is running: quit it first." >&2
     exit 1
 fi
 
@@ -101,7 +112,7 @@ if [ ${#APPS[@]} -gt 0 ] || [ -e "$LOG" ]; then
     fi
 fi
 if [ ${#SAVES[@]} -gt 0 ]; then
-    if ask "Also move your Portal 2 Natif saves and settings to the Trash?"; then
+    if ask "Also move your $NAME saves and settings to the Trash?"; then
         for s in "${SAVES[@]}"; do trash "$s"; done
     else
         echo "saves kept"
@@ -116,15 +127,15 @@ cat <<EOF
 Not touched (delete them yourself if you no longer need them):
 EOF
 [ -n "$GAME" ] && cat <<EOF
-- Portal 2 game files (about 12 GB): $GAME
-  If this is your Steam install, uninstall Portal 2 from Steam instead
-  (Library > Portal 2 > Manage > Uninstall); otherwise delete the folder.
+- $TITLE game files$GAME_SIZE: $GAME
+  If this is your Steam install, uninstall $TITLE from Steam instead
+  (Library > $TITLE > Manage > Uninstall); otherwise delete the folder.
 EOF
 [ -n "$LINUX" ] && cat <<EOF
-- Linux binaries, depot 661 (about 90 MB): $LINUX
+- Linux binaries, $DEPOT: $LINUX
   Fetched with download_depot for this project; delete the folder when done with it.
 EOF
-[ -d "$OLD_SAVES" ] && cat <<EOF
+[ "$TITLE" = "Portal 2" ] && [ -d "$OLD_SAVES" ] && cat <<EOF
 - Older saves location (copied to the new one by make_app.py): $(cd "$OLD_SAVES" && pwd)
 EOF
 [ "$REPO" != "$BUILD_DIR" ] && cat <<EOF
