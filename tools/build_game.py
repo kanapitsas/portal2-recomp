@@ -21,15 +21,19 @@ import subprocess
 import sys
 import time
 import lift
+import localconfig
 import peprep
 
-# Identique à HOST_CFLAGS/HOST_LIBS du Makefile (tools/bench.py les importe d'ici).
-HOST_CFLAGS = ['-I/opt/homebrew/include', '-I/opt/homebrew/include/freetype2', '-DGL_SILENCE_DEPRECATION',
-               '-DOPENAL_DEPRECATED=', '-DAL_SILENCE_DEPRECATION']
-HOST_LIBS = ['-L/opt/homebrew/lib', '-lSDL2', '-lfreetype', '-lfontconfig', '-liconv',
-             '-framework', 'OpenGL', '-framework', 'OpenAL', '-lobjc']
+# Identique à HOST_CFLAGS/HOST_LIBS du Makefile (tools/bench.py les importe d'ici) ;
+# préfixe Homebrew ou bundle précompilé, voir localconfig.host_prefix.
+HOST_CFLAGS, HOST_LIBS = localconfig.host_flags()
 WARNINGS = ['-Wall', '-Wextra', '-Werror']
 DEBUG = {'full': '-g', 'lines': '-gline-tables-only', 'none': '-g0'}
+# Generated functions name `CPU *restrict c` hundreds of times; past LLVM's
+# default capture-tracking budget clang assumes guest stores may alias *c and
+# reloads c->esp & co. after each one (client_so.036.c: 454 kB -> 397 kB of
+# __text at -O2 -DRT_FAST_MEMORY).
+GENERATED_TUNING = ['-mllvm', '-capture-tracking-max-uses-to-explore=100000']
 # Scripts whose content enters the generation keys (a change regenerates the C).
 GEN_TOOLS = ['tools/lift.py', 'tools/float_lift.py', 'tools/registry.py']
 PE_TOOLS = GEN_TOOLS + ['tools/peprep.py']
@@ -199,11 +203,15 @@ def compile_units(units, cache, jobs, compiler_identity):
         return source, None, time.time() - started
 
     seconds, failures = 0.0, []
+    started = time.time()
+    step = max(1, len(planned) // 10)   # une ligne par dixième, comme « lifted » (lue par l'installeur)
     with ThreadPoolExecutor(max_workers=jobs) as pool:
-        for source, error, elapsed in pool.map(run, planned):
+        for done, (source, error, elapsed) in enumerate(pool.map(run, planned), 1):
             seconds += elapsed
             if error:
                 failures.append(f'{source}:\n{error[:4000]}')
+            if len(planned) >= 20 and (done % step == 0 or done == len(planned)):
+                print(f'  compiled {done}/{len(planned)} files, {time.time() - started:.0f} s', flush=True)
     if failures:
         raise SystemExit('compilation failed:\n' + '\n'.join(failures[:5]))
     return objects, len(planned), seconds
@@ -292,7 +300,7 @@ def main():
         profile = [f'-fprofile-instr-use={args.pgo_use.resolve()}', '-Wno-profile-instr-unprofiled',
                    '-Wno-profile-instr-out-of-date', '-Wno-profile-instr-missing']
     runtime_flags = [f'-O{args.runtime_opt or args.opt}', '-g', *WARNINGS, *memory, *profile, '-Iruntime', *HOST_CFLAGS]
-    generated_flags = [f'-O{args.opt}', DEBUG[args.debug], *WARNINGS, *memory, *profile, '-Iruntime']
+    generated_flags = [f'-O{args.opt}', DEBUG[args.debug], *GENERATED_TUNING, *WARNINGS, *memory, *profile, '-Iruntime']
     sources = Path('build/game/gen/src')
     units = [(str(p), runtime_flags) for p in sorted(Path('runtime').glob('*.c'))]
     units.append(('src/main.c', runtime_flags))

@@ -56,9 +56,24 @@ Journal setting) then shows `[ios] renderer: Metal (...)`,
 - Resolution: the Metal view takes the app's render scale (Résolution
   setting), like the GL view, so the drawable is the game's back buffer
   size and mtld3d does not resample.
-- Frame rate: `present.maxFps` follows `P2_IOS_MAX_FPS` (60 by default);
-  the 120 Hz display request is the same as on OpenGL. The FPS counter and
+- Frame rate: `present.maxFps` follows `P2_IOS_MAX_FPS` (60 by default) and
+  auto power saving, see "Frame rate cap"; the 120 Hz display request is the
+  same as on OpenGL. The FPS counter and
   back taps count frames on `Present` (`rt_d3d9_on_present`).
+- Upscaling (MetalFX): Settings > Upscaling puts `render.scale=0.75` or
+  `0.5` in `MTLD3D_CONFIG` (`P2_IOS_UPSCALE`; a `render.scale` you set in
+  `MTLD3D_CONFIG` yourself comes later and wins). mtld3d then rasterizes the
+  scene at that fraction of the game's back buffer and enlarges it with the
+  MetalFX spatial scaler, with a texture LOD bias so textures keep their
+  detail (`render.lodBias`, on by default). It multiplies on top of
+  Resolution: the back buffer is the screen in points × the Resolution scale,
+  so ×2 with Quality renders 1398×645 on an iPhone 15 Pro Max, upscaled to
+  1864×860, which the display then stretches to 2796×1290; Native with
+  Quality renders 2097×968 (about the pixel count of ×2.25) and MetalFX
+  produces the full native image. The interface is scaled with the world.
+  Ignored with OpenGL (`[ios] MetalFX : agrandissement … ignoré`); the log
+  says `[ios] MetalFX : rendu à 75 % du tampon arrière` when it is active.
+  Not measured yet on the phone.
 - Shader/pipeline cache: `Library/Caches/d3d9metal` (`P2_D3D9_CACHE` to
   move it). Memory caps: the same `MTLD3D_CONFIG` defaults as on macOS.
 - Simulator: not available. mtld3d links MetalFX, which the iOS Simulator
@@ -138,22 +153,73 @@ The page is in English, and in French on a device set to French
 | Setting | Variable | Values |
 |---|---|---|
 | Resolution | `P2_IOS_RENDER_SCALE` (+ the game's `-w`/`-h`) | native, ×2 (default), ×1.5, ×1 |
-| Frames per second | `P2_IOS_MAX_FPS` | 60 (default), 120 |
+| Frames per second | `P2_IOS_MAX_FPS` | 30, 40, 60 (default), 120; see "Frame rate cap" |
+| Auto power saving | `P2_IOS_POWER_SAVE` | on by default: at most 30 fps in Low Power Mode or when the phone is hot |
 | Renderer | `P2_RENDERER` | Metal: `d3d9` (default), `opengl`; see "Metal renderer" |
+| Upscaling (MetalFX) | `P2_IOS_UPSCALE` | Off (1, default), Quality (0.75), Performance (0.5); Metal only, see "Metal renderer" |
 | FPS counter | `P2_SHOW_FPS` | shown by default; tapping the top-left corner shows or hides it (choice is remembered) |
 | On-screen controls | `P2_TOUCH_CONTROLS` | automatic (hidden when a controller is connected), always, never |
 | Trackpad camera | key `P2TouchTrackpad` | also toggled by the button at the bottom left |
 | Camera speed | `P2_TOUCH_LOOK` | ×0.5 to ×3 |
 | Trackpad acceleration | `P2_TOUCH_ACCEL` | none (1) to strong (4), normal 2.5 |
 | Back taps | `P2_BACKTAP` | enabled by default |
+| Vibrate when firing | `P2_HAPTICS` | on by default: a light Taptic Engine tap for each portal fired from the overlay (button or back tap) |
 | Tap sensitivity | `P2_BACKTAP_SENSITIVITY` | 0.75 / 1 / 1.33: thresholds are divided by this value |
 | Swap left and right | `P2_BACKTAP_INVERT` | |
 | Portal buttons | `P2_PORTAL_BUTTONS` | automatic (when back taps are off), always, never |
 | Log | `P2_LOG_FILE=Documents/game.log` | |
 
+### Frame rate cap
+
+`P2_IOS_MAX_FPS` (Frames per second) is the ceiling, read at launch by
+`runtime/ios/power_ios.m`:
+
+- Metal: `present.maxFps=<cap>` in `MTLD3D_CONFIG`; mtld3d holds presents to it.
+- OpenGL: 60 and 120 are paced by the display; under 60 the runtime waits
+  before each present (`gl_ios.m`, `limit_frame_rate`).
+- Display: 120 asks the ProMotion panel for 120 Hz, as before; so does 40,
+  which then lands on every third refresh (on a 60 Hz panel 40 fps would
+  alternate one and two refreshes; on a phone without ProMotion choose 30).
+
+Auto power saving (on by default, `P2_IOS_POWER_SAVE=0` turns it off) lowers
+the cap to 30 when Low Power Mode is on or the thermal state is serious or
+critical, and logs `[ios] économie d'énergie (<reason>) : 30 i/s au lieu de
+<cap>`. mtld3d reads its configuration once, at initialization, and has no way
+to change `present.maxFps` afterwards: with Metal the check happens at launch
+only (a later change is logged as applying at the next launch); with OpenGL
+the cap follows thermal and power changes during play.
+
 Simulator: `xcrun simctl spawn <device> defaults write <bundle id>
 P2ResolutionScale -string 1.5`. `tests/checks_ios_settings.c` checks the
 translation and that the keys match between the code and the settings page.
+
+## Leaving the app
+
+When the app stops being active (app switcher, home gesture, Control Center
+or Notification Center pulled down, incoming call, screen locked), the game
+pauses at its next frame (`runtime/ios/lifecycle_ios.m`): the main thread,
+which is the game's, stops in `SDL_PollEvent`, finishes pending OpenGL ES
+work (`glFinish`; iOS kills an app that uses the GPU through OpenGL ES in the
+background, and refuses Metal submissions), suspends and detaches the OpenAL
+context, then waits, serving UIKit's run loop, until the app is active again
+(`UIApplicationDidBecomeActive`). Other game threads keep running (the guest
+lock is released while it waits). The touch overlay treats the pause like a
+menu (held fingers released, no input sent) and the back-tap sensors stop at
+once. A frame presented by another thread while in the background is
+dropped without any OpenGL call. Log lines: `[ios] app inactive : jeu en
+pause`, `[ios] app en arrière-plan`, `[ios] app active : reprise après N s`.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `P2_IOS_BACKGROUND_PAUSE` | 1 | `0`: no pause at all (the old behavior) |
+| `P2_IOS_BACKGROUND_AUDIO` | 1 | `0`: the pause leaves the OpenAL context alone |
+
+To check on the phone (with the Log setting on): in game, open the app
+switcher and come back; go to the home screen, wait 30 s, reopen; pull down
+Control Center over the game, then dismiss it; lock the screen and unlock.
+Each time the game must come back where it was (no restart: a restart means
+iOS killed it), with sound, and `game.log` must show the pause and resume
+lines. Also try during a level load, and with the OpenGL renderer once.
 
 ## Diagnostics
 
@@ -219,6 +285,15 @@ tried. Hard taps peak 30 to 40 ms after they start and make the
 phone vibrate for more than 150 ms: rise-time criterion dropped, vibration excluded for
 250 ms (measured: 0.03 to 0.04 g RMS beyond that). Known limitation: the first jolt of a sudden movement from rest
 looks like a tap (filtering it out would delay every shot).
+
+The motion sensors run only while a tap can be accepted: device motion
+updates stop after 2 s in a menu or with the overlay hidden for a controller
+or keyboard, at once when the app becomes inactive, and restart as soon as the game is back
+(log: `[ios] tapes au dos : capteurs arrêtés` / `en marche`). The first 150 ms
+after a restart count as menu time, so the touch that closed the menu (handled
+by SDL, not the overlay) cannot fire a portal. Recordings and the dataset
+therefore have gaps in menus; dataset labels still pending when the sensors
+stop are written when they restart.
 
 Raw recording for tuning the thresholds on the Mac:
 Settings > Portal 2 > Record taps (one dated file per launch in `Documents/backtap/`,
@@ -356,5 +431,8 @@ Profile with `P2_PROFILE_RAW=1` before guessing.
   `runtime/ios/case_path.c` recover the actual case.
 - SDL never sees the game "capture" the mouse: the menu/gameplay state comes from the
   engine (`IEngineVGui::IsGameUIVisible`, `runtime/ios/game_state.c`).
-- Touch controls: a UIKit view placed on top of the window and force-drawn
-  (SDL's loop never commits UIKit transactions).
+- Touch controls: a UIKit view placed on top of the window, made of fixed
+  layers (one `CAShapeLayer` per stick and button, a small bitmap for the FPS
+  counter) moved without animation and flushed once per run-loop pass (SDL's
+  loop never commits UIKit transactions). It used to be a full-screen
+  `drawRect` at the native ×3 scale, redrawn on every finger move.

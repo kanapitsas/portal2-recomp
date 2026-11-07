@@ -1,14 +1,20 @@
 /* French for the Settings page; keys are the English strings of Root.plist. */
 "Display" = "Affichage";
-"Changes apply the next time the game starts (close it from the app switcher). A lower resolution gives more frames per second." = "Les changements s'appliquent au prochain lancement du jeu (fermez-le depuis le sélecteur d'apps). Une résolution plus basse donne plus d'images par seconde.";
+"Changes apply the next time the game starts (close it from the app switcher). A lower resolution gives more frames per second. Auto power saving caps the game at 30 frames per second in Low Power Mode or when the phone is hot (checked at launch with Metal, at any time with OpenGL)." = "Les changements s'appliquent au prochain lancement du jeu (fermez-le depuis le sélecteur d'apps). Une résolution plus basse donne plus d'images par seconde. L'économie d'énergie automatique limite le jeu à 30 images par seconde en mode économie d'énergie ou quand le téléphone chauffe (vérifié au lancement avec Metal, à tout moment avec OpenGL).";
 "Resolution" = "Résolution";
 "×2 (recommended)" = "×2 (recommandé)";
 "×1.5" = "×1,5";
 "Frames per second" = "Images par seconde";
+"30 (battery saver)" = "30 (économie de batterie)";
 "60 (recommended)" = "60 (recommandé)";
+"Auto power saving" = "Économie d'énergie auto";
 "FPS counter" = "Compteur d’images";
 "Rendering" = "Rendu";
-"Metal: the game's native Direct3D 9 rendering (libd3d9metal), faster and more faithful than OpenGL. Without the library in the app, or if the device does not support it, the game stays on OpenGL." = "Metal : rendu Direct3D 9 natif du jeu (libd3d9metal), plus rapide et plus fidèle qu'OpenGL. Sans la bibliothèque dans l'app, ou si l'appareil ne la prend pas en charge, le jeu reste en OpenGL.";
+"Metal: the game's native Direct3D 9 rendering (libd3d9metal), faster and more faithful than OpenGL. Without the library in the app, or if the device does not support it, the game stays on OpenGL. Upscaling (Metal only) renders the scene at a fraction of the Resolution above and enlarges it with MetalFX: Quality with Native resolution renders as many pixels as ×2.25 and lets MetalFX fill the full screen; with ×2 it is faster but softer." = "Metal : rendu Direct3D 9 natif du jeu (libd3d9metal), plus rapide et plus fidèle qu'OpenGL. Sans la bibliothèque dans l'app, ou si l'appareil ne la prend pas en charge, le jeu reste en OpenGL. L'agrandissement (Metal seulement) rend la scène à une fraction de la Résolution ci-dessus et l'agrandit avec MetalFX : Qualité avec la résolution Native rend autant de pixels que ×2,25 et laisse MetalFX remplir tout l'écran ; avec ×2, c'est plus rapide mais plus flou.";
+"Upscaling (MetalFX)" = "Agrandissement (MetalFX)";
+"Off" = "Désactivé";
+"Quality (×0.75)" = "Qualité (×0,75)";
+"Performance (×0.5)" = "Performance (×0,5)";
 "Renderer" = "Moteur de rendu";
 "Metal (recommended)" = "Metal (recommandé)";
 "Touch controls" = "Commandes tactiles";
@@ -33,6 +39,7 @@
 "Tap the back of the phone near the left edge for the blue portal, near the right edge for the orange one. Without back taps, portal buttons appear at the top of the screen. “Record taps” writes the sensor readings of each game to Portal 2’s backtap folder (Files app) and shows a ✗ button to report a wrong shot or a missed tap." = "Tapez le dos du téléphone près du bord gauche pour le portail bleu, près du bord droit pour l'orange. Sans tapes au dos, des boutons de portail s'affichent en haut de l'écran. « Enregistrer les tapes » écrit les mesures des capteurs de chaque partie dans le dossier backtap de Portal 2 (app Fichiers) et affiche un bouton ✗ pour signaler un mauvais tir ou une tape manquée.";
 "Record taps" = "Enregistrer les tapes";
 "Back taps" = "Tapes au dos";
+"Vibrate when firing" = "Vibrer au tir";
 "Tap sensitivity" = "Sensibilité des tapes";
 "Low" = "Faible";
 "High" = "Élevée";

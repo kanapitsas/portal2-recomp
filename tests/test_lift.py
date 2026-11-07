@@ -79,6 +79,22 @@ class LifterTests(unittest.TestCase):
         self.assertNotIn(0x11, insns)
         self.assertEqual(insns[0x10], (0x14, 'lock_cmpxchg', 'dword ptr [esi], edx'))
 
+    def test_alignment_traps_report_the_instruction_address(self):
+        # Not c->eip (the function entry): the faulting instruction itself.
+        for insn in [('lock_add', 'dword ptr [eax], ecx'), ('lock_xadd', 'dword ptr [eax], ecx'),
+                     ('xchg', 'dword ptr [eax], ecx'), ('lock_cmpxchg', 'dword ptr [esi], edx'),
+                     ('lock_cmpxchg8b', 'qword ptr [esi]'), ('movaps', 'xmm0, xmmword ptr [eax]'),
+                     ('movntps', 'xmmword ptr [eax], xmm1'), ('cvtpd2ps', 'xmm0, xmmword ptr [eax]')]:
+            code = lift.translate(0x1234, (0x1238,) + insn)[0]
+            self.assertIn('0x1234u', code, insn)
+            self.assertNotIn('c->eip', code, insn)
+
+    def test_locked_adc_sbb_flags_take_the_carry_in(self):
+        for op, helper in (('lock_adc', 'f_adc'), ('lock_sbb', 'f_sbb')):
+            code = lift.translate(0x10, (0x14, op, 'dword ptr [eax], ecx'))[0]
+            self.assertIn('b + f.cf', code)
+            self.assertIn(f'{helper}(&f, a, b, 32);', code)
+
     def test_reject_segment_addressing(self):
         with self.assertRaises(lift.Unsupported):
             lift.Operand('dword ptr fs:[0x14]')

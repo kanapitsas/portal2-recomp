@@ -24,6 +24,37 @@ run and diagnostics instructions that used to live here are in
 
 - 2026-11-06: `tools/ios_device.sh saves status|pull|push` copies the `.sav` files between the Mac user data and the iPhone over the cable, newer side only, with backups (`tools/save_sync.py`); not tested on a device yet.
 
+## 6 November 2026 — iPhone polish (branch feat/ios-polish, not yet tested on the phone)
+
+- 2026-11-06: iPhone: game data kept out of iCloud backups, game paused while
+  the app is inactive or in the background, touch overlay drawn with fixed
+  layers, back-tap sensors stopped outside gameplay, haptic tap on each portal
+  shot, 30/40 fps caps and auto power saving, MetalFX upscaling setting
+  ([docs/ios.md](docs/ios.md)).
+
+## 6 November 2026 — performance and correctness audit (branch perf/audit-nov06)
+
+- Generated code is compiled with `-mllvm -capture-tracking-max-uses-to-explore=100000`
+  (macOS and iOS builds; part of the object cache key). With the inlined calls
+  and atomics below, `client_so.036.c` goes from 453,804 to 383,664 bytes of
+  `__text` at `-O2 -DRT_FAST_MEMORY` (440,856 without the flag).
+- `rt_call_fn`/`rt_call_any` push the return address through the caller's
+  `mem_` instead of reloading `M`; guest atomics are inlined in `rt.h`, and
+  their alignment traps, like the SSE ones, report the instruction address.
+- `strlen` scans guest strings with `memchr` per 4 KiB page; `strcmp` stops at
+  the first difference instead of measuring both strings first.
+- Direct routes for `pthread_cond_*`, `pthread_get/setspecific` and
+  `pthread_self`, and a cache for condition lookups.
+- Steam warnings raised on a Steam thread are queued and delivered by the next
+  `SteamAPI_RunCallbacks` (the guest hook used to run without the guest gate).
+- Relative futex timeouts use the monotonic clock; `fullscreen_height` reads
+  its cache on any thread; five shims span-check their output pointers;
+  `getcwd(buf, 0)` gives EINVAL.
+- Checked: `make check`, the UBSan abi-smoke, the shard compiled with
+  `-DRT_FAST_MEMORY`, checked memory and `-DRT_TRACED_CALLS`. Not measured:
+  in-game frame rate, the full game build, the iOS build. `lock adc`/`lock sbb`
+  already took the carry-in for their flags (audit item dropped, test added).
+
 ## 30 October – 4 November 2026 — fixes, LAN co-op, roadmap (branches fix/audit-oct30, fix/lan-coop, merged)
 
 - 2026-11-04: `setup.sh`'s final summary also says which renderer the iPhone app uses.

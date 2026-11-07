@@ -4,9 +4,12 @@ HEADERS := $(sort $(wildcard runtime/*.h runtime/d3d9/*.h))
 PYTHON ?= python3
 CC = clang
 CFLAGS ?= -O2 -g -Wall -Wextra -Werror
-# Bibliothèques hôtes ARM64 des ponts natifs ; partagées avec tools/build_game.py.
-HOST_CFLAGS = -I/opt/homebrew/include -I/opt/homebrew/include/freetype2 -DGL_SILENCE_DEPRECATION -DOPENAL_DEPRECATED= -DAL_SILENCE_DEPRECATION
-HOST_LIBS = -L/opt/homebrew/lib -lSDL2 -lfreetype -lfontconfig -liconv -framework OpenGL -framework OpenAL -lobjc
+# Bibliothèques hôtes ARM64 des ponts natifs ; partagées avec tools/build_game.py
+# (localconfig.host_flags). Préfixe : P2_HOST_PREFIX, host_prefix de
+# config/local.json (bundle précompilé de setup.sh), sinon Homebrew.
+HOST_PREFIX := $(or $(P2_HOST_PREFIX),$(if $(wildcard config/local.json),$(shell $(PYTHON) -c 'import json; print(json.load(open("config/local.json")).get("host_prefix") or "")' 2>/dev/null)),/opt/homebrew)
+HOST_CFLAGS = -I"$(HOST_PREFIX)/include" -I"$(HOST_PREFIX)/include/freetype2" -DGL_SILENCE_DEPRECATION -DOPENAL_DEPRECATED= -DAL_SILENCE_DEPRECATION
+HOST_LIBS = -L"$(HOST_PREFIX)/lib" -Wl,-rpath,"$(HOST_PREFIX)/lib" -lSDL2 -lfreetype -lfontconfig -liconv -framework OpenGL -framework OpenAL -lobjc
 CFLAGS += $(HOST_CFLAGS)
 LIFT_FLAGS ?= --allow-unimplemented-imports
 # Linux binaries of the game (libtier0.so, libvstdlib.so): linux_root of

@@ -158,8 +158,9 @@ static int signal_shim(CPU *c, const char *name) {
     } else if (!strcmp(name, "sigaddset")) {
         uint32_t set = argument(c, 0), signal = argument(c, 1);
         if (!valid_signal(signal)) { fail(c, LINUX_EINVAL); return 1; }
-        uint32_t word = set + (signal - 1) / 32 * 4;
-        W32(word, R32(word) | 1u << ((signal - 1) % 32)); c->eax = 0;
+        uint8_t *word = rt_write_span(c, set + (signal - 1) / 32 * 4, 4);
+        uint32_t bits; memcpy(&bits, word, 4); bits |= 1u << ((signal - 1) % 32); memcpy(word, &bits, 4);
+        c->eax = 0;
     } else if (!strcmp(name, "sigprocmask")) {
         uint32_t how = argument(c, 0), set = argument(c, 1), old = argument(c, 2);
         if (set && how > 2) { fail(c, LINUX_EINVAL); return 1; }

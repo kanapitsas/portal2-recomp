@@ -4,7 +4,8 @@
 // - Au lancement (ios/main_ios.c) : appareil Metal capable (textures BC, que
 //   Source utilise partout et que mtld3d crée sans solution de repli), sinon
 //   retour à OpenGL ; cache des nuanceurs dans Library/Caches ; cadence
-//   plafonnée comme en OpenGL (P2_IOS_MAX_FPS, 60 par défaut).
+//   plafonnée comme en OpenGL (P2_IOS_MAX_FPS, 60 par défaut, et économie
+//   d'énergie : power_ios.m).
 // - À la création de la vue Metal (runtime/sdl_video.c) : échelle de rendu de
 //   l'app (P2_IOS_RENDER_SCALE) au lieu de l'échelle native que SDL donne à la
 //   couche, pour que mtld3d (taille du drawable = bounds × contentsScale)
@@ -23,6 +24,8 @@
 #include <string.h>
 #include "d3d9_bridge.h"
 #include "metal_ios.h"
+#include "power_ios.h"
+#include "settings.h"
 
 extern _Atomic unsigned long rt_ios_frames;   // gl_ios.m
 float rt_ios_render_scale(void);                    // sdl_ios.m
@@ -55,24 +58,39 @@ int rt_ios_metal_usable(char *why, size_t size) {
 
 // Clés MTLD3D_CONFIG propres à iOS, devant celles de l'utilisateur (la
 // dernière gagne ; runtime/d3d9.c ajoute ensuite ses plafonds mémoire devant).
+// present.maxFps : lu une fois par mtld3d à son initialisation (sa config est
+// figée ensuite), d'où l'économie d'énergie appliquée au lancement seulement.
+// render.scale (réglage « Upscaling (MetalFX) », P2_IOS_UPSCALE) : la scène est
+// rendue à cette fraction du tampon arrière du jeu, lui-même à l'échelle de
+// Résolution (P2_IOS_RENDER_SCALE), puis agrandie par MetalFX ; l'écran étire
+// ensuite le tampon arrière jusqu'à sa taille native.
 void rt_ios_metal_config(char *out, size_t size) {
-    const char *e = getenv("P2_IOS_MAX_FPS");
-    int fps = e && atoi(e) > 0 ? atoi(e) : 60;
-    snprintf(out, size, "present.maxFps=%d", fps);
+    double scale;
+    rt_ios_metal_keys(out, size, rt_ios_max_fps(), getenv("P2_IOS_UPSCALE"), &scale);
+    if (scale < 1) fprintf(stderr, "[ios] MetalFX : rendu à %.0f %% du tampon arrière, agrandi par MetalFX\n", scale * 100);
+}
+// Réglage d'agrandissement MetalFX sans rendu Metal : sans effet, dit une fois.
+static void upscale_ignored(void) {
+    double scale;
+    char keys[96];
+    rt_ios_metal_keys(keys, sizeof(keys), 60, getenv("P2_IOS_UPSCALE"), &scale);
+    if (scale < 1) fprintf(stderr, "[ios] MetalFX : agrandissement %g ignoré (rendu OpenGL)\n", scale);
 }
 
 int rt_ios_metal_prepare(void) {
     // Metal par défaut ; le réglage ou P2_RENDERER=opengl gardent OpenGL.
-    if (rt_renderer_request(getenv("P2_RENDERER")) < 0) return 0;
+    if (rt_renderer_request(getenv("P2_RENDERER")) < 0) { upscale_ignored(); return 0; }
     char why[256];
     if (!d3d9metal_linked()) {
         fprintf(stderr, "[ios] renderer: libd3d9metal not linked in (build without --d3d9metal), staying on OpenGL\n");
         setenv("P2_RENDERER", "opengl", 1);
+        upscale_ignored();
         return 0;
     }
     if (!rt_ios_metal_usable(why, sizeof(why))) {
         fprintf(stderr, "[ios] renderer: Metal unusable (%s), staying on OpenGL\n", why);
         setenv("P2_RENDERER", "opengl", 1);   // src/main.c ne tente alors pas libd3d9metal
+        upscale_ignored();
         return 0;
     }
     setenv("P2_RENDERER", "d3d9", 1);
@@ -83,7 +101,7 @@ int rt_ios_metal_prepare(void) {
         snprintf(cache, sizeof(cache), "%s/Library/Caches/d3d9metal", home);
         setenv("P2_D3D9_CACHE", cache, 0);   // runtime/d3d9.c crée le dossier
     }
-    char ours[64];
+    char ours[128];
     rt_ios_metal_config(ours, sizeof(ours));
     const char *given = getenv("MTLD3D_CONFIG");
     if (!given || !*given) setenv("MTLD3D_CONFIG", ours, 1);

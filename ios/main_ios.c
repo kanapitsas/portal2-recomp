@@ -8,6 +8,7 @@
 // --user-dir, --images, --game-dir et --linux-root manquants : dossiers
 // portal2-userdata, prep, game et linux de Documents (s'ils existent).
 #include <SDL_main.h>
+#include <CoreFoundation/CoreFoundation.h>
 #include <limits.h>
 #include <mach-o/dyld.h>
 #include <stdio.h>
@@ -35,6 +36,39 @@ static void read_launch_file(const char *bundle) {
         if (line[0] && line[0] != '#') push(line);
     }
     fclose(file);
+}
+
+// Données du jeu copiées dans Documents (game, prep, linux : ~11,5 Go) :
+// exclues de la sauvegarde iCloud/iTunes, qui les recopierait à chaque
+// sauvegarde du téléphone alors qu'elles viennent du Mac. Les sauvegardes du
+// joueur (portal2-userdata) restent sauvegardées. Attribut posé sur le dossier
+// (il vaut pour son contenu), seulement s'il manque : coût d'un stat par dossier.
+static void exclude_from_backup(const char *documents) {
+    static const char *const folders[] = {"game", "prep", "linux"};
+    char done[64] = "", already[64] = "";
+    for (size_t i = 0; i < sizeof(folders) / sizeof(*folders); ++i) {
+        char path[PATH_MAX]; struct stat st;
+        snprintf(path, sizeof(path), "%s/%s", documents, folders[i]);
+        if (stat(path, &st) || !S_ISDIR(st.st_mode)) continue;
+        CFURLRef url = CFURLCreateFromFileSystemRepresentation(NULL, (const UInt8 *)path, (CFIndex)strlen(path), true);
+        if (!url) continue;
+        CFTypeRef value = NULL;
+        int excluded = CFURLCopyResourcePropertyForKey(url, kCFURLIsExcludedFromBackupKey, &value, NULL) && value &&
+                       CFBooleanGetValue((CFBooleanRef)value);
+        if (value) CFRelease(value);
+        char *list = excluded ? already : done;
+        CFErrorRef error = NULL;
+        if (!excluded && !CFURLSetResourcePropertyForKey(url, kCFURLIsExcludedFromBackupKey, kCFBooleanTrue, &error)) {
+            fprintf(stderr, "[ios] sauvegarde iCloud : %s non exclu\n", folders[i]);
+            list = NULL;
+        }
+        if (error) CFRelease(error);
+        CFRelease(url);
+        if (list) snprintf(list + strlen(list), sizeof(done) - strlen(list), "%s%s", list[0] ? ", " : "", folders[i]);
+    }
+    if (done[0] || already[0])
+        fprintf(stderr, "[ios] sauvegarde iCloud : exclus %s%s%s%s, portal2-userdata gardé\n", done,
+                done[0] && already[0] ? " ; " : "", already[0] ? "déjà exclus " : "", already);
 }
 
 int main(int argc, char **argv) {
@@ -109,6 +143,7 @@ int main(int argc, char **argv) {
             arguments[1] = strdup(defaults[d].option); arguments[2] = strdup(path);
             count += 2;
         }
+        exclude_from_backup(documents);
     }
     // Échelle de rendu choisie (Réglages ou P2_IOS_RENDER_SCALE) : la
     // résolution du jeu suit, sinon video.txt garderait l'ancienne.

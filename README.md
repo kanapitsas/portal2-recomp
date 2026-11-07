@@ -35,7 +35,9 @@ share them.
 - **Co-op** over the local network: a Mac hosts, an iPhone or a second copy
   on the same Mac joins. Connection and map load are checked; a full co-op
   course has not been played yet.
-- **Install**: one command, `setup.sh`.
+- **Install**: the Portal 2 Installer app from the
+  [releases](https://github.com/kanapitsas/portal2-recomp/releases), or one
+  command, `setup.sh`. Only the Xcode command line tools are required.
 
 ## How it works
 
@@ -64,22 +66,38 @@ share them.
 
 ## What you need
 
-- An Apple silicon Mac with Python 3.9 or newer, [Homebrew](https://brew.sh)
-  and the Xcode command line tools (`xcode-select --install`), then
-  `brew install sdl2 freetype fontconfig`.
+- An Apple silicon Mac on macOS 13 or newer with the Xcode command line tools
+  (`xcode-select --install`, which also brings Python 3.9). SDL2, FreeType,
+  Fontconfig and the Metal renderer come prebuilt from this project's
+  releases (about 4 MB, SHA-256 checked); with
+  `brew install sdl2 freetype fontconfig`, Homebrew's are used instead.
 - Portal 2 on Steam:
   - the game folder (the one with `portal2/`, `platform/` and `bin/`); the
     Windows version works;
   - the Linux binaries: open the Steam console (`open steam://open/console`)
     and type `download_depot 620 661` (about 90 MB).
-- Optional but recommended: Rust 1.99 or newer from [rustup](https://rustup.rs),
-  for the faster Metal renderer (Homebrew's `rust` has no iOS target).
+- Optional: Rust 1.99 or newer from [rustup](https://rustup.rs) builds the
+  Metal renderer from source instead of using the prebuilt one; the iPhone
+  app needs it for Metal (Homebrew's `rust` has no iOS target).
 - For iPhone: Xcode with your Apple ID (a free account works),
   `brew install xcodegen cmake ninja`, an iPhone on iOS 17 or newer
   connected by cable with Developer Mode on, and about 12 GB free on it.
   Tested on an iPhone 15 Pro Max only.
 
 ## Install on Mac
+
+**Without Terminal**: download `Portal-2-Installer-<version>.zip` from the
+[latest release](https://github.com/kanapitsas/portal2-recomp/releases/latest),
+unzip it and open **Portal 2 Installer** (signed and notarized by Apple; if
+macOS still refuses to open it, go to System Settings > Privacy & Security
+and click **Open Anyway**). The installer checks the Xcode command
+line tools (and offers to install them), finds the game and the Linux
+binaries (with the Steam console commands to paste when they are missing),
+then runs `setup.sh` for you. Its copy of the code and the build (about 5 GB)
+live in `~/Library/Application Support/Portal 2 Natif Build`; its log in
+`~/Library/Logs/Portal2Installer.log`.
+
+**With Terminal**:
 
 ```sh
 git clone https://github.com/kanapitsas/portal2-recomp.git
@@ -98,6 +116,8 @@ The app contains its own executable and libraries; the game files stay where
 Steam put them. After a rebuild or a change to `config/local.json`, run
 `python3 tools/make_app.py` to update the app (`--dest` for another folder).
 Downloads and iOS libraries go to `deps/` (`P2_DEPS` overrides it).
+`P2_HOST_DEPS=homebrew` or `bundle` forces where the host libraries come
+from; `P2_APP_DIR` puts the app elsewhere than `~/Applications`.
 
 ## Install on iPhone
 
@@ -147,7 +167,8 @@ an iPhone, and fixes the too-dark image of OpenGL on iPhone.
 - If Rust is installed, `setup.sh` fetches and builds `libd3d9metal` (about a
   minute) from a pinned commit of
   [mtld3d's native host branch](https://github.com/kanapitsas/mtld3d/tree/feat/native-host).
-  Without Rust it says so and the game uses OpenGL. If the build fails,
+  Without Rust it uses the prebuilt library from the same commit (in the
+  host libraries download); if neither works, the game uses OpenGL. If the build fails,
   a library built by an earlier run is kept as long as its file still
   exists; otherwise OpenGL. `P2_NO_METAL=1 ./setup.sh` skips it.
 - The end of `setup.sh` tells which renderer the Mac app and the iPhone app
@@ -205,6 +226,7 @@ profiles.
 | Rendering | Metal renderer through mtld3d (about +50 % fps on Mac), OpenGL fallback | ✅ |
 | iPhone | Single player at a steady 60 fps, touch controls, Settings page | ✅ |
 | iPhone | Portals fired by tapping the back of the phone | ✅ |
+| iPhone | Pause in the background, haptic feedback, 30/40 fps caps with auto power saving, MetalFX upscaling | 🚧 |
 | Install | One-command install (`setup.sh`) and a standalone Mac app | ✅ |
 | Co-op | LAN co-op: a Mac hosts, an iPhone or a second copy on the same Mac joins by IP address | ✅ |
 | Co-op | Find the host automatically on the local network (Bonjour), host/join in the iPhone settings | 🚧 |
@@ -230,6 +252,7 @@ profiles.
 - `tests/`: Python tests (`test_*.py`) and C checks (`checks_*.c`) linked
   into `abi-smoke`.
 - `ios/`: app shell, Settings bundle, dependency build, signing project.
+- `installer/`: the Mac installer app (SwiftUI, one file).
 - `config/`: `game-roots.json` (indirect call roots); `local.json` is
   yours and ignored by git.
 - `docs/`: the documents listed below. `experiments/`: the Steam probe.
@@ -242,6 +265,9 @@ profiles.
   path defaults to `linux_root` in `config/local.json`. `make sanitize` is
   the UBSan variant.
 - `P2_STEAM_TESTS=1 make test`: live Steam tests, with the client running.
+- Releases: `tools/build_host_deps.sh` builds the prebuilt host libraries
+  (then update `HOST_DEPS_*` in `setup.sh`), `tools/build_installer.sh` the
+  installer app and its zip; see [docs/usage.md](docs/usage.md#releases).
 - CI (`.github/workflows/ci.yml`, macos-15): the Python tests, `abi-smoke`
   and `abi-smoke-ubsan`. It cannot build the full game, whose files are not
   in the repository.

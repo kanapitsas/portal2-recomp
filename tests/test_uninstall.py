@@ -53,6 +53,16 @@ class UninstallTests(unittest.TestCase):
         for path in (self.support, self.explicit, self.game):
             self.assertTrue(path.exists(), path)
 
+    def test_installer_build_folder_goes_with_the_app(self):
+        build = self.home / 'Library/Application Support/Portal 2 Natif Build'
+        (build / 'build').mkdir(parents=True)
+        out = self.run_script('\n\n')
+        self.assertIn('source and build', out)
+        self.assertTrue(build.exists())
+        self.run_script('y\n\n')
+        self.assertFalse(build.exists())
+        self.assertTrue(self.support.exists())
+
     def test_saves_to_trash_only_on_yes(self):
         self.run_script('y\ny\n')
         self.assertFalse(self.support.exists())
