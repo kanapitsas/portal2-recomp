@@ -7,7 +7,9 @@
 > Steam. `setup.sh` downloads Valve's `libsteam_api.dylib` inside the
 > Steamworks.NET 20.1.0 package (SHA-256 checked, unpacked into
 > `deps/steam_api.bundle`, path recorded as `steam_api_dylib` in
-> `config/local.json`); nothing from Valve is committed.
+> `config/local.json`); nothing from Valve is committed. For Half-Life 2
+> (`setup.sh --game hl2`) it takes Steamworks.NET 2024.8.0 (SDK 1.60)
+> instead, unpacked into `deps/steamworks-2024.8.0/steam_api.bundle`.
 
 **Conclusion.** The game does not start without Steam: it has to talk to the real client.
 This can be done cleanly with the **official `libsteam_api.dylib` (Valve, ARM64)**
