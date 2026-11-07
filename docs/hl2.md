@@ -198,11 +198,3 @@ risk for now.
   shared).
 - Only the main game has been played (a few hours); Episode One, Episode Two
   and Lost Coast, which the same `hl2_complete` build contains, are untested.
-- Metal: the HDR sky (and the menu background behind the loading screen)
-  shows garbage blocks. The six sky faces are DEFAULT-pool DYNAMIC
-  1024×512 textures in `A16B16G16R16` (or `A16B16G16R16F` when 36 is
-  refused), each filled twice through `IDirect3DSurface9::LockRect` (full
-  rect, `D3DLOCK_NOSYSLOCK`). The data the game writes are valid and the
-  bridge passes pitch and pointer through unchanged, so the upload goes wrong
-  inside libd3d9metal. Refusing both formats in `CheckDeviceFormat` makes
-  the game fall back to the LDR sky, which renders correctly.
