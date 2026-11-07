@@ -20,8 +20,8 @@ the generated code contain Valve's game, so keep them for yourself and don't
 share them.
 
 > Unofficial fan project, not affiliated with or endorsed by Valve. Portal,
-> Portal 2, Steam and Source are trademarks of Valve Corporation. Provided as
-> is, without warranty.
+> Portal 2, Half-Life, Steam and Source are trademarks of Valve Corporation.
+> Provided as is, without warranty.
 
 ## Status at a glance (5 November 2026)
 
@@ -38,8 +38,9 @@ share them.
 - **Install**: the Portal 2 Installer app from the
   [releases](https://github.com/kanapitsas/portal2-recomp/releases), or one
   command, `setup.sh`. Only the Xcode command line tools are required.
-- **Half-Life 2** (experimental): a save loads and plays on Mac; see
-  [docs/hl2.md](docs/hl2.md).
+- **Half-Life 2** (experimental): plays on Mac with OpenGL at about 77 fps
+  (M3 Pro, 720p), installed with `./setup.sh --game hl2`; see
+  [below](#half-life-2-experimental).
 
 ## How it works
 
@@ -192,6 +193,36 @@ Details: [docs/d3d9-bridge.md](docs/d3d9-bridge.md).
 It asks before moving the app and its log to the Trash, and asks again for
 the saves. It never touches the Steam game files or the Linux binaries.
 
+## Half-Life 2 (experimental)
+
+The same recompiler also turns the Linux version of **Half-Life 2** (the
+current Steam build, 20th anniversary update) into a native Mac app. **You
+must own Half-Life 2**; as for Portal 2, nothing from Valve is in this
+repository.
+
+Install Half-Life 2 with Steam, fetch its Linux binaries from the Steam
+console with `download_depot 220 224` (about 320 MB), then, in a separate
+clone (one checkout builds one game):
+
+```sh
+git clone https://github.com/kanapitsas/portal2-recomp.git hl2-recomp
+cd hl2-recomp
+./setup.sh --game hl2
+```
+
+It creates `~/Applications/Half-Life 2 Natif.app`, with its own saves folder.
+
+- **Tested**: a few hours of the main game on an M3 Pro, about 77 fps at
+  1280×720 with OpenGL (`--release` build).
+- **Renderer**: OpenGL by default. Metal is slower for HL2 (60–67 fps) and
+  still draws the HDR sky wrong.
+- **Not yet**: iPhone; Episode One, Episode Two and Lost Coast are
+  untested; and some indirect call targets are still being found: a
+  crash ending with `target not recompiled` is one more to add (please
+  report it with the log, `~/Library/Logs/HalfLife2Natif.log`).
+
+Details, manual setup and measurements: [docs/hl2.md](docs/hl2.md).
+
 ## Troubleshooting
 
 - **"Steam is not running"**: the engine exits without a logged-in Steam
@@ -242,6 +273,8 @@ profiles.
 | Controllers | Button prompts and default bindings that match the controller | 💡 |
 | Community | Community maps copied by hand, loaded with `+map` | 📅 |
 | Community | Steam Workshop on Mac (needs the UGC part of the Steam bridge) | 💡 |
+| Half-Life 2 | Mac app from the same recompiler (`setup.sh --game hl2`), OpenGL, main game played for a few hours | 🚧 |
+| Half-Life 2 | Metal renderer without the HDR sky bug, the episodes and Lost Coast, iPhone | 📅 |
 | Rendering | Ray-traced lighting with Metal on M3 and A17 Pro GPUs, in the spirit of Portal with RTX (NVIDIA's RTX Remix is Windows and NVIDIA only, so it cannot be reused) | 💡 |
 
 ## Repository layout
@@ -255,8 +288,8 @@ profiles.
   into `abi-smoke`.
 - `ios/`: app shell, Settings bundle, dependency build, signing project.
 - `installer/`: the Mac installer app (SwiftUI, one file).
-- `config/`: `game-roots.json` (indirect call roots); `local.json` is
-  yours and ignored by git.
+- `config/`: `game-roots.json` and `hl2-roots.json` (indirect call roots
+  of Portal 2 and Half-Life 2); `local.json` is yours and ignored by git.
 - `docs/`: the documents listed below. `experiments/`: the Steam probe.
 - `build/` and `deps/`: generated, ignored by git.
 
@@ -279,6 +312,7 @@ profiles.
 ## Documentation
 
 - [docs/usage.md](docs/usage.md): language, controllers, LAN co-op, manual build, diagnostics
+- [docs/hl2.md](docs/hl2.md): Half-Life 2 (experimental)
 - [docs/ios.md](docs/ios.md): iOS port, controls, settings, back taps
 - [docs/d3d9-bridge.md](docs/d3d9-bridge.md): Metal renderer (Direct3D 9 bridge)
 - [docs/steam.md](docs/steam.md): Steam bridge
@@ -307,4 +341,4 @@ his direction. The history and [STATUS.md](STATUS.md) show the whole process.
 
 Copyright (C) 2026 Raphaël Kanapitsas and contributors.
 
-[GNU GPL v3.0](LICENSE). It does not cover Portal 2 or any Valve material.
+[GNU GPL v3.0](LICENSE). It does not cover Portal 2, Half-Life 2 or any Valve material.

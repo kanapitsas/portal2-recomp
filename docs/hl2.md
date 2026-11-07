@@ -1,22 +1,62 @@
 # Half-Life 2 (experimental)
 
 The same pipeline also recompiles **Half-Life 2** (20th anniversary build,
-Steam app 220, mod `hl2_complete`). It is work in progress: a save loads and
-plays on Mac, but `setup.sh` does not install it yet and only a few hours of
-play have been tested.
+Steam app 220, mod `hl2_complete`). It is experimental: it installs and plays
+on Mac, but only a few hours of play have been tested, the episodes and Lost
+Coast have not been tried, and there is no iPhone build.
 
 **You must own Half-Life 2.** As for Portal 2, everything is generated from
-your own copy and nothing from Valve is in this repository.
+your own copy and nothing from Valve is in this repository. The app and the
+generated code contain Valve's game: keep them for yourself.
+
+## Install
+
+You need what Portal 2 needs (see the [README](../README.md#what-you-need)),
+Half-Life 2 installed by Steam on your Mac, and its Linux binaries:
+
+1. Install Half-Life 2 with Steam (the current version, which has
+   `hl2_complete/`).
+2. Open the Steam console (`open steam://open/console`) and type
+   `download_depot 220 224` (about 320 MB). Wait for "Depot download
+   complete".
+3. In a **separate clone** from your Portal 2 one (a checkout builds one
+   game, `build/` is shared):
+
+   ```sh
+   git clone https://github.com/kanapitsas/portal2-recomp.git hl2-recomp
+   cd hl2-recomp
+   ./setup.sh --game hl2
+   ```
+
+   Without paths, it finds the game in
+   `~/Library/Application Support/Steam/steamapps/common/Half-Life 2` and the
+   depot where `download_depot` put it; otherwise pass them:
+   `./setup.sh --game hl2 "/path/to/Half-Life 2" "/path/to/depot_224"`.
+   Later runs remember the game, so `./setup.sh` is enough.
+
+`setup.sh` downloads Valve's `libsteam_api.dylib` from Steamworks.NET
+2024.8.0 (SHA-256 checked; HL2 needs a newer SDK than Portal 2), builds the
+game with `--release` (about 20 minutes and 4 GB the first time) and creates
+`~/Applications/Half-Life 2 Natif.app`. Open Steam with the account that
+owns Half-Life 2, then open the app.
+
+- Saves and settings: `~/Library/Application Support/Half-Life 2 Natif/userdata`.
+- Log: `~/Library/Logs/HalfLife2Natif.log`.
+- Renderer: **OpenGL** by default, because it is faster than Metal for HL2
+  (see Performance) and Metal still draws the HDR sky wrong (Known limits).
+  To try Metal anyway:
+  `open --env P2_RENDERER=d3d9 -a "Half-Life 2 Natif"`.
+- `./uninstall.sh` in that clone removes the HL2 app, and the saves if you
+  confirm.
 
 ## What differs from Portal 2
 
 - **Game profile** (`tools/games.py`): program `hl2_linux`, game libraries
-  under `bin/` and `hl2_complete/bin/`, roots in `config/hl2-roots.json`.
-  `config/local.json` picks it with `"game": "hl2"`.
-- **Linux binaries**: depot 224 (all i386). Download it from the Steam
-  console (`steam://open/console`):
-  `download_depot 220 224`, then point `linux_root` at the folder Steam
-  prints.
+  under `bin/` and `hl2_complete/bin/`, roots in `config/hl2-roots.json`,
+  app name, log and data folder. `config/local.json` picks it with
+  `"game": "hl2"` (written by `setup.sh --game hl2`).
+- **Linux binaries**: depot 224 (all i386), with Miles' plugins
+  (`bin/linux32/*.asi`), which Portal 2 takes from the game folder instead.
 - **Steamworks**: HL2's `client.so` asks for interfaces from SDK 1.60 and
   1.61, newer than Portal 2's. The bridge calls them by vtable slot
   (`tools/gen_steam.py`), against Valve's `libsteam_api.dylib` from
@@ -36,7 +76,9 @@ your own copy and nothing from Valve is in this repository.
   switch forms (moves scheduled inside the jump sequence, fused table loads,
   pre-scaled indexes).
 
-## Example config/local.json
+## Manual setup
+
+What `setup.sh --game hl2` writes, for a hand-made `config/local.json`:
 
 ```json
 {
@@ -53,14 +95,19 @@ Then:
 
 ```sh
 python3 tools/gameprep.py
-python3 tools/build_game.py
-python3 tools/run_game.py --show --timeout 3600
+python3 tools/build_game.py --release
+python3 tools/make_app.py                            # the app, or:
+python3 tools/run_game.py --show --timeout 3600      # from the terminal
 ```
+
+`run_game.py` uses Metal when `d3d9metal_dylib` is set (unlike the app);
+`P2_RENDERER=opengl` forces OpenGL.
 
 ## Performance
 
 Build to play with `python3 tools/build_game.py --release` (`-O2`, without
-memory checks): the default `--opt 1` checked build is twice as slow.
+memory checks), as `setup.sh` does: the default `--opt 1` checked build is
+2.5 times slower.
 Measured on an M3 Pro (save `half-life-018`, 1280×720, hidden window,
 simulated focus, idle machine, 3 alternating runs each):
 
@@ -70,7 +117,8 @@ simulated focus, idle machine, 3 alternating runs each):
 | `--release` | 77.0 fps | 12.6 ms |
 | `--release --pgo-use` | 79.7 fps (+3.5 %) | 12.1 ms |
 
-Metal (`-vulkan` path) is close: ~60–67 fps with `--release`. The guest gate
+Metal (`-vulkan` path) is slower here: ~60–67 fps with `--release`, one
+reason the app starts on OpenGL. The guest gate
 costs nothing here (`P2_GATE_TIMING=1`: 0.1 % of the main thread). With
 `/usr/bin/sample`, the main thread spends ~66 % in translated game code,
 spread thin (no function above 4 %), and ~20 % in Apple's OpenGL driver and
@@ -139,14 +187,17 @@ risk for now.
 ## Known limits
 
 - Indirect call targets are still being discovered; a crash ending with
-  `target not recompiled` means one more root. `tools/discover_game.py`
-  finds them from real runs (arguments after `--` go to the game, e.g.
-  `+load <save>`).
+  `target not recompiled` means one more root. Please open an issue with the
+  end of `~/Library/Logs/HalfLife2Natif.log` and where it happened.
+  `tools/discover_game.py` finds them from real runs (arguments after `--`
+  go to the game, e.g. `+load <save>`).
 - The game wants the `en_US.UTF-8` locale and warns about glyph support: the
   runtime only provides `C` and `C.UTF-8`.
-- Saves and settings share Portal 2's data folder
-  (`~/Library/Application Support/Portal 2 Natif/userdata`).
-- No app bundle and no iPhone build yet.
+- Mac only: no iPhone build.
+- One game per checkout: Portal 2 and HL2 need two clones (`build/` is
+  shared).
+- Only the main game has been played (a few hours); Episode One, Episode Two
+  and Lost Coast, which the same `hl2_complete` build contains, are untested.
 - Metal: the HDR sky (and the menu background behind the loading screen)
   shows garbage blocks. The six sky faces are DEFAULT-pool DYNAMIC
   1024×512 textures in `A16B16G16R16` (or `A16B16G16R16F` when 36 is
