@@ -9,18 +9,19 @@
 #define EXPORT __attribute__((visibility("default"), used))
 void *steam_stub_interface(const char *version);
 int32_t steam_stub_ticket(void *buffer, int32_t capacity);
+uint32_t steam_stub_app_id(void);
 EXPORT int32_t SteamAPI_ISteamAppList_GetAppBuildId(void *a0, uint32_t a1) { (void)a0; (void)a1; return 0; }
 EXPORT int32_t SteamAPI_ISteamAppList_GetAppInstallDir(void *a0, uint32_t a1, void *a2, int32_t a3) { (void)a0; (void)a1; (void)a2; (void)a3; return 0; }
 EXPORT int32_t SteamAPI_ISteamAppList_GetAppName(void *a0, uint32_t a1, void *a2, int32_t a3) { (void)a0; (void)a1; (void)a2; (void)a3; return 0; }
 EXPORT uint32_t SteamAPI_ISteamAppList_GetInstalledApps(void *a0, void *a1, uint32_t a2) { (void)a0; (void)a1; (void)a2; return 0; }
 EXPORT uint32_t SteamAPI_ISteamAppList_GetNumInstalledApps(void *a0) { (void)a0; return 0; }
 EXPORT bool SteamAPI_ISteamApps_BGetDLCDataByIndex(void *a0, int32_t a1, void *a2, void *a3, void *a4, int32_t a5) { (void)a0; (void)a1; (void)a2; (void)a3; (void)a4; (void)a5; return false; }
-EXPORT bool SteamAPI_ISteamApps_BIsAppInstalled(void *a0, uint32_t a1) { (void)a0; (void)a1; return a1 == 620u; }
+EXPORT bool SteamAPI_ISteamApps_BIsAppInstalled(void *a0, uint32_t a1) { (void)a0; (void)a1; return a1 == steam_stub_app_id(); }
 EXPORT bool SteamAPI_ISteamApps_BIsCybercafe(void *a0) { (void)a0; return false; }
 EXPORT bool SteamAPI_ISteamApps_BIsDlcInstalled(void *a0, uint32_t a1) { (void)a0; (void)a1; return false; }
 EXPORT bool SteamAPI_ISteamApps_BIsLowViolence(void *a0) { (void)a0; return false; }
 EXPORT bool SteamAPI_ISteamApps_BIsSubscribed(void *a0) { (void)a0; return true; }
-EXPORT bool SteamAPI_ISteamApps_BIsSubscribedApp(void *a0, uint32_t a1) { (void)a0; (void)a1; return a1 == 620u; }
+EXPORT bool SteamAPI_ISteamApps_BIsSubscribedApp(void *a0, uint32_t a1) { (void)a0; (void)a1; return a1 == steam_stub_app_id(); }
 EXPORT bool SteamAPI_ISteamApps_BIsSubscribedFromFamilySharing(void *a0) { (void)a0; return false; }
 EXPORT bool SteamAPI_ISteamApps_BIsSubscribedFromFreeWeekend(void *a0) { (void)a0; return false; }
 EXPORT bool SteamAPI_ISteamApps_BIsTimedTrial(void *a0, void *a1, void *a2) { (void)a0; (void)a1; (void)a2; return false; }
@@ -708,7 +709,7 @@ EXPORT bool SteamAPI_ISteamUtils_DismissFloatingGamepadTextInput(void *a0) { (vo
 EXPORT int32_t SteamAPI_ISteamUtils_FilterText(void *a0, int32_t a1, uint64_t a2, const char *a3, void *a4, uint32_t a5) { (void)a0; (void)a1; (void)a2; (void)a3; (void)a4; (void)a5; return 0; }
 EXPORT int32_t SteamAPI_ISteamUtils_GetAPICallFailureReason(void *a0, uint64_t a1) { (void)a0; (void)a1; return 0; }
 EXPORT bool SteamAPI_ISteamUtils_GetAPICallResult(void *a0, uint64_t a1, void *a2, int32_t a3, int32_t a4, void *a5) { (void)a0; (void)a1; (void)a2; (void)a3; (void)a4; (void)a5; return false; }
-EXPORT uint32_t SteamAPI_ISteamUtils_GetAppID(void *a0) { (void)a0; return 620u; }
+EXPORT uint32_t SteamAPI_ISteamUtils_GetAppID(void *a0) { (void)a0; return steam_stub_app_id(); }
 EXPORT int32_t SteamAPI_ISteamUtils_GetConnectedUniverse(void *a0) { (void)a0; return 1; }
 EXPORT uint8_t SteamAPI_ISteamUtils_GetCurrentBatteryPower(void *a0) { (void)a0; return 255; }
 EXPORT bool SteamAPI_ISteamUtils_GetEnteredGamepadTextInput(void *a0, void *a1, uint32_t a2) { (void)a0; (void)a1; (void)a2; return false; }

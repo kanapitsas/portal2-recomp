@@ -74,9 +74,6 @@ if [ -n "$CONFIGURED_GAME" ] && [ "$CONFIGURED_GAME" != "$GAME_ID" ]; then
   and run ./setup.sh --game $GAME_ID there." >&2
     exit 2
 fi
-if [ $IOS = 1 ] && [ "$GAME_ID" != portal2 ]; then
-    echo "--ios builds Portal 2 only: $TITLE runs on Mac for now" >&2; exit 2
-fi
 APP_NAME="$TITLE Natif"
 LOG_NAME="$(printf '%s' "$TITLE" | tr -d ' -')Natif.log"
 STEAMWORKS_URL="https://github.com/rlabrecque/Steamworks.NET/releases/download/$STEAMWORKS_VERSION/Steamworks.NET_$STEAMWORKS_VERSION.unitypackage"
@@ -392,7 +389,11 @@ if fresh:   # each game its own folder (tools/localconfig.py)
     config['user_dir'] = str(Path.home() / 'Library/Application Support' / os.environ['P2_SETUP_APP_NAME'] / 'userdata')
 if team and not config.get('ios_bundle_id'):
     # Unique to the team: free accounts cannot reuse an identifier taken elsewhere.
-    config['ios_bundle_id'] = f'local.portal2recomp.{team.lower()}'
+    # Portal 2 keeps its identifier; another game gets its own, so that it does
+    # not replace Portal 2's app on the phone.
+    game_id = os.environ['P2_SETUP_GAME']
+    prefix = 'portal2recomp' if game_id == 'portal2' else f'{game_id}recomp'
+    config['ios_bundle_id'] = f'local.{prefix}.{team.lower()}'
 p.write_text(json.dumps(config, indent=2) + '\n')
 for key, value in config.items():
     print(f'{key}: {value}')

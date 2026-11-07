@@ -4,7 +4,8 @@ libsteam_api function the bridge (runtime/steam_generated.c) can call, for the
 Steam stub of the iOS build (runtime/ios/steam_stub.c).
 
 By default a function returns 0, false, NULL or ""; RESPONSES gives the answers
-of a logged-in, offline user who owns Portal 2 (620). A function returning a
+of a logged-in, offline user who owns the game of the build (SteamAppId, set by
+ios/main_ios.c from the game profile: 620 for Portal 2, 220 for Half-Life 2). A function returning a
 pointer from an interface version returns the stub's interface object.
 Functions already hand-written in steam_stub.c are skipped.
 
@@ -15,7 +16,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-APP_ID = 620
+APP_ID = 'steam_stub_app_id()'   # runtime/ios/steam_stub.c
 STEAM_ID = 76561197960265729   # compte individuel public valide, univers 1
 
 # Réponses explicites (corps de fonction C), par nom de fonction plate ;
@@ -25,13 +26,13 @@ RESPONSES = {
     'SteamAPI_ISteamUser_GetSteamID': f'return {STEAM_ID}ull;',
     'SteamAPI_ISteamUser_GetHSteamUser': 'return 1;',
     'SteamAPI_ISteamApps_BIsSubscribed': 'return true;',
-    'SteamAPI_ISteamApps_BIsSubscribedApp': f'return a1 == {APP_ID}u;',
-    'SteamAPI_ISteamApps_BIsAppInstalled': f'return a1 == {APP_ID}u;',
+    'SteamAPI_ISteamApps_BIsSubscribedApp': f'return a1 == {APP_ID};',
+    'SteamAPI_ISteamApps_BIsAppInstalled': f'return a1 == {APP_ID};',
     'SteamAPI_ISteamApps_BIsDlcInstalled': 'return false;',
     'SteamAPI_ISteamApps_GetCurrentGameLanguage': 'return "english";',
     'SteamAPI_ISteamApps_GetAvailableGameLanguages': 'return "english";',
     'SteamAPI_ISteamApps_GetAppOwner': f'return {STEAM_ID}ull;',
-    'SteamAPI_ISteamUtils_GetAppID': f'return {APP_ID}u;',
+    'SteamAPI_ISteamUtils_GetAppID': f'return {APP_ID};',
     'SteamAPI_ISteamUtils_GetIPCountry': 'return "FR";',
     'SteamAPI_ISteamUtils_GetServerRealTime': 'return (uint32_t)time(NULL);',
     'SteamAPI_ISteamUtils_GetCurrentBatteryPower': 'return 255;',
@@ -87,7 +88,8 @@ def generate():
              '#include <stdbool.h>', '#include <stdint.h>', '#include <stddef.h>', '#include <time.h>',
              '#define EXPORT __attribute__((visibility("default"), used))',
              'void *steam_stub_interface(const char *version);',
-             'int32_t steam_stub_ticket(void *buffer, int32_t capacity);']
+             'int32_t steam_stub_ticket(void *buffer, int32_t capacity);',
+             'uint32_t steam_stub_app_id(void);']
     count = 0
     for name, (ret, args) in sorted(signatures().items()):
         if name in skip:

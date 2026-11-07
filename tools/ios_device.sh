@@ -21,6 +21,9 @@ APP_ID=$(python3 tools/ios_bundle_id.py)
 PROBE_ID=$(python3 tools/ios_bundle_id.py --probe)
 GAME_ROOT=$(python3 -c "import json;print(json.load(open('config/local.json'))['game_root'])")
 LINUX_ROOT=$(python3 -c "import json;print(json.load(open('config/local.json'))['linux_root'])")
+# Game of the build (tools/games.py): its mod and the folders of its data.
+GAME_PROFILE=(python3 -c 'import sys; sys.path.insert(0, "tools"); import games, localconfig; g = games.profile(localconfig.load()); print(g[sys.argv[1]] if isinstance(g[sys.argv[1]], str) else " ".join(g[sys.argv[1]]))')
+MOD=$("${GAME_PROFILE[@]}" mod)
 dc() {  # sous-commande de trois mots, --device, puis le reste (options et arguments)
   xcrun devicectl "${@:1:3}" --device "$DEVICE" "${@:4}"
 }
@@ -64,11 +67,12 @@ install)
   dc device install app build/ios/device/Portal2.app
   ;;
 data)
-  # Sans la bande son ni sdk_content (inutiles au jeu) : ~11,5 Go.
+  # Dossiers du profil (ios_data) : Portal 2 sans la bande son ni sdk_content
+  # (~11,5 Go), Half-Life 2 avec les épisodes et Lost Coast (~10 Go).
   mark_data incomplete
   copy_to $APP_ID build/game/prep Documents/prep
   copy_to $APP_ID "$LINUX_ROOT" Documents/linux
-  for d in bin platform update portal2 portal2_dlc1 portal2_dlc2; do
+  for d in $("${GAME_PROFILE[@]}" ios_data); do
     [ -e "$GAME_ROOT/$d" ] && copy_to $APP_ID "$GAME_ROOT/$d" "Documents/game/$d"
   done
   mark_data complete
@@ -83,7 +87,7 @@ has-mark)  # un état existe (copie commencée par cette version du script)
   has_file "$DATA_MARK"
   ;;
 has-game)  # copies antérieures au marqueur : le dossier du jeu suffit
-  has_file Documents/game/portal2
+  has_file "Documents/game/$MOD"
   ;;
 prep)
   # Fichier par fichier : chacun remplace son homologue (les adresses des

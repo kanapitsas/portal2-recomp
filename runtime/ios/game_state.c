@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "game_ios.h"
 #include "modules.h"
 #include "rt.h"
 
@@ -39,10 +40,11 @@ int rt_ios_game_ui_visible(void) { return ui_visible; }
 // en réponse linéaire (0) tant que la manette virtuelle est là, et retrouve sa
 // valeur quand elle part (vraie manette branchée).
 //
-// Variables lues et écrites par ICvar (« VEngineCvar007 », libvstdlib.so) :
-// FindCommandBase, 14e entrée de sa table (IAppSystem en a 8, puis
-// AllocateDLLIdentifier, Register/UnregisterConCommand, UnregisterConCommands,
-// GetCommandLineValue ; même indice que l'outil SAR pour Portal 2). Le résultat
+// Variables lues et écrites par ICvar (libvstdlib.so ; « VEngineCvar007 »
+// pour Portal 2, « VEngineCvar004 » pour HL2) : FindCommandBase, 14e entrée de
+// sa table pour Portal 2 (IAppSystem en a 8, puis AllocateDLLIdentifier,
+// Register/UnregisterConCommand, UnregisterConCommands, GetCommandLineValue ;
+// même indice que l'outil SAR), 11e pour HL2 (game_ios.c). Le résultat
 // est vérifié par son nom (ConCommandBase : vptr, m_pNext, m_bRegistered,
 // m_pszName) avant tout usage ; la valeur est posée par IConVar::SetValue(const
 // char *), 1re entrée de la table d'IConVar (à +24 dans ConVar), et relue dans
@@ -67,7 +69,7 @@ static uint32_t find_convar(CPU *c, const char *name) {
     if (!icvar) {
         const GuestModule *vstdlib = rt_find_module("libvstdlib.so");
         uint32_t create = vstdlib ? rt_module_symbol(vstdlib, "CreateInterface") : 0;
-        uint32_t text = create ? guest_text("VEngineCvar007") : 0;
+        uint32_t text = create ? guest_text(rt_ios_current_game()->cvar_interface) : 0;
         uint32_t args[2] = {text, 0};
         icvar = text ? rt_invoke(c, create, args, 2) : 0;
         rt_free(text);
@@ -77,7 +79,7 @@ static uint32_t find_convar(CPU *c, const char *name) {
     uint32_t text = guest_text(name);
     if (!text) return 0;
     uint32_t args[2] = {icvar, text};
-    uint32_t base = rt_invoke(c, R32(R32(icvar) + 13 * 4), args, 2);
+    uint32_t base = rt_invoke(c, R32(R32(icvar) + rt_ios_current_game()->find_command_base * 4), args, 2);
     rt_free(text);
     if (!plausible(base) || !plausible(R32(base + 12)) || strcmp(GPTR(R32(base + 12)), name) ||
         !plausible(R32(base + 28))) return 0;
@@ -140,7 +142,7 @@ static void run_console_command(CPU *c, const char *line) {
     uint32_t text = guest_text(name);
     if (!text) return;
     uint32_t args[2] = {icvar, text};
-    uint32_t base = rt_invoke(c, R32(R32(icvar) + 13 * 4), args, 2);
+    uint32_t base = rt_invoke(c, R32(R32(icvar) + rt_ios_current_game()->find_command_base * 4), args, 2);
     rt_free(text);
     if (!plausible(base) || !plausible(R32(base + 12)) || strcmp(GPTR(R32(base + 12)), name)) {
         fprintf(stderr, "[ios] commande %s introuvable\n", name); return;

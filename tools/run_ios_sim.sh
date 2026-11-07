@@ -9,7 +9,8 @@ DEVICE=${P2_SIM_DEVICE:-$(xcrun simctl list devices booted | grep -oE '[0-9A-F-]
 DEVICE=${DEVICE:-$(xcrun simctl list devices available | grep iPhone | grep -oE '[0-9A-F-]{36}' | head -1)}
 APP_ID=$(python3 tools/ios_bundle_id.py)
 SECONDS_MAX=${1:-120}; shift || true
-GAME_ARGS=("$@"); [ ${#GAME_ARGS[@]} -eq 0 ] && GAME_ARGS=(-game portal2 -novid -fullscreen)
+MOD=$(python3 -c 'import sys; sys.path.insert(0, "tools"); import games, localconfig; print(games.profile(localconfig.load())["mod"])')
+GAME_ARGS=("$@"); [ ${#GAME_ARGS[@]} -eq 0 ] && GAME_ARGS=(-game "$MOD" -novid -fullscreen)
 GAME_ROOT=$(python3 -c "import json;print(json.load(open('config/local.json'))['game_root'])")
 LINUX_ROOT=$(python3 -c "import json;print(json.load(open('config/local.json'))['linux_root'])")
 xcrun simctl bootstatus "$DEVICE" -b >/dev/null 2>&1 || xcrun simctl boot "$DEVICE"

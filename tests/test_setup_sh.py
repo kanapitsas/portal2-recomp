@@ -38,8 +38,7 @@ class SetupScriptTests(unittest.TestCase):
     def test_game_option_errors(self):
         for args, message in ((['--game'], '--game needs a value'),
                               (['--game', 'quake'], 'unknown game quake'),
-                              (['--game=quake'], 'unknown game quake'),
-                              (['--ios', '--game', 'hl2'], '--ios builds Portal 2 only')):
+                              (['--game=quake'], 'unknown game quake')):
             result = run_setup(*args)
             self.assertEqual(result.returncode, 2, args)
             self.assertIn(message, result.stderr, args)

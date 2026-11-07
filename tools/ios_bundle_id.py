@@ -23,7 +23,13 @@ def bundle_id(probe=False):
             value = json.loads((ROOT / 'config/local.json').read_text()).get('ios_bundle_id')
         except FileNotFoundError:
             value = None
-    value = value or DEFAULT
+    if not value:
+        # Example identifier of the configured game (another game must not
+        # replace Portal 2's app in the simulator).
+        sys.path.insert(0, str(ROOT / 'tools'))
+        import games, localconfig
+        name = games.profile(localconfig.load())['name']
+        value = DEFAULT if name == 'portal2' else f'com.example.{name}-recomp'
     return value + '.probe' if probe else value
 
 

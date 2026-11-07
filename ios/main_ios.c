@@ -6,7 +6,8 @@
 // fichier launch.args du paquet (un argument par ligne, # pour commenter),
 // complété par Documents/launch.args s'il existe.
 // --user-dir, --images, --game-dir et --linux-root manquants : dossiers
-// portal2-userdata, prep, game et linux de Documents (s'ils existent).
+// <jeu>-userdata (portal2-userdata, hl2-userdata), prep, game et linux de
+// Documents (s'ils existent). Le jeu vient de l'Info.plist (runtime/ios/game_ios.c).
 #include <SDL_main.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <limits.h>
@@ -17,6 +18,7 @@
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "game_ios.h"
 #include "metal_ios.h"
 #include "settings.h"
 
@@ -41,7 +43,7 @@ static void read_launch_file(const char *bundle) {
 // Données du jeu copiées dans Documents (game, prep, linux : ~11,5 Go) :
 // exclues de la sauvegarde iCloud/iTunes, qui les recopierait à chaque
 // sauvegarde du téléphone alors qu'elles viennent du Mac. Les sauvegardes du
-// joueur (portal2-userdata) restent sauvegardées. Attribut posé sur le dossier
+// joueur (<jeu>-userdata) restent sauvegardées. Attribut posé sur le dossier
 // (il vaut pour son contenu), seulement s'il manque : coût d'un stat par dossier.
 static void exclude_from_backup(const char *documents) {
     static const char *const folders[] = {"game", "prep", "linux"};
@@ -67,8 +69,8 @@ static void exclude_from_backup(const char *documents) {
         if (list) snprintf(list + strlen(list), sizeof(done) - strlen(list), "%s%s", list[0] ? ", " : "", folders[i]);
     }
     if (done[0] || already[0])
-        fprintf(stderr, "[ios] sauvegarde iCloud : exclus %s%s%s%s, portal2-userdata gardé\n", done,
-                done[0] && already[0] ? " ; " : "", already[0] ? "déjà exclus " : "", already);
+        fprintf(stderr, "[ios] sauvegarde iCloud : exclus %s%s%s%s, %s gardé\n", done,
+                done[0] && already[0] ? " ; " : "", already[0] ? "déjà exclus " : "", already, rt_ios_current_game()->userdata);
 }
 
 int main(int argc, char **argv) {
@@ -96,6 +98,10 @@ int main(int argc, char **argv) {
         fprintf(stderr, "[ios] descripteurs de fichiers : %llu\n", (unsigned long long)files.rlim_cur);
     }
     fprintf(stderr, "[ios] réglages : %s\n", applied ? settings : "aucun modifié");
+    const rt_ios_game *game = rt_ios_current_game();
+    fprintf(stderr, "[ios] jeu : %s (mod %s, %s)\n", game->name, game->mod, game->userdata);
+    // Tapes au dos coupées par défaut dans HL2 (game_ios.c) ; P2_BACKTAP=1 les rend.
+    if (!game->back_taps) setenv("P2_BACKTAP", "0", 0);
     // Rendu Metal (P2_RENDERER=d3d9, Réglages > Rendu) : vérifié avant que
     // src/main.c initialise libd3d9metal ; OpenGL sinon.
     rt_ios_metal_prepare();
@@ -107,9 +113,9 @@ int main(int argc, char **argv) {
     if (slash) *slash = 0;
     // Stub Steam du build iOS (runtime/ios/steam_stub.c) : lié dans l'exécutable.
     setenv("P2_STEAM_API_DYLIB", exe, 0);
-    setenv("SteamAppId", "620", 0);
-    setenv("SteamGameId", "620", 0);
-    push(argc > 0 ? argv[0] : "portal2");
+    setenv("SteamAppId", game->app_id, 0);
+    setenv("SteamGameId", game->app_id, 0);
+    push(argc > 0 ? argv[0] : game->name);
     if (argc > 1) for (int i = 1; i < argc; ++i) push(argv[i]);
     else {
         read_launch_file(bundle);
@@ -129,13 +135,13 @@ int main(int argc, char **argv) {
         snprintf(documents, sizeof(documents), "%s/Documents", getenv("HOME"));
         mkdir(documents, 0755);
         static const struct { const char *option, *folder; int create; } defaults[] = {
-            {"--user-dir", "portal2-userdata", 1}, {"--images", "prep", 0},
+            {"--user-dir", NULL, 1}, {"--images", "prep", 0},
             {"--game-dir", "game", 0}, {"--linux-root", "linux", 0}};
         for (size_t d = 0; d < sizeof(defaults) / sizeof(*defaults) && count + 2 < 256; ++d) {
             int present = 0;
             for (int i = 1; i < count; ++i) present |= !strcmp(arguments[i], defaults[d].option);
             char path[PATH_MAX]; struct stat st;
-            snprintf(path, sizeof(path), "%s/%s", documents, defaults[d].folder);
+            snprintf(path, sizeof(path), "%s/%s", documents, defaults[d].folder ? defaults[d].folder : game->userdata);
             if (present) continue;
             if (defaults[d].create) mkdir(path, 0755);
             else if (stat(path, &st) || !S_ISDIR(st.st_mode)) continue;

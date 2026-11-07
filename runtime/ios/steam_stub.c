@@ -47,8 +47,16 @@ void *steam_stub_interface(const char *version) {
     return found;
 }
 
+// App possédée : SteamAppId, posée par ios/main_ios.c d'après le jeu du build
+// (620 Portal 2, 220 Half-Life 2) ; 620 à défaut.
+uint32_t steam_stub_app_id(void) {
+    const char *id = getenv("SteamAppId");
+    uint32_t value = id ? (uint32_t)strtoul(id, NULL, 10) : 0;
+    return value ? value : 620u;
+}
+
 // ---- cycle de vie ----
-EXPORT bool SteamAPI_InitSafe(void) { fprintf(stderr, "[steam-stub] hors ligne : stub iOS, app 620\n"); return true; }
+EXPORT bool SteamAPI_InitSafe(void) { fprintf(stderr, "[steam-stub] hors ligne : stub iOS, app %u\n", steam_stub_app_id()); return true; }
 EXPORT void SteamAPI_Shutdown(void) {}
 EXPORT bool SteamAPI_RestartAppIfNecessary(uint32_t app) { (void)app; return false; }
 EXPORT int32_t SteamAPI_GetHSteamPipe(void) { return 1; }

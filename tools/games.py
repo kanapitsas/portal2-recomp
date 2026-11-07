@@ -30,6 +30,13 @@ GAMES = {
         bundle_id='fr.kanapitsas.portal2-native',
         icon='portal2/resource/game.icns',
         renderer=None,   # Metal when libd3d9metal is there
+        # iOS app (tools/build_ios.py): home screen name, executable, and the
+        # Info.plist key P2Game that runtime/ios/game_ios.c reads.
+        ios_name='Portal 2',
+        ios_executable='portal2',
+        # Folders of the game copy that tools/ios_device.sh data copies to the
+        # device (Documents/game), without the soundtrack or sdk_content.
+        ios_data=('bin', 'platform', 'update', 'portal2', 'portal2_dlc1', 'portal2_dlc2'),
     ),
     # Half-Life 2 since the 20th anniversary update (depot 224): episodes and
     # Lost Coast live in the hl2_complete mod; hl2/ and hl2mp/ hold other
@@ -58,6 +65,11 @@ GAMES = {
         bundle_id='fr.kanapitsas.hl2-native',
         icon='hl2/resource/game.icns',
         renderer=None,   # Metal when libd3d9metal is there, as for Portal 2 (docs/hl2.md)
+        ios_name='Half-Life 2',
+        ios_executable='hl2',
+        # hl2_complete mounts the VPKs of hl2, episodic and ep2 (gameinfo.txt);
+        # lostcoast for its map. hl2mp and the macOS launcher are not needed.
+        ios_data=('bin', 'platform', 'hl2', 'episodic', 'ep2', 'lostcoast', 'hl2_complete'),
     ),
 }
 
