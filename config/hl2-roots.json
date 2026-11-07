@@ -156,5 +156,6 @@
   "shaderapivk.so:code:0x252a4",
   "shaderapivk.so:code:0x253c8",
   "shaderapivk.so:code:0x252ea",
-  "shaderapivk.so:code:0x253a8"
+  "shaderapivk.so:code:0x253a8",
+  "materialsystem.so:code:0xaf37c"
 ]
