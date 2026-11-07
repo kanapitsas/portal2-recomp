@@ -35,6 +35,8 @@ uint32_t steam_proxy(CPU *c, void *host, const char *version);
 
 // Introspection pour les tests.
 const char *steam_dylib_path(void);
+// Valeur d'une clé de premier niveau d'un texte JSON (config/local.json) ; 0 si absente.
+int steam_config_text_value(const char *text, const char *key, char *out, size_t size);
 int steam_dylib_available(void);
 uint32_t steam_vtable(CPU *c, const char *version);
 void *steam_proxy_host(uint32_t proxy);

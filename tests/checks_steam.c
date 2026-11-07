@@ -471,3 +471,17 @@ RT_CHECK(steam_callback_tail_padding_table) {
     assert(steam_callback_guest_size(2002, 20) == 20);   // taille inattendue : inchangée (piégera)
     assert(steam_callback_guest_size(1101, 16) == 16);   // autres callbacks inchangés
 }
+
+// config/local.json à deux jeux : seules les clés de premier niveau (Portal 2 et
+// partagées) comptent, même quand la section "games" vient avant elles.
+RT_CHECK(steam_config_reads_top_level_keys_only) {
+    char out[256];
+    const char *text = "{\"games\": {\"hl2\": {\"steam_appid\": 220, \"steam_api_dylib\": \"/sw2024/x.dylib\"}},\n"
+                       " \"note\": \"steam_appid\", \"list\": [{\"steam_appid\": 1}],\n"
+                       " \"steam_api_dylib\": \"/sw20\\\"1/x.dylib\", \"steam_appid\": 620}";
+    assert(steam_config_text_value(text, "steam_appid", out, sizeof(out)) && !strcmp(out, "620"));
+    assert(steam_config_text_value(text, "steam_api_dylib", out, sizeof(out)) && !strcmp(out, "/sw20\"1/x.dylib"));
+    assert(!steam_config_text_value("{\"games\": {\"hl2\": {\"steam_appid\": 220}}}", "steam_appid", out, sizeof(out)));
+    assert(!steam_config_text_value("{\"steam_appid\": ", "steam_appid", out, sizeof(out)));
+    assert(!steam_config_text_value("", "steam_appid", out, sizeof(out)));
+}

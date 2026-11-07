@@ -65,7 +65,45 @@ static int repository(char *out, size_t size) {
     return snprintf(out, size, "%s/..", real) >= (int)size ? -1 : 0;
 }
 
-// Valeur (chaîne ou nombre) d'une clé de premier niveau de config/local.json.
+// Valeur (chaîne ou nombre) d'une clé de premier niveau d'un texte JSON. Les
+// clés des sections ("games": {"hl2": {...}}, autre jeu que Portal 2) sont
+// ignorées : seules les clés de profondeur 1 comptent, quel que soit leur ordre.
+int steam_config_text_value(const char *text, const char *key, char *out, size_t size) {
+    int depth = 0;
+    size_t key_length = strlen(key);
+    for (const char *p = text; *p; ++p) {
+        if (*p == '{' || *p == '[') { ++depth; continue; }
+        if (*p == '}' || *p == ']') { --depth; continue; }
+        if (*p != '"') continue;
+        const char *start = ++p;                  // chaîne : clé ou valeur
+        while (*p && *p != '"') p += (*p == '\\' && p[1]) ? 2 : 1;
+        if (!*p) return 0;
+        size_t length = (size_t)(p - start);
+        if (depth != 1 || length != key_length || memcmp(start, key, length)) continue;
+        const char *q = p + 1;
+        while (*q == ' ' || *q == '\t' || *q == '\n' || *q == '\r') ++q;
+        if (*q++ != ':') continue;                // une valeur égale au nom de la clé
+        while (*q == ' ' || *q == '\t' || *q == '\n' || *q == '\r') ++q;
+        size_t used = 0;
+        if (*q == '"') {
+            for (++q; *q && *q != '"' && used + 1 < size; ++q) {
+                if (*q == '\\' && q[1]) ++q;
+                out[used++] = *q;
+            }
+            if (*q != '"') return 0;
+        } else {
+            while ((*q == '-' || (*q >= '0' && *q <= '9')) && used + 1 < size) out[used++] = *q++;
+            if (!used) return 0;
+        }
+        out[used] = 0;
+        return 1;
+    }
+    return 0;
+}
+
+// Valeur d'une clé de premier niveau de config/local.json (celles de Portal 2 et
+// les clés partagées ; un autre jeu reçoit les siennes de tools/run_game.py ou
+// de son lanceur, par l'environnement).
 static int config_value(const char *key, char *out, size_t size) {
     char root[PATH_MAX], file[PATH_MAX];
     if (repository(root, sizeof(root)) || snprintf(file, sizeof(file), "%s/config/local.json", root) >= (int)sizeof(file))
@@ -76,27 +114,7 @@ static int config_value(const char *key, char *out, size_t size) {
     size_t n = fread(text, 1, sizeof(text) - 1, f);
     fclose(f);
     text[n] = 0;
-    char quoted[128];
-    snprintf(quoted, sizeof(quoted), "\"%s\"", key);
-    const char *p = strstr(text, quoted);
-    if (!p) return 0;
-    p += strlen(quoted);
-    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') ++p;
-    if (*p++ != ':') return 0;
-    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') ++p;
-    size_t used = 0;
-    if (*p == '"') {
-        for (++p; *p && *p != '"' && used + 1 < size; ++p) {
-            if (*p == '\\' && p[1]) ++p;
-            out[used++] = *p;
-        }
-        if (*p != '"') return 0;
-    } else {
-        while ((*p == '-' || (*p >= '0' && *p <= '9')) && used + 1 < size) out[used++] = *p++;
-        if (!used) return 0;
-    }
-    out[used] = 0;
-    return 1;
+    return steam_config_text_value(text, key, out, size);
 }
 
 const char *steam_dylib_path(void) {
