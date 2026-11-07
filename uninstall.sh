@@ -38,6 +38,7 @@ if [ "$(config_get game)" = hl2 ]; then
     SUPPORT="$H/Library/Application Support/$NAME"
     LOG="$H/Library/Logs/HalfLife2Natif.log"
     TITLE="Half-Life 2"; GAME_SIZE=""; DEPOT="depot 224 (about 320 MB)"
+    BUILD_DIR=""   # the installer only builds Portal 2: its folder is never offered from here
 fi
 ask() {  # question -> 0 only for an explicit yes
     local answer=""

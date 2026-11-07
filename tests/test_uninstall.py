@@ -116,6 +116,14 @@ class UninstallTests(unittest.TestCase):
             self.run_script('y\ny\n')
             self.assertTrue((self.support / 'userdata/portal2/SAVE').is_dir(), user_dir)
 
+    def test_hl2_keeps_the_portal2_installer_build_folder(self):
+        build = self.home / 'Library/Application Support/Portal 2 Natif Build'
+        (build / 'build').mkdir(parents=True)
+        self.config.write_text(json.dumps({'game': 'hl2'}))
+        out = self.run_script('y\ny\n')
+        self.assertTrue((build / 'build').is_dir())
+        self.assertNotIn('source and build', out)
+
     def test_nothing_installed(self):
         self.run_script('y\ny\n')
         out = self.run_script('y\ny\n')
