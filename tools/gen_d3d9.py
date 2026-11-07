@@ -289,8 +289,8 @@ interface IDirect3DQuery9 : IUnknown {D9771460-A695-4F26-BBD3-27B840B541CC}
     HRESULT GetDevice(pp:IDirect3DDevice9 ppDevice)
     DWORD GetType()
     DWORD GetDataSize()
-    HRESULT Issue(u dwIssueFlags)
-    HRESULT GetData(out:dwSize pData, u dwSize, u dwGetDataFlags)
+    HRESULT Issue(u dwIssueFlags) !manual
+    HRESULT GetData(out:dwSize pData, u dwSize, u dwGetDataFlags) !manual
 
 interface IDirect3D9Ex : IDirect3D9 {02177241-69FC-400C-8FF1-93A44DF6861D}
     UINT GetAdapterModeCountEx(u Adapter, in:12 pFilter)

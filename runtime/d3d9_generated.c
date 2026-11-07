@@ -1680,17 +1680,6 @@ static void t_IDirect3DPixelShader9_GetFunction(CPU *c, void *self, uint32_t a) 
     c->eax = (uint32_t)hr;
 }
 
-static void t_IDirect3DQuery9_GetData(CPU *c, void *self, uint32_t a) {
-    uint32_t g_pData = R32(a + 0);
-    uint32_t g_dwSize = R32(a + 4);
-    uint32_t g_dwGetDataFlags = R32(a + 8);
-    uint32_t a_dwSize = g_dwSize;
-    uint32_t a_dwGetDataFlags = g_dwGetDataFlags;
-    void *a_pData = d3d9_out(c, g_pData, (uint64_t)(a_dwSize));
-    int32_t hr = ((int32_t (*)(void *, void *, uint32_t, uint32_t))D3D9_VTBL(self)[7])(self, a_pData, a_dwSize, a_dwGetDataFlags);
-    c->eax = (uint32_t)hr;
-}
-
 static void t_IDirect3DQuery9_GetDataSize(CPU *c, void *self, uint32_t a) {
     c->eax = ((uint32_t (*)(void *))D3D9_VTBL(self)[5])(self);
     (void)a;
@@ -1707,13 +1696,6 @@ static void t_IDirect3DQuery9_GetDevice(CPU *c, void *self, uint32_t a) {
 static void t_IDirect3DQuery9_GetType(CPU *c, void *self, uint32_t a) {
     c->eax = ((uint32_t (*)(void *))D3D9_VTBL(self)[4])(self);
     (void)a;
-}
-
-static void t_IDirect3DQuery9_Issue(CPU *c, void *self, uint32_t a) {
-    uint32_t g_dwIssueFlags = R32(a + 0);
-    uint32_t a_dwIssueFlags = g_dwIssueFlags;
-    int32_t hr = ((int32_t (*)(void *, uint32_t))D3D9_VTBL(self)[6])(self, a_dwIssueFlags);
-    c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DResource9_FreePrivateData(CPU *c, void *self, uint32_t a) {
@@ -2258,11 +2240,11 @@ const D3d9Method rt_d3d9_methods[] = {
     {"IDirect3DIndexBuffer9::Unlock", t_IDirect3DIndexBuffer9_Unlock, 0x400u, 12, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DPixelShader9::GetDevice", t_IDirect3DPixelShader9_GetDevice, 0x8000u, 3, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DPixelShader9::GetFunction", t_IDirect3DPixelShader9_GetFunction, 0x8000u, 4, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DQuery9::GetData", t_IDirect3DQuery9_GetData, 0x20000u, 7, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DQuery9::GetData", d3d9_manual_IDirect3DQuery9_GetData, 0x20000u, 7, D3D9_MANUAL, D3D9_RET_HRESULT},
     {"IDirect3DQuery9::GetDataSize", t_IDirect3DQuery9_GetDataSize, 0x20000u, 5, D3D9_GENERATED, D3D9_RET_U32},
     {"IDirect3DQuery9::GetDevice", t_IDirect3DQuery9_GetDevice, 0x20000u, 3, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DQuery9::GetType", t_IDirect3DQuery9_GetType, 0x20000u, 4, D3D9_GENERATED, D3D9_RET_U32},
-    {"IDirect3DQuery9::Issue", t_IDirect3DQuery9_Issue, 0x20000u, 6, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DQuery9::Issue", d3d9_manual_IDirect3DQuery9_Issue, 0x20000u, 6, D3D9_MANUAL, D3D9_RET_HRESULT},
     {"IDirect3DResource9::FreePrivateData", t_IDirect3DResource9_FreePrivateData, 0xfc0u, 6, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DResource9::GetDevice", t_IDirect3DResource9_GetDevice, 0xfc0u, 3, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DResource9::GetPriority", t_IDirect3DResource9_GetPriority, 0xfc0u, 8, D3D9_GENERATED, D3D9_RET_U32},

@@ -946,11 +946,65 @@ void rt_d3d9_draw_overlay(void *dev) {   // aussi appelé par tests/checks_d3d9.
     ((Release)D3D9_VTBL(back)[s_release])(back);
 }
 
+// Requêtes D3DQUERYTYPE_EVENT. Source (mat_frame_sync_enable) attend, à
+// chaque image, l'événement émis à l'image précédente, en dormant 1 ms entre
+// deux GetData. Sous Direct3D, le pilote soumet le travail au fil de l'eau
+// et l'événement est vite atteint ; libd3d9metal ne soumet l'image qu'au
+// Present, et ne le signale qu'une fois l'image entière exécutée : CPU et
+// GPU travaillent alors l'un après l'autre (HL2 : 83 i/s, 120 sans cette
+// attente). Un événement émis avant le dernier Present est donc annoncé
+// atteint : le jeu garde au plus une image d'avance, et libd3d9metal borne
+// déjà l'avance par ses surfaces d'affichage. P2_D3D9_STRICT_EVENTS=1 rend
+// la réponse de la bibliothèque telle quelle.
+enum { D3DQUERYTYPE_EVENT = 8, D3DISSUE_END = 1, EVENT_SLOTS = 256, SLOT_QUERY_GETTYPE = 4 };
+static uint64_t d3d9_presents;                       // Present réussis (sous le verrou invité)
+static struct { void *query; uint64_t present; } event_issued[EVENT_SLOTS];
+static int strict_events(void) {
+    static int value = -1;
+    if (value < 0) value = getenv("P2_D3D9_STRICT_EVENTS") != NULL;
+    return value;
+}
+static int is_event(void *query) {
+    return ((uint32_t (*)(void *))D3D9_VTBL(query)[SLOT_QUERY_GETTYPE])(query) == D3DQUERYTYPE_EVENT;
+}
+static size_t event_slot(void *query) {              // adressage ouvert, sondage linéaire
+    size_t i = ((uintptr_t)query >> 4) % EVENT_SLOTS;
+    for (size_t n = 0; n < EVENT_SLOTS; ++n, i = (i + 1) % EVENT_SLOTS)
+        if (event_issued[i].query == query || !event_issued[i].query) return i;
+    return SIZE_MAX;                                 // table pleine : réponse de la bibliothèque
+}
+void d3d9_manual_IDirect3DQuery9_Issue(CPU *c, void *self, uint32_t a) {
+    uint32_t flags = R32(a);
+    c->eax = (uint32_t)((int32_t (*)(void *, uint32_t))D3D9_VTBL(self)[D3D9_SLOT_IDirect3DQuery9_Issue])(self, flags);
+    if ((int32_t)c->eax < 0 || !(flags & D3DISSUE_END) || strict_events()) return;
+    if (!is_event(self)) return;
+    size_t i = event_slot(self);
+    if (i != SIZE_MAX) event_issued[i].query = self, event_issued[i].present = d3d9_presents;
+}
+void d3d9_manual_IDirect3DQuery9_GetData(CPU *c, void *self, uint32_t a) {
+    uint32_t data = R32(a), size = R32(a + 4), flags = R32(a + 8);
+    void *out = d3d9_out(c, data, size);
+    int32_t hr = ((int32_t (*)(void *, void *, uint32_t, uint32_t))D3D9_VTBL(self)[D3D9_SLOT_IDirect3DQuery9_GetData])(
+        self, out, size, flags);
+    if (hr == 1 /* S_FALSE */ && !strict_events()) {
+        size_t i = event_slot(self);
+        if (i != SIZE_MAX && event_issued[i].query == self && event_issued[i].present < d3d9_presents && is_event(self)) {
+            if (out && size >= 4) W32(data, 1);     // BOOL TRUE, comme un événement atteint
+            hr = 0;
+        }
+    }
+    c->eax = (uint32_t)hr;
+}
+// Une requête libérée puis réallouée à la même adresse peut retrouver une
+// entrée périmée : seul un événement en profite, et un événement jamais émis
+// n'a rien à attendre.
+
 static int d3d9_present_call(CPU *c, const char *name, void *data) {
     const D3d9Method *m = data;
     if (m->name[9] == 'D') rt_d3d9_draw_overlay(self_of(c, m));   // IDirect3DDevice9::Present (pas la chaîne d'échange)
     d3d9_call(c, name, data);
     if ((int32_t)c->eax >= 0) {
+        ++d3d9_presents;
         rt_frame_log_tick();                                  // P2_FRAME_LOG, Mac et iOS (sdl_video.c)
         void (*hook)(void) = rt_d3d9_on_present;
         if (hook) hook();
@@ -964,7 +1018,8 @@ static int d3d9_timed_present(CPU *c, const char *name, void *data) {
     return 1;
 }
 static int is_present(const D3d9Method *m) {
-    return !strcmp(m->name, "IDirect3DDevice9::Present") || !strcmp(m->name, "IDirect3DSwapChain9::Present");
+    return !strcmp(m->name, "IDirect3DDevice9::Present") || !strcmp(m->name, "IDirect3DSwapChain9::Present")
+        || !strcmp(m->name, "IDirect3DDevice9Ex::PresentEx");
 }
 static rt_shim_handler handler_of(const D3d9Method *m) {
     if (!is_present(m)) return d3d9_call;

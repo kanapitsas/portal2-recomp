@@ -699,6 +699,49 @@ RT_CHECK(d3d9_system_memory_user_pointer_reaches_host) {
     assert(CALL0(dev, IUnknown, Release).eax == 0 && rt_d3d9_live_proxies() == live);
 }
 
+// Événement D3D9 (frame sync de Source) : un événement émis avant le dernier
+// Present est annoncé atteint même si la bibliothèque répond encore S_FALSE ;
+// pas avant ce Present, et jamais pour une requête d'un autre type.
+static void *event_query_vtbl[8], *event_device_vtbl[119];
+static struct { unsigned issues, get_data; } event_seen;
+static int32_t event_issue(Fake *self, uint32_t flags) { (void)self; (void)flags; ++event_seen.issues; return 0; }
+static int32_t event_get_data(Fake *self, void *data, uint32_t size, uint32_t flags) {
+    (void)self; (void)flags; ++event_seen.get_data;
+    if (data && size >= 4) memset(data, 0, 4);
+    return 1;   // S_FALSE : jamais atteint côté bibliothèque
+}
+static int32_t event_present(Fake *self, const void *a, const void *b, void *w, const void *r) {
+    (void)self; (void)a; (void)b; (void)w; (void)r; return 0;
+}
+RT_CHECK(d3d9_event_query_reached_after_present) {
+    fill(event_query_vtbl, 8);
+    event_query_vtbl[1] = (void *)f_addref; event_query_vtbl[2] = (void *)f_release;
+    event_query_vtbl[4] = (void *)f_get_type;
+    event_query_vtbl[slot_of("IDirect3DQuery9", "Issue")] = (void *)event_issue;
+    event_query_vtbl[slot_of("IDirect3DQuery9", "GetData")] = (void *)event_get_data;
+    fill(event_device_vtbl, 119);
+    event_device_vtbl[1] = (void *)f_addref; event_device_vtbl[2] = (void *)f_release;
+    event_device_vtbl[slot_of("IDirect3DDevice9", "Present")] = (void *)event_present;
+    static Fake event = {event_query_vtbl, 1, 8, NULL, NULL}, occlusion = {event_query_vtbl, 1, 9, NULL, NULL};
+    static Fake dev_object = {event_device_vtbl, 1, 0, NULL, NULL};
+    CPU c; rt_cpu_reset(&c); c.esp = STACK;
+    uint32_t q = d3d9_proxy(&c, &event, D3D9_IDirect3DQuery9), o = d3d9_proxy(&c, &occlusion, D3D9_IDirect3DQuery9);
+    uint32_t dev = d3d9_proxy(&c, &dev_object, D3D9_IDirect3DDevice9);
+    uint32_t data = SCRATCH + 0x100;
+    assert(CALL(q, IDirect3DQuery9, Issue, 1 /* END */).eax == 0);
+    assert(CALL(o, IDirect3DQuery9, Issue, 1).eax == 0);
+    W32(data, 0xdead);
+    assert(CALL(q, IDirect3DQuery9, GetData, data, 4, 1).eax == 1 && R32(data) == 0);   // même image : on attend
+    assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0);
+    assert(CALL(q, IDirect3DQuery9, GetData, data, 4, 1).eax == 0 && R32(data) == 1);   // image présentée
+    assert(CALL(q, IDirect3DQuery9, GetData, 0, 0, 1).eax == 0);                       // sans tampon aussi
+    assert(CALL(o, IDirect3DQuery9, GetData, data, 4, 1).eax == 1);                    // occlusion : inchangée
+    assert(CALL(q, IDirect3DQuery9, Issue, 1).eax == 0);                                // nouvel événement
+    assert(CALL(q, IDirect3DQuery9, GetData, data, 4, 1).eax == 1);
+    assert(event_seen.issues == 3 && event_seen.get_data == 5);
+    CALL0(q, IUnknown, Release); CALL0(o, IUnknown, Release); CALL0(dev, IUnknown, Release);
+}
+
 // Création et libération en boucle d'objets distincts (requêtes, textures de
 // passage) : la table se réorganise à taille constante au lieu de doubler à
 // chaque fois que les pierres tombales la remplissent.
