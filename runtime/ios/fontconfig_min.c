@@ -27,6 +27,9 @@ static Font *fonts;
 static int font_count;
 static pthread_once_t once = PTHREAD_ONCE_INIT;
 static struct _FcConfig config;
+// Index (fonts, font_count) : grossi par FcConfigAppFontAddFile pendant que
+// d'autres threads peuvent chercher une police.
+static pthread_mutex_t index_lock = PTHREAD_MUTEX_INITIALIZER;
 
 // ---------------------------------------------------------------- index
 static int extension_ok(const char *name) {
@@ -160,15 +163,17 @@ FcBool FcConfigAppFontAddFile(FcConfig *c, const FcChar8 *file) {
     (void)c;
     FcInit();
     if (!file) return FcFalse;
+    pthread_mutex_lock(&index_lock);
     // Le jeu ajoute ses polices à chaque rechargement du schéma : une fois suffit.
-    for (int i = 0; i < font_count; ++i) if (!strcmp(fonts[i].file, (const char *)file)) return FcTrue;
+    for (int i = 0; i < font_count; ++i)
+        if (!strcmp(fonts[i].file, (const char *)file)) { pthread_mutex_unlock(&index_lock); return FcTrue; }
     FT_Library library;
-    if (FT_Init_FreeType(&library)) return FcFalse;
     int before = font_count;
-    add_font(library, (const char *)file);
-    FT_Done_FreeType(library);
-    fprintf(stderr, "[fontconfig-ios] police du jeu %s : %d face(s)\n", file, font_count - before);
-    return font_count > before;
+    if (!FT_Init_FreeType(&library)) { add_font(library, (const char *)file); FT_Done_FreeType(library); }
+    int added = font_count - before;
+    pthread_mutex_unlock(&index_lock);
+    fprintf(stderr, "[fontconfig-ios] police du jeu %s : %d face(s)\n", file, added);
+    return added > 0;
 }
 FcBool FcConfigSubstitute(FcConfig *c, FcPattern *p, FcMatchKind kind) { (void)c; (void)p; (void)kind; return FcTrue; }
 void FcDefaultSubstitute(FcPattern *p) { (void)p; }
@@ -223,6 +228,7 @@ FcPattern *FcFontMatch(FcConfig *c, FcPattern *p, FcResult *result) {
     int italic = get_int(p, FC_SLANT, FC_SLANT_ROMAN) > 0;
     const Font *best = NULL;
     int best_score = -1;
+    pthread_mutex_lock(&index_lock);
     for (int pass = 0; pass < 2 && !best; ++pass) {
         const char *want = pass ? "Helvetica" : family;   // repli : une police par défaut
         for (int i = 0; i < font_count; ++i) {
@@ -233,9 +239,12 @@ FcPattern *FcFontMatch(FcConfig *c, FcPattern *p, FcResult *result) {
         }
     }
     if (!best && font_count) best = &fonts[0];
-    log_request("FcFontMatch", family, best ? best->file : NULL);
-    if (result) *result = best ? FcResultMatch : FcResultNoMatch;
-    return best ? font_pattern(best) : NULL;
+    FcPattern *match = best ? font_pattern(best) : NULL;
+    const char *file = best ? best->file : NULL;   // chaîne propre à la police : survit au verrou
+    pthread_mutex_unlock(&index_lock);
+    log_request("FcFontMatch", family, file);
+    if (result) *result = match ? FcResultMatch : FcResultNoMatch;
+    return match;
 }
 
 FcObjectSet *FcObjectSetCreate(void) { return calloc(1, sizeof(FcObjectSet)); }
@@ -259,8 +268,9 @@ FcFontSet *FcFontList(FcConfig *c, FcPattern *p, FcObjectSet *os) {
     const char *family = get_string(p, FC_FAMILY), *style = get_string(p, FC_STYLE);
     FcFontSet *set = calloc(1, sizeof(*set));
     if (!set) return NULL;
+    pthread_mutex_lock(&index_lock);
     set->fonts = calloc((size_t)(font_count ? font_count : 1), sizeof(*set->fonts));
-    if (!set->fonts) { free(set); return NULL; }
+    if (!set->fonts) { pthread_mutex_unlock(&index_lock); free(set); return NULL; }
     for (int i = 0; i < font_count; ++i) {
         if (family && strcasecmp(family, fonts[i].family)) continue;
         if (style && strcasecmp(style, fonts[i].style)) continue;
@@ -268,6 +278,7 @@ FcFontSet *FcFontList(FcConfig *c, FcPattern *p, FcObjectSet *os) {
         if (font) set->fonts[set->nfont++] = font;
     }
     set->sfont = font_count;
+    pthread_mutex_unlock(&index_lock);
     char answer[32];
     snprintf(answer, sizeof(answer), "%d faces", set->nfont);
     log_request("FcFontList", family, answer);
