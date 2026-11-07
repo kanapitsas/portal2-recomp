@@ -625,6 +625,80 @@ RT_CHECK(d3d9_get_container_iunknown_keeps_one_reference) {
     assert(CALL0(level, IUnknown, Release).eax == 0 && rt_d3d9_live_proxies() == live);
 }
 
+// pSharedHandle d'une création d3d9Ex en mémoire système à un seul niveau :
+// le HANDLE invité contient l'adresse invitée des pixels (« mémoire
+// utilisateur ») et l'hôte doit recevoir un HANDLE contenant le pointeur hôte
+// correspondant. shaderapivk.so de Half-Life 2 crée ainsi les faces du ciel
+// HDR avant de les copier par UpdateSurface ; ignoré, le ciel partait de pages
+// non initialisées (blocs de couleurs). Ailleurs (pool DEFAULT, plusieurs
+// niveaux, appareil non Ex), NULL comme avant.
+static void *user_memory_device_vtbl[119];
+static Fake user_memory_device = {user_memory_device_vtbl, 0, 0, NULL, NULL};
+static int user_memory_device_is_ex;
+static struct { unsigned creates; void *shared, *pixels; } user_memory_seen;
+static int32_t user_memory_query(Fake *self, const uint8_t *iid, void **out) {
+    if (user_memory_device_is_ex && !memcmp(iid, rt_d3d9_interfaces[D3D9_IDirect3DDevice9Ex].iid, 16)) {
+        ++self->refs; *out = self; return 0;
+    }
+    *out = NULL; return (int32_t)D3D9_E_NOINTERFACE;
+}
+static int32_t user_memory_record(void **out, void *shared) {
+    ++user_memory_seen.creates;
+    user_memory_seen.shared = shared;
+    user_memory_seen.pixels = shared ? *(void **)shared : NULL;
+    *out = NULL;
+    return (int32_t)0x8876086cu;   // D3DERR_INVALIDCALL : pas d'objet à envelopper
+}
+static int32_t user_memory_create_texture(Fake *self, uint32_t w, uint32_t h, uint32_t levels, uint32_t usage,
+                                          uint32_t format, uint32_t pool, void **out, void *shared) {
+    (void)self; (void)w; (void)h; (void)levels; (void)usage; (void)format; (void)pool;
+    return user_memory_record(out, shared);
+}
+static int32_t user_memory_create_plain(Fake *self, uint32_t w, uint32_t h, uint32_t format, uint32_t pool, void **out,
+                                        void *shared) {
+    (void)self; (void)w; (void)h; (void)format; (void)pool;
+    return user_memory_record(out, shared);
+}
+
+RT_CHECK(d3d9_system_memory_user_pointer_reaches_host) {
+    fill(user_memory_device_vtbl, 119);
+    user_memory_device_vtbl[0] = (void *)user_memory_query;
+    user_memory_device_vtbl[1] = (void *)f_addref; user_memory_device_vtbl[2] = (void *)f_release;
+    user_memory_device_vtbl[slot_of("IDirect3DDevice9", "CreateTexture")] = (void *)user_memory_create_texture;
+    user_memory_device_vtbl[slot_of("IDirect3DDevice9", "CreateOffscreenPlainSurface")] = (void *)user_memory_create_plain;
+    unsigned live = rt_d3d9_live_proxies();
+    CPU c; rt_cpu_reset(&c); c.esp = STACK;
+    user_memory_device.refs = 1;
+    // Mandataire typé IDirect3DDevice9 comme celui que rend IDirect3D9Ex::CreateDevice.
+    uint32_t dev = d3d9_proxy(&c, &user_memory_device, D3D9_IDirect3DDevice9);
+    uint32_t out = SCRATCH + 0x100, handle = SCRATCH + 0x200, pixels = SCRATCH + 0x400;
+    W32(handle, pixels);
+
+    user_memory_device_is_ex = 1;
+    memset(&user_memory_seen, 0, sizeof(user_memory_seen));
+    CALL(dev, IDirect3DDevice9, CreateTexture, 512, 512, 1, 0, 21, 2 /* SYSTEMMEM */, out, handle);
+    assert(user_memory_seen.creates == 1 && user_memory_seen.shared && user_memory_seen.pixels == GPTR(pixels));
+    assert(R32(out) == 0 && R32(handle) == pixels);
+    CALL(dev, IDirect3DDevice9, CreateOffscreenPlainSurface, 64, 64, 21, 2, out, handle);
+    assert(user_memory_seen.creates == 2 && user_memory_seen.pixels == GPTR(pixels));
+    W32(handle, 0);   // pointeur nul : transmis tel quel, la bibliothèque décide
+    CALL(dev, IDirect3DDevice9, CreateTexture, 512, 512, 1, 0, 21, 2, out, handle);
+    assert(user_memory_seen.shared && !user_memory_seen.pixels);
+    W32(handle, pixels);
+    CALL(dev, IDirect3DDevice9, CreateTexture, 512, 512, 0, 0, 21, 2, out, handle);   // chaîne complète
+    assert(user_memory_seen.creates == 4 && !user_memory_seen.shared);
+    CALL(dev, IDirect3DDevice9, CreateTexture, 512, 512, 1, 0, 21, 0 /* DEFAULT */, out, handle);
+    assert(!user_memory_seen.shared);
+    CALL(dev, IDirect3DDevice9, CreateTexture, 512, 512, 1, 0, 21, 2, out, 0);
+    assert(user_memory_seen.creates == 6 && !user_memory_seen.shared);
+    user_memory_device_is_ex = 0;   // appareil d3d9 simple
+    CALL(dev, IDirect3DDevice9, CreateTexture, 512, 512, 1, 0, 21, 2, out, handle);
+    assert(user_memory_seen.creates == 7 && !user_memory_seen.shared);
+
+    assert(user_memory_device.refs == 1);
+    assert(CALL0(dev, IUnknown, Release).eax == 0 && rt_d3d9_live_proxies() == live);
+}
+
 // Création et libération en boucle d'objets distincts (requêtes, textures de
 // passage) : la table se réorganise à taille constante au lieu de doubler à
 // chaque fois que les pierres tombales la remplissent.

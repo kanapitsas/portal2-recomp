@@ -70,7 +70,7 @@ class Table(unittest.TestCase):
         self.assertIn('d3d9_lock_ptr_out(c, g_ppbData, h_ppbData, hr >= 0);', lock)
         create = gen_d3d9.thunk(everything, by_name['CreateTexture'])
         self.assertIn('d3d9_iface_out(c, g_ppTexture, h_ppTexture, D3D9_IDirect3DTexture9);', create)
-        self.assertIn('d3d9_shared(c, g_pSharedHandle)', create)
+        self.assertIn('d3d9_shared(c, g_pSharedHandle, (a_Pool == 2 && a_Levels == 1), &h_pSharedHandle)', create)
         clear = gen_d3d9.thunk(everything, by_name['Clear'])
         self.assertIn('float a_Z = d3d9_f32(g_Z);', clear)
         self.assertIn('d3d9_in(c, g_pRects, (uint64_t)(a_Count*16))', clear)

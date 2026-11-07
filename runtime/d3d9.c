@@ -568,10 +568,35 @@ void *d3d9_hwnd(CPU *c, uint32_t guest) {
 }
 static uint32_t guest_hwnd(const void *window) { return window ? rt_handle_find(window, RT_SDL_WINDOW) : 0; }
 
-void *d3d9_shared(CPU *c, uint32_t guest) {
+// pSharedHandle. Une création d3d9Ex en mémoire système à un seul niveau
+// (texture, surface hors écran) y passe un pointeur vers ses pixels : la
+// bibliothèque part de cette « mémoire utilisateur ». shaderapivk.so de
+// Half-Life 2 crée ainsi les textures qu'il copie ensuite par UpdateSurface
+// (faces du ciel HDR, polices...) : sans ce pointeur, elles partaient de
+// pages non initialisées. Le HANDLE invité (4 octets) contient l'adresse
+// invitée des pixels ; l'hôte attend un HANDLE de 8 octets contenant un
+// pointeur hôte. Hors de ce cas (vraie ressource partagée, appareil non Ex,
+// qui la refuseraient), NULL comme avant. L'appelant est le thunk d'une
+// méthode d'appareil : son this invité est en esp+4. Le mandataire d'un
+// appareil créé par IDirect3D9Ex::CreateDevice est typé IDirect3DDevice9,
+// d'où la question posée à l'objet hôte lui-même.
+static int host_device_is_ex(void *device) {
+    void *ex = NULL;
+    typedef int32_t (*QueryEx)(void *, const void *, void **);
+    int yes = ((QueryEx)D3D9_VTBL(device)[0])(device, rt_d3d9_interfaces[D3D9_IDirect3DDevice9Ex].iid, &ex) >= 0 && ex;
+    if (ex) ((uint32_t (*)(void *))D3D9_VTBL(ex)[2])(ex);
+    return yes;
+}
+void *d3d9_shared(CPU *c, uint32_t guest, int user_memory, void **slot) {
     static int logged;
-    (void)c;
-    if (guest && !logged) { logged = 1; fprintf(stderr, "d3d9: pSharedHandle ignored (not supported by Direct3D 9)\n"); }
+    if (!guest) return NULL;
+    if (user_memory && host_device_is_ex(proxy_host(R32(c->esp + 4)))) {
+        rt_span(c, guest, 4);
+        uint32_t pixels = R32(guest);
+        *slot = pixels ? rt_span(c, pixels, 1) : NULL;
+        return slot;
+    }
+    if (!logged) { logged = 1; fprintf(stderr, "d3d9: pSharedHandle ignored outside system-memory user memory\n"); }
     return NULL;
 }
 

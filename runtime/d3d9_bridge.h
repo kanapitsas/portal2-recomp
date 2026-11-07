@@ -77,7 +77,7 @@ void d3d9_iface_out(CPU *c, uint32_t guest, void *host, unsigned iface);
 // arrière (dépend de la chaîne d'échange ou du périphérique sans partager).
 void d3d9_child_out(CPU *c, uint32_t guest, void *host, unsigned iface, const void *parent, int shared);
 void *d3d9_hwnd(CPU *c, uint32_t guest);
-void *d3d9_shared(CPU *c, uint32_t guest);
+void *d3d9_shared(CPU *c, uint32_t guest, int user_memory, void **slot);
 void *d3d9_params_in(CPU *c, uint32_t guest, D3d9HostParams *host, int input);
 void d3d9_params_out(CPU *c, uint32_t guest, const D3d9HostParams *host);
 void *d3d9_adapter_id_in(CPU *c, uint32_t guest, D3d9HostAdapterId *host);

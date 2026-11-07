@@ -106,7 +106,12 @@ in the environment.)
   `SetPrivateData` with `D3DSPD_IUNKNOWN`, `CheckResourceResidency`,
   `GetPresentStats` (`D3DPRESENTSTATS` holds 64-bit counters aligned
   differently on i386), `QueryInterface` for interfaces outside d3d9.
-  `pSharedHandle` is ignored.
+- `pSharedHandle`: on an extended device, a single-level `SYSTEMMEM`
+  texture or offscreen plain surface takes "user memory": the guest HANDLE
+  holds the guest address of the pixels, handed to the library as a host
+  pointer in a 64-bit HANDLE. Half-Life 2's shaderapivk.so creates its
+  upload sources this way before `UpdateSurface` (HDR sky faces, fonts...).
+  Every other handle (shared resources) is still passed as NULL.
 - D3D9Ex: `Direct3DCreate9Ex` calls the export of the same name in the native
   library (optional: without it, `D3DERR_NOTAVAILABLE`). `IDirect3D9Ex`,
   `IDirect3DDevice9Ex` and `IDirect3DSwapChain9Ex` are bridged; Half-Life 2

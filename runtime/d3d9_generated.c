@@ -372,7 +372,7 @@ static void t_IDirect3DDevice9_CreateCubeTexture(CPU *c, void *self, uint32_t a)
     uint32_t a_Format = g_Format;
     uint32_t a_Pool = g_Pool;
     void *h_ppCubeTexture = NULL, **a_ppCubeTexture = d3d9_out_slot(c, g_ppCubeTexture) ? &h_ppCubeTexture : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[25])(self, a_EdgeLength, a_Levels, a_Usage, a_Format, a_Pool, a_ppCubeTexture, a_pSharedHandle);
     d3d9_iface_out(c, g_ppCubeTexture, h_ppCubeTexture, D3D9_IDirect3DCubeTexture9);
     c->eax = (uint32_t)hr;
@@ -394,7 +394,7 @@ static void t_IDirect3DDevice9_CreateDepthStencilSurface(CPU *c, void *self, uin
     uint32_t a_MultisampleQuality = g_MultisampleQuality;
     uint32_t a_Discard = g_Discard;
     void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[29])(self, a_Width, a_Height, a_Format, a_MultiSample, a_MultisampleQuality, a_Discard, a_ppSurface, a_pSharedHandle);
     d3d9_iface_out(c, g_ppSurface, h_ppSurface, D3D9_IDirect3DSurface9);
     c->eax = (uint32_t)hr;
@@ -412,7 +412,7 @@ static void t_IDirect3DDevice9_CreateIndexBuffer(CPU *c, void *self, uint32_t a)
     uint32_t a_Format = g_Format;
     uint32_t a_Pool = g_Pool;
     void *h_ppIndexBuffer = NULL, **a_ppIndexBuffer = d3d9_out_slot(c, g_ppIndexBuffer) ? &h_ppIndexBuffer : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[27])(self, a_Length, a_Usage, a_Format, a_Pool, a_ppIndexBuffer, a_pSharedHandle);
     d3d9_iface_out(c, g_ppIndexBuffer, h_ppIndexBuffer, D3D9_IDirect3DIndexBuffer9);
     c->eax = (uint32_t)hr;
@@ -430,7 +430,7 @@ static void t_IDirect3DDevice9_CreateOffscreenPlainSurface(CPU *c, void *self, u
     uint32_t a_Format = g_Format;
     uint32_t a_Pool = g_Pool;
     void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, (a_Pool == 2), &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[36])(self, a_Width, a_Height, a_Format, a_Pool, a_ppSurface, a_pSharedHandle);
     d3d9_iface_out(c, g_ppSurface, h_ppSurface, D3D9_IDirect3DSurface9);
     c->eax = (uint32_t)hr;
@@ -472,7 +472,7 @@ static void t_IDirect3DDevice9_CreateRenderTarget(CPU *c, void *self, uint32_t a
     uint32_t a_MultisampleQuality = g_MultisampleQuality;
     uint32_t a_Lockable = g_Lockable;
     void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[28])(self, a_Width, a_Height, a_Format, a_MultiSample, a_MultisampleQuality, a_Lockable, a_ppSurface, a_pSharedHandle);
     d3d9_iface_out(c, g_ppSurface, h_ppSurface, D3D9_IDirect3DSurface9);
     c->eax = (uint32_t)hr;
@@ -504,7 +504,7 @@ static void t_IDirect3DDevice9_CreateTexture(CPU *c, void *self, uint32_t a) {
     uint32_t a_Format = g_Format;
     uint32_t a_Pool = g_Pool;
     void *h_ppTexture = NULL, **a_ppTexture = d3d9_out_slot(c, g_ppTexture) ? &h_ppTexture : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, (a_Pool == 2 && a_Levels == 1), &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[23])(self, a_Width, a_Height, a_Levels, a_Usage, a_Format, a_Pool, a_ppTexture, a_pSharedHandle);
     d3d9_iface_out(c, g_ppTexture, h_ppTexture, D3D9_IDirect3DTexture9);
     c->eax = (uint32_t)hr;
@@ -522,7 +522,7 @@ static void t_IDirect3DDevice9_CreateVertexBuffer(CPU *c, void *self, uint32_t a
     uint32_t a_FVF = g_FVF;
     uint32_t a_Pool = g_Pool;
     void *h_ppVertexBuffer = NULL, **a_ppVertexBuffer = d3d9_out_slot(c, g_ppVertexBuffer) ? &h_ppVertexBuffer : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[26])(self, a_Length, a_Usage, a_FVF, a_Pool, a_ppVertexBuffer, a_pSharedHandle);
     d3d9_iface_out(c, g_ppVertexBuffer, h_ppVertexBuffer, D3D9_IDirect3DVertexBuffer9);
     c->eax = (uint32_t)hr;
@@ -566,7 +566,7 @@ static void t_IDirect3DDevice9_CreateVolumeTexture(CPU *c, void *self, uint32_t 
     uint32_t a_Format = g_Format;
     uint32_t a_Pool = g_Pool;
     void *h_ppVolumeTexture = NULL, **a_ppVolumeTexture = d3d9_out_slot(c, g_ppVolumeTexture) ? &h_ppVolumeTexture : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[24])(self, a_Width, a_Height, a_Depth, a_Levels, a_Usage, a_Format, a_Pool, a_ppVolumeTexture, a_pSharedHandle);
     d3d9_iface_out(c, g_ppVolumeTexture, h_ppVolumeTexture, D3D9_IDirect3DVolumeTexture9);
     c->eax = (uint32_t)hr;
@@ -1502,7 +1502,7 @@ static void t_IDirect3DDevice9Ex_CreateDepthStencilSurfaceEx(CPU *c, void *self,
     uint32_t a_Discard = g_Discard;
     uint32_t a_Usage = g_Usage;
     void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *, uint32_t))D3D9_VTBL(self)[131])(self, a_Width, a_Height, a_Format, a_MultiSample, a_MultisampleQuality, a_Discard, a_ppSurface, a_pSharedHandle, a_Usage);
     d3d9_iface_out(c, g_ppSurface, h_ppSurface, D3D9_IDirect3DSurface9);
     c->eax = (uint32_t)hr;
@@ -1522,7 +1522,7 @@ static void t_IDirect3DDevice9Ex_CreateOffscreenPlainSurfaceEx(CPU *c, void *sel
     uint32_t a_Pool = g_Pool;
     uint32_t a_Usage = g_Usage;
     void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, (a_Pool == 2), &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *, uint32_t))D3D9_VTBL(self)[130])(self, a_Width, a_Height, a_Format, a_Pool, a_ppSurface, a_pSharedHandle, a_Usage);
     d3d9_iface_out(c, g_ppSurface, h_ppSurface, D3D9_IDirect3DSurface9);
     c->eax = (uint32_t)hr;
@@ -1546,7 +1546,7 @@ static void t_IDirect3DDevice9Ex_CreateRenderTargetEx(CPU *c, void *self, uint32
     uint32_t a_Lockable = g_Lockable;
     uint32_t a_Usage = g_Usage;
     void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *, uint32_t))D3D9_VTBL(self)[129])(self, a_Width, a_Height, a_Format, a_MultiSample, a_MultisampleQuality, a_Lockable, a_ppSurface, a_pSharedHandle, a_Usage);
     d3d9_iface_out(c, g_ppSurface, h_ppSurface, D3D9_IDirect3DSurface9);
     c->eax = (uint32_t)hr;
