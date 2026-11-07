@@ -1,4 +1,9 @@
-// Commandes tactiles de Portal 2 sur iPhone/iPad.
+// Commandes tactiles de Portal 2 et de Half-Life 2 sur iPhone/iPad.
+//
+// Les boutons dépendent du jeu du build (game_ios.c, clé P2Game de
+// l'Info.plist) : dispositions dans touch_layout.c. Ce qui suit décrit Portal 2 ;
+// HL2 garde les sticks et ajoute tir (glisser vise), tir secondaire,
+// rechargement, sprint et accroupi en bascule, lampe, armes et sauvegarde rapide.
 //
 // Une surcouche UIKit posée sur la fenêtre de SDL, affichée en partie
 // seulement : quand l'interface du jeu est visible (menus, pause, écrans de
@@ -51,6 +56,8 @@
 #include "back_tap.h"
 #include "backtap_dataset.h"
 #include "env_ios.h"
+#include "game_ios.h"
+#include "touch_layout.h"
 #include "lifecycle_ios.h"
 
 int rt_ios_game_ui_visible(void);   // game_state.c
@@ -61,9 +68,10 @@ int rt_ios_move_response(void);
 void rt_ios_console_command(const char *name);   // game_state.c
 
 typedef enum { ROLE_MOVE, ROLE_LOOK, ROLE_BUTTON } Role;
-typedef enum { KEY_SPACE, KEY_CTRL, KEY_E, KEY_ESCAPE, MOUSE_LEFT, MOUSE_RIGHT, LOOK_MODE, FLAG_ERROR, ACTION_COUNT } Action;
-typedef struct { Action action; NSString *symbol; UIColor *color; CGPoint at; CGFloat size; } Button;
-enum { MAX_BUTTONS = 11 };
+typedef rt_touch_action Action;
+enum { MOUSE_LEFT = RT_TOUCH_FIRE, MOUSE_RIGHT = RT_TOUCH_ALT_FIRE, ACTION_COUNT = RT_TOUCH_ACTION_COUNT };
+typedef struct { Action action; NSString *symbol; UIColor *color; CGPoint at; CGFloat size; unsigned flags; } Button;
+enum { MAX_BUTTONS = 16 };
 
 // Manette virtuelle : deux axes seulement (stick gauche), aucun bouton, pour
 // qu'elle ne porte aucune autre commande que le déplacement.
@@ -114,7 +122,7 @@ static void remove_virtual_pad(SDL_Joystick *pad) {
     replug_controllers();
 }
 
-static const CGFloat kButtonSize = 54, kPortalSize = 60;
+static const CGFloat kButtonSize = 54;   // boutons : touch_layout.c
 static const float kStickLook = 90;      // comptes de souris par image, stick à fond (≈ 360°/s à la sensibilité 3 du jeu)
 static const float kTrackpadLook = 3.5f; // comptes de souris par point de glissement
 static NSString *const kTrackpadKey = @"P2TouchTrackpad";
@@ -399,7 +407,8 @@ static UIImpactFeedbackGenerator *haptic;
 static void haptic_prepare(void) {
     static int wanted = -1;
     if (wanted < 0) {
-        wanted = rt_ios_env_flag("P2_HAPTICS", 1);
+        // Portal 2 seulement : HL2 n'a pas ce réglage (tir tenu, pas de portails).
+        wanted = rt_ios_current_game()->layout == RT_IOS_LAYOUT_PORTAL2 && rt_ios_env_flag("P2_HAPTICS", 1);
         fprintf(stderr, "[ios] vibration au tir : %s\n", wanted ? "oui" : "non");
     }
     if (!wanted) return;
@@ -415,6 +424,7 @@ static void haptic_fire(void) {
 // Doigt suivi : rôle, action (bouton), point de départ, dernier point.
 @interface P2Finger : NSObject
 @property Role role; @property Action action; @property CGPoint start, at;
+@property BOOL toggle, aim;   // bouton à bascule ; bouton qui vise en glissant (tir de HL2)
 @property NSTimeInterval stamp; @property double speed;   // trackpad : horodatage, vitesse lissée (pt/s)
 @end
 @implementation P2Finger
@@ -428,6 +438,7 @@ static void haptic_fire(void) {
     SDL_Window *window;
     NSMapTable<UITouch *, P2Finger *> *fingers;
     int held[ACTION_COUNT];   // nombre de doigts par action
+    BOOL toggled[ACTION_COUNT]; // boutons à bascule enfoncés (sprint, accroupi de HL2)
     BOOL wasd[4];             // W, A, S, D enfoncées
     BOOL concealed;           // cachée pour une manette ou un clavier
     BOOL menu;                // interface du jeu affichée : surcouche effacée
@@ -595,7 +606,8 @@ static void haptic_fire(void) {
     return menu ? nil : [super hitTest:point withEvent:event];
 }
 - (void)releaseAll {
-    for (P2Finger *f in fingers.objectEnumerator) if (f.role == ROLE_BUTTON) [self action:f.action down:NO];
+    for (P2Finger *f in fingers.objectEnumerator) if (f.role == ROLE_BUTTON && !f.toggle) [self action:f.action down:NO];
+    for (int a = 0; a < ACTION_COUNT; ++a) [self untoggle:(Action)a];
     [self backTapRelease:YES];
     [fingers removeAllObjects];
     [self updateMove];
@@ -624,16 +636,35 @@ static void haptic_fire(void) {
     if ((before > 0) == (held[action] > 0)) return;
     CGPoint centre = CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
     switch (action) {
-    case KEY_SPACE: [self key:SDL_SCANCODE_SPACE down:down]; break;
-    case KEY_CTRL: [self key:SDL_SCANCODE_LCTRL down:down]; break;
-    case KEY_E: [self key:SDL_SCANCODE_E down:down]; break;
-    case KEY_ESCAPE: [self key:SDL_SCANCODE_ESCAPE down:down]; break;
-    case MOUSE_LEFT: [self mouseButton:SDL_BUTTON_LEFT down:down at:centre]; if (down) haptic_fire(); break;
-    case MOUSE_RIGHT: [self mouseButton:SDL_BUTTON_RIGHT down:down at:centre]; if (down) haptic_fire(); break;
-    case LOOK_MODE: if (down) [self toggleLookMode]; break;
-    case FLAG_ERROR: if (down) { backtap_flag(); flagAt = CACurrentMediaTime(); flagLit = YES; [self setNeedsRender]; } break;
+    case RT_TOUCH_JUMP: [self key:SDL_SCANCODE_SPACE down:down]; break;
+    case RT_TOUCH_CROUCH: [self key:SDL_SCANCODE_LCTRL down:down]; break;
+    case RT_TOUCH_USE: [self key:SDL_SCANCODE_E down:down]; break;
+    case RT_TOUCH_PAUSE: [self key:SDL_SCANCODE_ESCAPE down:down]; break;
+    case RT_TOUCH_FIRE: [self mouseButton:SDL_BUTTON_LEFT down:down at:centre]; if (down) haptic_fire(); break;
+    case RT_TOUCH_ALT_FIRE: [self mouseButton:SDL_BUTTON_RIGHT down:down at:centre]; if (down) haptic_fire(); break;
+    case RT_TOUCH_LOOK_MODE: if (down) [self toggleLookMode]; break;
+    case RT_TOUCH_FLAG_ERROR: if (down) { backtap_flag(); flagAt = CACurrentMediaTime(); flagLit = YES; [self setNeedsRender]; } break;
+    case RT_TOUCH_RELOAD: [self key:SDL_SCANCODE_R down:down]; break;
+    case RT_TOUCH_SPRINT: [self key:SDL_SCANCODE_LSHIFT down:down]; break;
+    case RT_TOUCH_FLASHLIGHT: [self key:SDL_SCANCODE_F down:down]; break;
+    case RT_TOUCH_QUICKSAVE: [self key:SDL_SCANCODE_F6 down:down]; break;
+    case RT_TOUCH_WEAPON_PREV: if (down) [self wheel:1]; break;
+    case RT_TOUCH_WEAPON_NEXT: if (down) [self wheel:-1]; break;
     default: break;
     }
+}
+- (void)untoggle:(Action)action {
+    if (!toggled[action]) return;
+    toggled[action] = NO;
+    [self action:action down:NO];
+    [self setNeedsRender];
+}
+// Molette (armes de HL2) : un cran, vers le haut (invprev) ou le bas (invnext).
+- (void)wheel:(int)y {
+    SDL_Event e = {0};
+    e.type = SDL_MOUSEWHEEL; e.wheel.windowID = SDL_GetWindowID(window);
+    e.wheel.y = y; e.wheel.preciseY = (float)y; e.wheel.direction = SDL_MOUSEWHEEL_NORMAL;
+    SDL_PushEvent(&e);
 }
 - (void)setDirections:(const BOOL *)wanted {
     static const SDL_Scancode codes[4] = {SDL_SCANCODE_W, SDL_SCANCODE_A, SDL_SCANCODE_S, SDL_SCANCODE_D};
@@ -656,10 +687,12 @@ static BOOL portal_buttons(void) {
 }
 // Couleurs et icônes de la surcouche, créées une fois : buttons: et renderIfNeeded
 // sont appelés à chaque mouvement de doigt (jusqu'à 120 fois par seconde).
-static UIColor *blue, *orange, *ink, *icon_tint, *stick_ink, *line_ink;
+static UIColor *blue, *orange, *ink, *icon_tint, *stick_ink, *line_ink, *red, *flag_red;
 static void palette_init(void) {
     if (blue) return;
     blue = [UIColor colorWithRed:.16 green:.55 blue:1 alpha:.6]; orange = [UIColor colorWithRed:1 green:.55 blue:.05 alpha:.6];
+    red = [UIColor colorWithRed:.75 green:.12 blue:.08 alpha:.45];          // tir de HL2
+    flag_red = [UIColor colorWithRed:.6 green:.08 blue:.08 alpha:.45];      // ✗ du jeu de données
     ink = [UIColor colorWithWhite:0 alpha:.35];   // fond sombre : icônes lisibles sur un mur clair
     icon_tint = [UIColor colorWithWhite:1 alpha:.85];
     stick_ink = [UIColor colorWithWhite:1 alpha:.3]; line_ink = [UIColor colorWithWhite:1 alpha:.45];
@@ -675,7 +708,7 @@ static UIImage *render_bitmap(CGSize size, void (^draw)(CGContextRef c)) {
 // Icône SF Symbols teintée, par (nom, taille en points) : au plus une par
 // bouton et par taille (deux pour le mode de la caméra).
 static UIImage *icon_image(NSString *symbol, CGFloat point_size) {
-    static struct { NSString *symbol; CGFloat size; UIImage *image; } cache[8];
+    static struct { NSString *symbol; CGFloat size; UIImage *image; } cache[20];
     static int count;
     for (int i = 0; i < count; ++i)
         if (cache[i].size == point_size && [cache[i].symbol isEqualToString:symbol]) return cache[i].image;
@@ -692,37 +725,32 @@ static UIImage *icon_image(NSString *symbol, CGFloat point_size) {
     return image;
 }
 - (int)buttons:(Button *)b {
-    CGRect a = self.area; CGFloat x = CGRectGetMinX(a), y = CGRectGetMinY(a), w = a.size.width, h = a.size.height;
+    CGRect a = self.area;
     palette_init();
-    CGFloat top = y + h * .19, gap = kPortalSize * 1.15;   // sous le compteur d'images
-    Button all[] = {
-        // Portails, en miroir : bleu à l'extérieur, orange à l'intérieur, des deux côtés.
-        {MOUSE_LEFT, nil, blue, {x + w * .06, top}, kPortalSize}, {MOUSE_RIGHT, nil, orange, {x + w * .06 + gap, top}, kPortalSize},
-        {MOUSE_LEFT, nil, blue, {x + w * .94, top}, kPortalSize}, {MOUSE_RIGHT, nil, orange, {x + w * .94 - gap, top}, kPortalSize},
-        {KEY_SPACE, @"arrow.up", ink, {x + w * .94, y + h * .50}, kButtonSize},
-        {KEY_CTRL, @"arrow.down", ink, {x + w * .80, y + h * .40}, kButtonSize},
-        {KEY_E, @"hand.point.up.left.fill", ink, {x + w * .94, y + h * .80}, kButtonSize},
-        {KEY_ESCAPE, @"pause.fill", ink, {x + w - kButtonSize * .45, y + kButtonSize * .45}, kButtonSize * .75},
-        // Signaler une erreur des tapes au dos (jeu de données), à gauche de la pause.
-        {FLAG_ERROR, @"xmark", [UIColor colorWithRed:.6 green:.08 blue:.08 alpha:.45],
-         {x + w - kButtonSize * 1.35, y + kButtonSize * .45}, kButtonSize * .75},
-        // Mode de la caméra, dans le coin en bas à gauche : l'icône montre le mode actuel.
-        {LOOK_MODE, trackpad ? @"hand.draw.fill" : @"r.joystick.fill", ink,
-         {x + kButtonSize * .45, y + h - kButtonSize * .45}, kButtonSize * .75},
-    };
+    int count;
+    const rt_touch_button *layout = rt_touch_layout(rt_ios_current_game()->layout, &count);
     int n = 0;
-    for (int i = 0; i < (int)(sizeof(all) / sizeof(*all)) && n < MAX_BUTTONS; ++i) {
+    for (int i = 0; i < count && n < MAX_BUTTONS; ++i) {
+        const rt_touch_button *t = &layout[i];
         // Les tapes au dos tirent les portails : leurs boutons ne servent que sans
         // elles, sauf choix contraire (P2_PORTAL_BUTTONS=1 toujours, =0 jamais).
-        if ((all[i].action == MOUSE_LEFT || all[i].action == MOUSE_RIGHT) && !portal_buttons()) continue;
-        if (all[i].action == FLAG_ERROR && !backtap_dataset_on) continue;
-        b[n++] = all[i];
+        if ((t->flags & RT_TOUCH_PORTAL) && !portal_buttons()) continue;
+        if ((t->flags & RT_TOUCH_DATASET) && !backtap_dataset_on) continue;
+        double cx, cy;
+        rt_touch_place(t, CGRectGetMinX(a), CGRectGetMinY(a), a.size.width, a.size.height, &cx, &cy);
+        UIColor *color = t->color == RT_TOUCH_BLUE ? blue : t->color == RT_TOUCH_ORANGE ? orange
+                       : t->color == RT_TOUCH_RED ? red : t->color == RT_TOUCH_FLAG ? flag_red : ink;
+        // Mode de la caméra : l'icône montre le mode actuel.
+        NSString *symbol = t->action == RT_TOUCH_LOOK_MODE ? (trackpad ? @"hand.draw.fill" : @"r.joystick.fill")
+                         : t->symbol ? @(t->symbol) : nil;
+        b[n++] = (Button){t->action, symbol, color, CGPointMake(cx, cy), t->size, t->flags};
     }
     return n;
 }
-- (int)buttonAt:(CGPoint)p {
-    Button b[MAX_BUTTONS]; int n = [self buttons:b];
-    for (int i = 0; i < n; ++i) if (hypot(p.x - b[i].at.x, p.y - b[i].at.y) < b[i].size * .62) return (int)b[i].action;
+// Indice du bouton sous ce point dans b (rempli par buttons:), ou -1.
+- (int)buttonAt:(CGPoint)p in:(Button *)b {
+    int n = [self buttons:b];
+    for (int i = 0; i < n; ++i) if (hypot(p.x - b[i].at.x, p.y - b[i].at.y) < b[i].size * .62) return i;
     return -1;
 }
 
@@ -883,9 +911,16 @@ static Sint16 axis_value(CGFloat speed, int response) {
             [self setNeedsRender];
             continue;
         }
-        int button = [self buttonAt:f.start];
+        Button b[MAX_BUTTONS];
+        int button = [self buttonAt:f.start in:b];
         BOOL left = f.start.x < CGRectGetMidX(self.bounds);
-        if (button >= 0) { f.role = ROLE_BUTTON; f.action = (Action)button; [self action:f.action down:YES]; }
+        if (button >= 0) {
+            f.role = ROLE_BUTTON; f.action = b[button].action;
+            f.toggle = (b[button].flags & RT_TOUCH_TOGGLE) != 0; f.aim = (b[button].flags & RT_TOUCH_AIM) != 0;
+            if (!f.toggle) [self action:f.action down:YES];
+            else if (toggled[f.action]) [self untoggle:f.action];
+            else { toggled[f.action] = YES; [self action:f.action down:YES]; }
+        }
         else if (left && ![self roleTaken:ROLE_MOVE]) f.role = ROLE_MOVE;
         else if (!left && ![self roleTaken:ROLE_LOOK]) f.role = ROLE_LOOK;
         else continue;   // second doigt sur un stick déjà tenu : ignoré
@@ -902,7 +937,8 @@ static Sint16 axis_value(CGFloat speed, int response) {
         // Stick gauche, ou droit hors mode trackpad : son bouton suit le doigt.
         // Un doigt en trackpad ou sur un bouton ne change rien à l'écran.
         if (f && (f.role == ROLE_MOVE || (f.role == ROLE_LOOK && !trackpad))) changed = YES;
-        if (f && f.role == ROLE_LOOK && trackpad) {
+        // Tir de HL2 : le doigt qui tire vise aussi, comme sur le trackpad.
+        if (f && (f.role == ROLE_LOOK ? trackpad : f.role == ROLE_BUTTON && f.aim)) {
             accel_init();
             double dx = p.x - f.at.x, dy = p.y - f.at.y, dt = t.timestamp - f.stamp;
             // dt borné : premier mouvement (stamp nul) ou doigt resté immobile longtemps
@@ -922,7 +958,9 @@ static Sint16 axis_value(CGFloat speed, int response) {
     backtap_touch(touches);
     for (UITouch *t in touches) {
         P2Finger *f = [fingers objectForKey:t];
-        if (f.role == ROLE_BUTTON) [self action:f.action down:NO];
+        if (f.role == ROLE_BUTTON && !f.toggle) [self action:f.action down:NO];
+        // Sprint en bascule : il s'arrête quand le pouce quitte le stick.
+        if (f && f.role == ROLE_MOVE) [self untoggle:RT_TOUCH_SPRINT];
         [fingers removeObjectForKey:t];
     }
     [self updateMove]; [self setNeedsRender];
