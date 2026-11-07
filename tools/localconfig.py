@@ -1,6 +1,16 @@
 """config/local.json, shared by the tools: the local installation (game_root,
 linux_root, steam_api_dylib, user_dir...) written by ./setup.sh.
 
+One file for both games. Top-level keys are shared (host_prefix,
+d3d9metal_dylib, d3d9metal_ios, language...) plus Portal 2's own game keys
+(GAME_KEYS), as in single-game configs; another game's keys go in a section:
+
+    {"game_root": "<Portal 2>", ..., "games": {"hl2": {"game_root": ..., "steam_appid": 220, ...}}}
+
+game_config(config, name) is the merged view a tool works with. An older
+Half-Life 2 checkout ("game": "hl2" with its keys at the top level) is read as
+if its keys were in games.hl2 (migrate()).
+
 Keeps the single default for the saves folder (user_dir), the one the app
 made by tools/make_app.py uses; the other tools derive their copies from it.
 Each game has its own folder (games.py app_name); Portal 2's is unchanged.
@@ -19,10 +29,57 @@ SUPPORT = Path.home() / 'Library/Application Support' / APP_NAME
 HOMEBREW = Path('/opt/homebrew')
 
 
+# Keys that belong to one game; any other key is shared by every game.
+GAME_KEYS = ('game_root', 'linux_root', 'steam_appid', 'depot_id', 'manifest', 'steam_api_dylib', 'user_dir',
+             'ios_bundle_id')
+
+
 def load(path=None):
     """Content of config/local.json (or `path`); {} when the file does not exist."""
     path = Path(path) if path is not None else DEFAULT_PATH
     return json.loads(path.read_text()) if path.exists() else {}
+
+
+def migrate(config):
+    """Copy of `config` in the current format: an older single-game config of
+    another game than Portal 2 ("game": "hl2", game keys at the top level, no
+    games.hl2) has those keys moved into its section."""
+    config = dict(config)
+    name = config.get('game')
+    sections = dict(config.get('games') or {})
+    if name and name != games.DEFAULT and name in games.GAMES and name not in sections:
+        moved = {key: config.pop(key) for key in GAME_KEYS if key in config}
+        if moved:
+            sections[name] = moved
+            config['games'] = sections
+    return config
+
+
+def game_config(config, name=None):
+    """Merged view of `config` for one game (games.selected() when None): the
+    shared keys, that game's keys, and "game": its name, so games.profile()
+    and support_dir() apply to it. Portal 2's keys are the top-level ones
+    (a games.portal2 section, if any, overrides them)."""
+    config = migrate(config)
+    name = games.selected(name, config)
+    sections = config.get('games') or {}
+    merged = {key: value for key, value in config.items() if key != 'games' and
+              (key not in GAME_KEYS or name == games.DEFAULT)}
+    section = sections.get(name)
+    if isinstance(section, dict):
+        merged.update(section)
+    merged['game'] = name
+    return merged
+
+
+def for_game(name=None, path=None):
+    """game_config() of config/local.json (or `path`)."""
+    return game_config(load(path), name)
+
+
+def configured_games(config):
+    """Games that `config` sets up (a game_root), in games.GAMES order."""
+    return [name for name in games.GAMES if game_config(config, name).get('game_root')]
 
 
 def support_dir(config):

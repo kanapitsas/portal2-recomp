@@ -26,6 +26,35 @@ class GameProfiles(unittest.TestCase):
         with self.assertRaises(SystemExit):
             games.profile({'game': 'quake'})
 
+    def test_build_paths(self):
+        # Portal 2 keeps the paths of single-game checkouts; Half-Life 2 lives under build/hl2.
+        portal2, hl2 = games.GAMES['portal2'], games.GAMES['hl2']
+        self.assertEqual((portal2['build_dir'], portal2['binary'], portal2['ios_dir'], portal2['executable']),
+                         ('build/game', 'build/portal2-native', 'build/ios', 'portal2-native'))
+        self.assertEqual((hl2['build_dir'], hl2['binary'], hl2['ios_dir'], hl2['executable']),
+                         ('build/hl2', 'build/hl2/hl2-native', 'build/hl2/ios', 'hl2-native'))
+        self.assertEqual(games.EXECUTABLES, ('portal2-native', 'hl2-native'))
+        # No two games share a build tree, binary or data folder.
+        for key in ('build_dir', 'binary', 'ios_dir', 'executable', 'app_name', 'log_name', 'bundle_id'):
+            self.assertEqual(len({g[key] for g in games.GAMES.values()}), len(games.GAMES), key)
+
+    def test_selection_precedence(self):
+        both = {'game_root': '/p2', 'games': {'hl2': {'game_root': '/hl2'}}}
+        self.assertEqual(games.selected(None, {}, environ={}), 'portal2')
+        self.assertEqual(games.selected(None, both, environ={}), 'portal2')
+        self.assertEqual(games.selected(None, dict(both, game='hl2'), environ={}), 'hl2')
+        self.assertEqual(games.selected(None, dict(both, game='hl2'), environ={'P2_GAME': 'portal2'}), 'portal2')
+        self.assertEqual(games.selected('hl2', {'game': 'portal2'}, environ={'P2_GAME': 'portal2'}), 'hl2')
+        self.assertEqual(games.selected(None, {}, environ={'P2_GAME': ''}), 'portal2')
+        # Only Half-Life 2 set up: no --game needed.
+        self.assertEqual(games.selected(None, {'games': {'hl2': {'game_root': '/hl2'}}}, environ={}), 'hl2')
+        self.assertEqual(games.selected(None, {'games': {'hl2': {}}}, environ={}), 'portal2')
+        for name, environ in (('quake', {}), (None, {'P2_GAME': 'quake'})):
+            with self.assertRaises(SystemExit):
+                games.selected(name, {}, environ=environ)
+        with self.assertRaises(SystemExit):
+            games.selected(None, {'game': 'quake'}, environ={})
+
     def test_roots_follow_the_program(self):
         layout = {'program': 'hl2_linux', 'modules': [
             {'name': 'hl2_linux', 'init': 0x100, 'init_array': [1, 2]},

@@ -1,9 +1,15 @@
 """Per-game layout of the Linux depot: which modules to prepare and how the
 program is named, plus what setup.sh and tools/make_app.py need to install it
-(Steam depot, Steamworks.NET release, app name, data folder). `game` in
-config/local.json picks the profile (default portal2, so existing
-configurations keep working). One checkout builds one game: build/ is shared.
+(Steam depot, Steamworks.NET release, app name, data folder), and where its
+build lives in this checkout. One checkout builds both games side by side:
+Portal 2 keeps its historical paths (build/game, build/portal2-native,
+build/ios), Half-Life 2 lives under build/hl2.
+
+Which game a tool works on: its --game option, else the P2_GAME environment
+variable, else "game" in config/local.json, else the only game configured
+there, else portal2 (selected()).
 """
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -30,6 +36,13 @@ GAMES = {
         bundle_id='fr.kanapitsas.portal2-native',
         icon='portal2/resource/game.icns',
         renderer=None,   # Metal when libd3d9metal is there
+        # Build tree (prep, gen, obj, launch.log), executable and its name in
+        # the app, iPhone builds: the paths of the single-game checkouts.
+        build_dir='build/game',
+        binary='build/portal2-native',
+        executable='portal2-native',
+        ios_dir='build/ios',
+        ios=True,
     ),
     # Half-Life 2 since the 20th anniversary update (depot 224): episodes and
     # Lost Coast live in the hl2_complete mod; hl2/ and hl2mp/ hold other
@@ -58,14 +71,52 @@ GAMES = {
         bundle_id='fr.kanapitsas.hl2-native',
         icon='hl2/resource/game.icns',
         renderer=None,   # Metal when libd3d9metal is there, as for Portal 2 (docs/hl2.md)
+        build_dir='build/hl2',
+        binary='build/hl2/hl2-native',
+        executable='hl2-native',
+        ios_dir='build/hl2/ios',
+        ios=False,   # Mac only for now
     ),
 }
 
 
-def profile(config):
-    """Profile of the game named by `game` in the config (portal2 when absent)."""
-    name = config.get('game', 'portal2')
-    if name not in GAMES:
-        raise SystemExit(f'unknown game {name!r} in config/local.json (known: {", ".join(GAMES)})')
-    return dict(GAMES[name], name=name)
+DEFAULT = 'portal2'
+# Executable names of every game: "is a recompiled game running" checks
+# (uninstall.sh, tests) must cover them all.
+EXECUTABLES = tuple(g['executable'] for g in GAMES.values())
 
+
+def check(name, origin='--game'):
+    """`name` if it is a known game, else a clear exit."""
+    if name not in GAMES:
+        raise SystemExit(f'unknown game {name!r} ({origin}; known: {", ".join(GAMES)})')
+    return name
+
+
+def selected(name=None, config=None, environ=None):
+    """The game a tool works on: `name` (its --game option), else P2_GAME,
+    else "game" of the config, else the only game the config sets up (an
+    HL2-only checkout needs no --game), else portal2."""
+    environ = os.environ if environ is None else environ
+    if name: return check(name)
+    if environ.get('P2_GAME'): return check(environ['P2_GAME'], 'P2_GAME')
+    config = config or {}
+    if config.get('game'): return check(config['game'], 'config/local.json')
+    if not config.get('game_root'):   # top-level game keys are Portal 2's
+        configured = [n for n, section in (config.get('games') or {}).items()
+                      if n in GAMES and isinstance(section, dict) and section.get('game_root')]
+        if len(configured) == 1: return configured[0]
+    return DEFAULT
+
+
+def add_argument(parser):
+    """--game option of the tools (default: selected())."""
+    parser.add_argument('--game', choices=sorted(GAMES),
+                        help='game to work on (default: P2_GAME, else "game" of config/local.json, else portal2)')
+
+
+def profile(config):
+    """Profile of the game named by `game` in the config (portal2 when absent);
+    localconfig.game_config() returns such a config for any game."""
+    name = config.get('game') or DEFAULT
+    return dict(GAMES[check(name, 'config/local.json')], name=name)
