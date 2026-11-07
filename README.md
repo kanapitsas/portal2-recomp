@@ -38,7 +38,7 @@ share them.
 - **Install**: the Portal 2 Installer app from the
   [releases](https://github.com/kanapitsas/portal2-recomp/releases), or one
   command, `setup.sh`. Only the Xcode command line tools are required.
-- **Half-Life 2** (experimental): plays on Mac with OpenGL at about 77 fps
+- **Half-Life 2** (experimental): plays on Mac at about 118 fps with Metal
   (M3 Pro, 720p), installed with `./setup.sh --game hl2`; see
   [below](#half-life-2-experimental).
 
@@ -212,9 +212,9 @@ cd hl2-recomp
 
 It creates `~/Applications/Half-Life 2 Natif.app`, with its own saves folder.
 
-- **Tested**: a few hours of the main game on an M3 Pro, about 77 fps at
-  1280×720 with OpenGL (`--release` build).
-- **Renderer**: OpenGL by default, because Metal is slower for HL2 (60–67 fps).
+- **Tested**: a few hours of the main game on an M3 Pro, at 1280×720:
+  about 118 fps with Metal (the default, as for Portal 2) and 91 with
+  OpenGL (`--release` build).
 - **Not yet**: iPhone; Episode One, Episode Two and Lost Coast are
   untested; and some indirect call targets are still being found: a
   crash ending with `target not recompiled` is one more to add (please
@@ -273,7 +273,7 @@ profiles.
 | Community | Community maps copied by hand, loaded with `+map` | 📅 |
 | Community | Steam Workshop on Mac (needs the UGC part of the Steam bridge) | 💡 |
 | Half-Life 2 | Mac app from the same recompiler (`setup.sh --game hl2`), OpenGL, main game played for a few hours | 🚧 |
-| Half-Life 2 | Metal renderer as fast as OpenGL, the episodes and Lost Coast, iPhone | 📅 |
+| Half-Life 2 | The episodes and Lost Coast, iPhone | 📅 |
 | Rendering | Ray-traced lighting with Metal on M3 and A17 Pro GPUs, in the spirit of Portal with RTX (NVIDIA's RTX Remix is Windows and NVIDIA only, so it cannot be reused) | 💡 |
 
 ## Repository layout

@@ -42,10 +42,9 @@ owns Half-Life 2, then open the app.
 
 - Saves and settings: `~/Library/Application Support/Half-Life 2 Natif/userdata`.
 - Log: `~/Library/Logs/HalfLife2Natif.log`.
-- Renderer: **OpenGL** by default, because it is faster than Metal for HL2
-  (see Performance).
-  To try Metal anyway:
-  `open --env P2_RENDERER=d3d9 -a "Half-Life 2 Natif"`.
+- Renderer: **Metal** when `libd3d9metal` is there, as for Portal 2 (about
+  118 fps against 91 with OpenGL, see Performance). To force OpenGL:
+  `open --env P2_RENDERER=opengl -a "Half-Life 2 Natif"`.
 - `./uninstall.sh` in that clone removes the HL2 app, and the saves if you
   confirm.
 
@@ -109,21 +108,31 @@ Build to play with `python3 tools/build_game.py --release` (`-O2`, without
 memory checks), as `setup.sh` does: the default `--opt 1` checked build is
 2.5 times slower.
 Measured on an M3 Pro (save `half-life-018`, 1280×720, hidden window,
-simulated focus, idle machine, 3 alternating runs each):
+simulated focus, idle machine, alternating runs):
 
-| build | OpenGL | CPU time per frame (main thread) |
-|---|---|---|
-| `--opt 1` checked | 30.7 fps | 31 ms |
-| `--release` | 77.0 fps | 12.6 ms |
-| `--release --pgo-use` | 79.7 fps (+3.5 %) | 12.1 ms |
+| build (7 Nov. 2026) | OpenGL | Metal | CPU per frame (process) |
+|---|---|---|---|
+| `--opt 1` checked | 30.7 fps | | |
+| `--release` | 77.0 fps | 60–67 fps | 47 M cycles (GL) |
+| `--release --pgo-use` | 79.7 fps | ~83 fps | |
+| + Nov. 6 audit (lifter, capture tracking) | ~91–93 fps | ~83 fps | 38 M (GL), 34 M (Metal) |
+| + event queries reached at Present | ~91–93 fps | **~118 fps** | 35 M (Metal) |
 
-Metal (`-vulkan` path) is slower here: ~60–67 fps with `--release`, one
-reason the app starts on OpenGL. The guest gate
-costs nothing here (`P2_GATE_TIMING=1`: 0.1 % of the main thread). With
-`/usr/bin/sample`, the main thread spends ~66 % in translated game code,
-spread thin (no function above 4 %), and ~20 % in Apple's OpenGL driver and
-kernel, mostly command-buffer submissions forced by each render-target change
-(`glClear`, `glBlitFramebuffer`).
+The audit's `-mllvm -capture-tracking-max-uses-to-explore` lets clang keep
+guest registers in host registers in functions with loops (−9 %
+instructions, IPC 2.1 → 2.4). On Metal, the game then slept 30 % of the
+main thread in Source's frame sync: it waits for the event query of the
+previous frame, which libd3d9metal only signals once the whole frame has
+run, since it submits at Present. The bridge now reports an event issued
+before a finished Present as reached ([d3d9-bridge.md](d3d9-bridge.md);
+`P2_D3D9_STRICT_EVENTS=1` restores the library's answer). Metal is then
+not CPU-bound at 640×480 either.
+
+Rejected with measurements: Source's render thread (`mat_queue_mode 2`
+with `P2_GUEST_CPUS=4`, 52 fps: the guest gate serializes both threads)
+and Apple's multithreaded OpenGL engine (`kCGLCEMPEngine`, no gain).
+OpenGL time is ~30 % of the frame: ~1,100 draw calls at ~1.8 µs, the
+buffer swap and `glBlitFramebuffer` (`P2_GL_TIMING=1`).
 
 PGO profile: an instrumented build
 (`--release --pgo-generate --out build/portal2-native-pgogen`), runs with
