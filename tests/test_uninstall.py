@@ -109,6 +109,13 @@ class UninstallTests(unittest.TestCase):
         self.assertIn('depot 224', out)
         self.assertNotIn('Portal 2 Natif', out)
 
+    def test_hl2_never_offers_portal2_data_as_its_user_dir(self):
+        # An HL2 config whose user_dir is Portal 2's folder (the old shared default) or inside it.
+        for user_dir in (self.support, self.support / 'userdata'):
+            self.config.write_text(json.dumps({'game': 'hl2', 'user_dir': str(user_dir)}))
+            self.run_script('y\ny\n')
+            self.assertTrue((self.support / 'userdata/portal2/SAVE').is_dir(), user_dir)
+
     def test_nothing_installed(self):
         self.run_script('y\ny\n')
         out = self.run_script('y\ny\n')

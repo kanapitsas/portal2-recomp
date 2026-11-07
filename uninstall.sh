@@ -31,7 +31,9 @@ config_get() {  # key -> value from config/local.json, empty if absent
 }
 # Half-Life 2 checkout: its own app, log and data folder (tools/games.py).
 TITLE="Portal 2"; GAME_SIZE=" (about 12 GB)"; DEPOT="depot 661 (about 90 MB)"
+OTHER_SUPPORT=""   # another game's data folder: never offered from here
 if [ "$(config_get game)" = hl2 ]; then
+    OTHER_SUPPORT="$SUPPORT"
     NAME="Half-Life 2 Natif"
     SUPPORT="$H/Library/Application Support/$NAME"
     LOG="$H/Library/Logs/HalfLife2Natif.log"
@@ -83,10 +85,10 @@ case "$USER_DIR" in
     ""|"$SUPPORT"|"$SUPPORT"/*) ;;
     *)
         if [ -e "$USER_DIR" ]; then
-            if safe_user_dir "$USER_DIR" "$H" "$(config_get game_root)" "$(config_get linux_root)" "$REPO"; then
+            if safe_user_dir "$USER_DIR" "$H" "$(config_get game_root)" "$(config_get linux_root)" "$REPO" "$OTHER_SUPPORT"; then
                 SAVES+=("$USER_DIR")
             else
-                echo "Not offering to trash user_dir $USER_DIR: it overlaps your home, the game, the depot or this folder." >&2
+                echo "Not offering to trash user_dir $USER_DIR: it overlaps your home, the game, the depot, this folder or another game's data." >&2
             fi
         fi ;;
 esac
