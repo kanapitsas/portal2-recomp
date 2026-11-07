@@ -57,6 +57,38 @@ python3 tools/build_game.py
 python3 tools/run_game.py --show --timeout 3600
 ```
 
+## Performance
+
+Build to play with `python3 tools/build_game.py --release` (`-O2`, without
+memory checks): the default `--opt 1` checked build is twice as slow.
+Measured on an M3 Pro (save `half-life-018`, 1280×720, hidden window,
+simulated focus, idle machine, 3 alternating runs each):
+
+| build | OpenGL | CPU time per frame (main thread) |
+|---|---|---|
+| `--opt 1` checked | 30.7 fps | 31 ms |
+| `--release` | 77.0 fps | 12.6 ms |
+| `--release --pgo-use` | 79.7 fps (+3.5 %) | 12.1 ms |
+
+Metal (`-vulkan` path) is close: ~60–67 fps with `--release`. The guest gate
+costs nothing here (`P2_GATE_TIMING=1`: 0.1 % of the main thread). With
+`/usr/bin/sample`, the main thread spends ~66 % in translated game code,
+spread thin (no function above 4 %), and ~20 % in Apple's OpenGL driver and
+kernel, mostly command-buffer submissions forced by each render-target change
+(`glClear`, `glBlitFramebuffer`).
+
+PGO profile: an instrumented build
+(`--release --pgo-generate --out build/portal2-native-pgogen`), runs with
+`LLVM_PROFILE_FILE=…/%p.profraw` (the save on OpenGL and Metal,
+`+map d1_trainstation_02`, `+map d3_c17_01`, ~1.2 GB each), then
+`xcrun llvm-profdata merge -o build/game/pgo-hl2.profdata …` (155 MB, not in
+git) and `--release --pgo-use build/game/pgo-hl2.profdata`.
+
+Rejected with measurements: dropping the flag save before every call (the
+unsound version of the interprocedural flags analysis described in
+STATUS.md) gains only +2.8 % here, so the sound version is not worth its
+risk for now.
+
 ## Known limits
 
 - Indirect call targets are still being discovered; a crash ending with
@@ -68,3 +100,11 @@ python3 tools/run_game.py --show --timeout 3600
 - Saves and settings share Portal 2's data folder
   (`~/Library/Application Support/Portal 2 Natif/userdata`).
 - No app bundle and no iPhone build yet.
+- Metal: the HDR sky (and the menu background behind the loading screen)
+  shows garbage blocks. The six sky faces are DEFAULT-pool DYNAMIC
+  1024×512 textures in `A16B16G16R16` (or `A16B16G16R16F` when 36 is
+  refused), each filled twice through `IDirect3DSurface9::LockRect` (full
+  rect, `D3DLOCK_NOSYSLOCK`). The data the game writes are valid and the
+  bridge passes pitch and pointer through unchanged, so the upload goes wrong
+  inside libd3d9metal. Refusing both formats in `CheckDeviceFormat` makes
+  the game fall back to the LDR sky, which renders correctly.
