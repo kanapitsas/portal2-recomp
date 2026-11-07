@@ -49,8 +49,9 @@ in the environment.)
 - From the app: the bundled library is used by default; `P2_RENDERER=opengl
   "~/Applications/Portal 2 Natif.app/Contents/MacOS/launcher"` forces OpenGL.
 - `P2_D3D9_VENDOR_ID` / `P2_D3D9_DEVICE_ID` (hex): PCI ids handed to the
-  library for `D3DADAPTER_IDENTIFIER9` (default Apple `106b` / `0000`; Source
-  keys vendor-specific paths on them). `P2_D3D9_CACHE`: shader/PSO cache
+  library for `D3DADAPTER_IDENTIFIER9` (default NVIDIA `10de` / `0000`; Source
+  keys vendor-specific paths on them, and with Apple `106b` it turns off the
+  shadow depth textures of dynamic lights). `P2_D3D9_CACHE`: shader/PSO cache
   directory (default `<user_dir>/d3d9metal-cache`).
 - Memory caps: before `d3d9metal_init` the runtime puts
   `memory.pageboxPoolCapMB=64;memory.vbibRetentionCapMB=192;memory.vramBudgetMB=1024`
