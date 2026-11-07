@@ -708,8 +708,10 @@ static int steam_shim(CPU *c, const char *name) {
     } else if (!strcmp(name, "SteamAPI_RestartAppIfNecessary")) {
         c->eax = FLAT(bool (*)(uint32_t), "SteamAPI_RestartAppIfNecessary")(arg(c, 0));
     } else if (!strcmp(name, "SteamAPI_RunCallbacks")) {
+        steam_deliver_warnings(c);
         run_callbacks(c, 0);
     } else if (!strcmp(name, "SteamGameServer_RunCallbacks")) {
+        steam_deliver_warnings(c);
         run_callbacks(c, 1);
     } else if (!strcmp(name, "SteamAPI_RegisterCallback")) {
         register_callback(c, arg(c, 0), (int32_t)arg(c, 1));
@@ -770,15 +772,13 @@ RT_SHIM_PROVIDER(steam_shim)
 
 // ---- SetWarningMessageHook : rappel invité void (*)(int severity, const char *text) ----
 // Steam appelle le crochet de façon synchrone pendant un appel de l'API (thread
-// invité dans un shim : rt_shim_cpu) ou depuis un de ses threads (rattaché le
-// temps de l'appel). Le texte est recopié en mémoire invitée, SteamID64 masqués.
+// invité dans un shim, porte tenue : rt_shim_cpu) ou depuis un de ses threads.
+// Dans ce second cas, pas de rt_guest_enter (un thread invité peut tenir la
+// porte dans un appel Steam qui attend un verrou de ce thread) : le texte est
+// recopié dans une file hôte, livrée par le prochain SteamAPI_RunCallbacks.
+// SteamID64 masqués dans les deux cas.
 static uint32_t warning_hook;
-static void host_warning_hook(int severity, const char *text) {
-    uint32_t fn = __atomic_load_n(&warning_hook, __ATOMIC_ACQUIRE);
-    if (!fn || !text) return;
-    CPU *c = rt_shim_cpu();
-    int attached = !c;
-    if (attached) c = rt_foreign_thread_attach();
+static void call_warning_hook(CPU *c, uint32_t fn, int severity, const char *text) {
     size_t length = strlen(text);
     uint32_t guest = rt_alloc((uint32_t)length + 1);
     if (!guest) rt_trap(c, c->eip, "Steam warning hook: guest memory exhausted");
@@ -787,7 +787,41 @@ static void host_warning_hook(int severity, const char *text) {
     uint32_t arguments[] = {(uint32_t)severity, guest};
     rt_invoke(c, fn, arguments, 2);
     rt_free(guest);
-    if (attached) rt_foreign_thread_detach();
+}
+#define WARNING_QUEUE 32
+static struct { uint32_t fn; int severity; char *text; } warning_queue[WARNING_QUEUE];
+static unsigned warning_count;   // écrit sous warning_lock, lu sans verrou pour le cas vide
+static pthread_mutex_t warning_lock = PTHREAD_MUTEX_INITIALIZER;
+static void host_warning_hook(int severity, const char *text) {
+    uint32_t fn = __atomic_load_n(&warning_hook, __ATOMIC_ACQUIRE);
+    if (!fn || !text) return;
+    CPU *c = rt_shim_cpu();
+    if (c) { call_warning_hook(c, fn, severity, text); return; }
+    char *copy = strdup(text);
+    if (copy) steam_mask_ids(copy, strlen(copy));
+    pthread_mutex_lock(&warning_lock);
+    int queued = copy && warning_count < WARNING_QUEUE;
+    if (queued) {
+        warning_queue[warning_count].fn = fn; warning_queue[warning_count].severity = severity;
+        warning_queue[warning_count].text = copy;
+        __atomic_store_n(&warning_count, warning_count + 1, __ATOMIC_RELEASE);
+    }
+    pthread_mutex_unlock(&warning_lock);
+    if (!queued) { fprintf(stderr, "steam: warning not delivered (queue full): %s\n", copy ? copy : "?"); free(copy); }
+}
+// Thread invité, porte tenue (SteamAPI_RunCallbacks).
+void steam_deliver_warnings(CPU *c) {
+    if (!__atomic_load_n(&warning_count, __ATOMIC_ACQUIRE)) return;
+    pthread_mutex_lock(&warning_lock);
+    unsigned count = warning_count;
+    __typeof__(warning_queue[0]) pending[WARNING_QUEUE];
+    memcpy(pending, warning_queue, count * sizeof(*pending));
+    __atomic_store_n(&warning_count, 0, __ATOMIC_RELEASE);
+    pthread_mutex_unlock(&warning_lock);
+    for (unsigned i = 0; i < count; ++i) {
+        call_warning_hook(c, pending[i].fn, pending[i].severity, pending[i].text);
+        free(pending[i].text);
+    }
 }
 static void set_warning_hook(CPU *c, void *self, uint32_t args, const char *symbol) {
     typedef void (*Hook)(int, const char *);

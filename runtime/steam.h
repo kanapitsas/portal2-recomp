@@ -40,4 +40,5 @@ void *steam_proxy_host(uint32_t proxy);
 void steam_pop_hidden_pointer(CPU *c);
 void steam_mask_ids(char *text, size_t length);   // masque les SteamID64 d'un texte
 void steam_test_warning_hook(uint32_t guest_fn, int severity, const char *text);
+void steam_deliver_warnings(CPU *c);   // file des avertissements des threads Steam
 int steam_callback_guest_size(int32_t id, int32_t host_size);   // remplissage final i386 vs ARM64

@@ -277,7 +277,7 @@ def translate(pc, insn, entries=frozenset(), callees=None, cases=None, rebase=Fa
         if op == 'jmp':
             return branch, successors
         return f'if (cond(&f, CC_{CC[op[1:]]})) {{ {branch} }} {end}', successors + [nxt]
-    floating = float_lift.lower(op, args, nxt, Operand, Unsupported)
+    floating = float_lift.lower(op, args, nxt, Operand, Unsupported, here)
     if floating is not None:
         return floating
     operands = [Operand(x.strip()) for x in args.split(',')] if args else []
@@ -397,7 +397,7 @@ def translate(pc, insn, entries=frozenset(), callees=None, cases=None, rebase=Fa
         value = '1u' if operation in ('inc', 'dec') else operands[1].read()
         kind = {'add': 0, 'adc': 0, 'inc': 0, 'sub': 1, 'sbb': 1, 'dec': 1, 'and': 2, 'or': 3, 'xor': 4}[operation]
         increment = 'b + f.cf' if operation in ('adc', 'sbb') else 'b'
-        code = f'b = {value}; a = rt_atomic32(c, {dst.addr}, {increment}, {kind}); '
+        code = f'b = {value}; a = rt_atomic32(c, {dst.addr}, {increment}, {kind}, {here}); '
         if operation in ('and', 'or', 'xor'):
             operator = {'and': '&', 'or': '|', 'xor': '^'}[operation]
             code += f'f_logic(&f, a {operator} b, 32);'
@@ -409,11 +409,11 @@ def translate(pc, insn, entries=frozenset(), callees=None, cases=None, rebase=Fa
         dst, src = operands
         if dst.addr is None or dst.width != 32 or not src.reg or src.width != 32:
             raise Unsupported('xadd operand form')
-        code = f'b = {src.read()}; a = rt_atomic32(c, {dst.addr}, b, 0); f_add(&f, a, b, 32); ' + src.write('a')
+        code = f'b = {src.read()}; a = rt_atomic32(c, {dst.addr}, b, 0, {here}); f_add(&f, a, b, 32); ' + src.write('a')
     elif op == 'xchg' and len(operands) == 2:
         dst, src = operands
         if dst.addr is not None and dst.width == 32 and src.reg and src.width == 32:
-            code = f'a = {src.read()}; r = rt_exchange32(c, {dst.addr}, a); ' + src.write('r')
+            code = f'a = {src.read()}; r = rt_exchange32(c, {dst.addr}, a, {here}); ' + src.write('r')
         elif dst.reg and src.reg and dst.width == src.width:
             code = f'a = {dst.read()}; b = {src.read()}; ' + dst.write('b') + ' ' + src.write('a')
         else:
@@ -423,13 +423,13 @@ def translate(pc, insn, entries=frozenset(), callees=None, cases=None, rebase=Fa
         if dst.addr is None or dst.width != 64:
             raise Unsupported('cmpxchg8b operand form')
         code = (f'{{ uint64_t expected = ((uint64_t)c->edx << 32) | c->eax; '
-                f'uint64_t observed = rt_compare_exchange64(c, {dst.addr}, expected, ((uint64_t)c->ecx << 32) | c->ebx); '
+                f'uint64_t observed = rt_compare_exchange64(c, {dst.addr}, expected, ((uint64_t)c->ecx << 32) | c->ebx, {here}); '
                 'f.zf = observed == expected; if (!f.zf) { c->eax = (uint32_t)observed; c->edx = (uint32_t)(observed >> 32); } }')
     elif op in ('cmpxchg', 'lock_cmpxchg') and len(operands) == 2:
         dst, src = operands
         if dst.addr is None or dst.width != 32 or not src.reg or src.width != 32:
             raise Unsupported('cmpxchg operand form')
-        code = (f'a = c->eax; b = {src.read()}; r = rt_compare_exchange32(c, {dst.addr}, a, b); '
+        code = (f'a = c->eax; b = {src.read()}; r = rt_compare_exchange32(c, {dst.addr}, a, b, {here}); '
                 'f_sub(&f, a, r, 32); if (a != r) c->eax = r;')
     elif op.startswith('cmov') and op[4:] in CC and len(operands) == 2:
         dst, src = operands

@@ -2,6 +2,7 @@
 // signaux et threads hôtes étrangers appelant du code invité.
 #include "checks.h"
 #include "modules.h"
+#include <errno.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdatomic.h>
@@ -398,4 +399,60 @@ RT_CHECK(futex_wake_racing_timeout_is_not_lost) {
     while (!atomic_load(&futex_race_done)) woken += rt_futex(&c, FUTEX_RACE_WORD, 129, 1, 0);
     assert(!pthread_join(waiter, NULL));
     assert(woken == successes);
+}
+
+// Appels fréquents : route directe (sans recherche par nom), mêmes résultats,
+// et le cache des conditions oublie une condition détruite.
+static uint32_t routed(CPU *c, const char *name, const uint32_t *args, unsigned count) {
+    uint32_t esp = c->esp; c->esp -= 64;
+    for (unsigned i = 0; i < count; ++i) W32(c->esp + 4 + 4 * i, args[i]);
+    RtShimRoute route; assert(rt_shim_route(c, name, &route) && route.handler);
+    uint32_t first = c->eax;
+    assert(rt_route_call(&route, c, name) && c->eax == first);
+    c->esp = esp;
+    return c->eax;
+}
+RT_CHECK(pthread_hot_calls_have_direct_routes) {
+    CPU c; main_cpu(&c); rt_guest_enter();
+    uint32_t m = DATA + 0x900, cond = DATA + 0x940, key = DATA + 0x980, ts = DATA + 0x9c0;
+    uint32_t args[3] = {m, 0};
+    assert(call(&c, "pthread_mutex_init", args, 2) == 0);
+    args[0] = cond; assert(call(&c, "pthread_cond_init", args, 2) == 0);
+    assert(routed(&c, "pthread_cond_signal", args, 1) == 0);
+    assert(routed(&c, "pthread_cond_broadcast", args, 1) == 0);
+    {   // une seule fois : un second verrouillage bloquerait
+        uint32_t esp = c.esp; c.esp -= 64; W32(c.esp + 4, m);
+        RtShimRoute route; assert(rt_shim_route(&c, "pthread_mutex_lock", &route) && route.handler && c.eax == 0);
+        c.esp = esp;
+        args[0] = m; assert(call(&c, "pthread_mutex_unlock", args, 1) == 0);
+    }
+    W32(ts, 0); W32(ts + 4, 0); args[0] = cond; args[1] = m; args[2] = ts;
+    assert(call(&c, "pthread_mutex_lock", args + 1, 1) == 0);
+    assert(routed(&c, "pthread_cond_timedwait", args, 3) == 110);   // échéance passée
+    assert(call(&c, "pthread_mutex_unlock", args + 1, 1) == 0);
+    args[0] = cond; assert(call(&c, "pthread_cond_destroy", args, 1) == 0);
+    assert(routed(&c, "pthread_cond_signal", args, 1) == 22);        // plus dans le cache
+    args[0] = key; args[1] = 0; assert(call(&c, "pthread_key_create", args, 2) == 0);
+    args[0] = R32(key); args[1] = 0x1234;
+    assert(routed(&c, "pthread_setspecific", args, 2) == 0);
+    assert(routed(&c, "pthread_getspecific", args, 1) == 0x1234);
+    assert(call(&c, "pthread_key_delete", args, 1) == 0);
+    assert(routed(&c, "pthread_setspecific", args, 2) == 22);
+    assert(routed(&c, "pthread_self", args, 0) == call(&c, "pthread_self", args, 0));
+    args[0] = m; assert(call(&c, "pthread_mutex_destroy", args, 1) == 0);
+    rt_guest_leave();
+}
+
+// FUTEX_WAIT relatif (horloge monotone) : expire après le délai, pas avant,
+// et un délai nul expire aussitôt.
+RT_CHECK(futex_relative_timeout_expires_on_time) {
+    CPU c; main_cpu(&c);
+    uint32_t word = DATA + 0xa00, timeout = DATA + 0xa08;
+    W32(word, 0); W32(timeout, 0); W32(timeout + 4, 30000000);   // 30 ms
+    struct timespec start; clock_gettime(CLOCK_MONOTONIC, &start);
+    assert(rt_futex(&c, word, 128, 0, timeout) == -1 && errno == ETIMEDOUT);
+    double waited = elapsed_ms(&start);
+    assert(waited >= 29.0 && waited < 2000);
+    W32(timeout + 4, 0);
+    assert(rt_futex(&c, word, 128, 0, timeout) == -1 && errno == ETIMEDOUT);
 }

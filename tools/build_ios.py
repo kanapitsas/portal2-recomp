@@ -74,7 +74,7 @@ def main():
                      f'-I{deps}/include', f'-I{deps}/include/SDL2', f'-I{deps}/include/gl4es',
                      f'-I{deps}/include/freetype2', '-DGL_SILENCE_DEPRECATION', '-DGLES_SILENCE_DEPRECATION',
                      '-DOPENAL_DEPRECATED=', '-DAL_SILENCE_DEPRECATION']
-    generated_flags = [*base, f'-O{args.opt}', '-gline-tables-only', *build_game.WARNINGS, *memory, '-Iruntime']
+    generated_flags = [*base, f'-O{args.opt}', '-gline-tables-only', *build_game.GENERATED_TUNING, *build_game.WARNINGS, *memory, '-Iruntime']
     sources = Path('build/game/gen/src')
     # runtime/d3d9.c : symboles de libd3d9metal.a liés, pas de dlopen ;
     # runtime/ios/metal_ios.m s'en sert pour savoir si Metal est disponible.

@@ -17,8 +17,11 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include <fontconfig/fontconfig.h>
+#include <dlfcn.h>
+#include <limits.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #define KIND_LIBRARY 0x46544c42u  // 'FTLB'
 #define KIND_CONFIG  0x46434346u  // 'FCCF'
@@ -438,7 +441,26 @@ static uint32_t pattern_string(CPU *c, Pattern *p, const FcChar8 *s) {
     return p->copies[p->count++];
 }
 
+// Le bundle précompilé de setup.sh compile Fontconfig avec un préfixe neutre
+// (/opt/p2-host-deps) : sa configuration est dans <lib>/../etc/fonts. Sans
+// FONTCONFIG_PATH (que le lanceur de l'app fixe), on la cherche là ; avec
+// Homebrew, ce dossier n'existe pas et le chemin compilé sert.
+static void fontconfig_locate(void) {
+    if (getenv("FONTCONFIG_PATH") || getenv("FONTCONFIG_FILE")) return;
+    Dl_info info;
+    if (!dladdr((const void *)FcInit, &info) || !info.dli_fname) return;
+    char path[PATH_MAX];
+    const char *slash = strrchr(info.dli_fname, '/');
+    if (!slash) return;
+    int n = snprintf(path, sizeof(path), "%.*s/../etc/fonts/fonts.conf", (int)(slash - info.dli_fname), info.dli_fname);
+    if (n <= 0 || (size_t)n >= sizeof(path) || access(path, R_OK)) return;
+    path[n - (int)strlen("/fonts.conf")] = 0;
+    setenv("FONTCONFIG_PATH", path, 0);
+}
+
 static int fontconfig_shim(CPU *c, const char *name) {
+    static pthread_once_t located = PTHREAD_ONCE_INIT;
+    pthread_once(&located, fontconfig_locate);
     if (!strcmp(name, "FcInit")) {
         c->eax = (uint32_t)FcInit();
     } else if (!strcmp(name, "FcConfigGetCurrent")) {

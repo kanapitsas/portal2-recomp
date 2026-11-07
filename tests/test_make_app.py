@@ -37,7 +37,7 @@ class MakeAppTests(unittest.TestCase):
         self.old = self.tmp / 'work/portal2-userdata'
         # The fake binary is not Mach-O: skip dylib bundling and signing here.
         for patch in (mock.patch.object(make_app, 'ROOT', self.root), mock.patch.object(make_app, 'SUPPORT', self.support),
-                      mock.patch.object(make_app, 'bundle_libraries', lambda app, binary: None),
+                      mock.patch.object(make_app, 'bundle_libraries', lambda app, binary, prefix: None),
                       mock.patch.object(make_app, 'sign_app', lambda app: None)):
             patch.start()
             self.addCleanup(patch.stop)
@@ -116,6 +116,47 @@ class MakeAppTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             self.run_main()
         self.assertTrue((app / 'Contents/MacOS/launcher').exists())
+
+
+class BundleLibrariesTests(unittest.TestCase):
+    def test_executable_keeps_only_the_frameworks_rpath(self):
+        # build_game.py links with -rpath <host prefix>/lib; left in the app, it would load
+        # the bundle (or Homebrew) from outside the app whenever it still exists.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'main.c').write_text('int main(void) { return 0; }\n')
+            binary = tmp / 'portal2-native'
+            subprocess.run(['clang', str(tmp / 'main.c'), '-Wl,-rpath,/opt/p2-prefix/lib', '-o', str(binary)], check=True)
+            app = tmp / 'Test.app'
+            (app / 'Contents/MacOS').mkdir(parents=True)
+            make_app.bundle_libraries(app, binary, tmp / 'no-prefix')
+            self.assertEqual(make_app.macho_rpaths(app / 'Contents/MacOS/portal2-native'), [make_app.FRAMEWORKS_RPATH])
+
+    def test_rpaths_with_spaces(self):
+        # The installer builds in ~/Library/Application Support/Portal 2 Natif Build.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'main.c').write_text('int main(void) { return 0; }\n')
+            binary = tmp / 'a.out'
+            prefix = '/Users/me/Library/Application Support/Portal 2 Natif Build/deps/lib'
+            subprocess.run(['clang', str(tmp / 'main.c'), f'-Wl,-rpath,{prefix}', '-o', str(binary)], check=True)
+            self.assertEqual(make_app.macho_rpaths(binary), [prefix])
+            app = tmp / 'Test.app'
+            (app / 'Contents/MacOS').mkdir(parents=True)
+            make_app.bundle_libraries(app, binary, tmp / 'no-prefix')
+            self.assertEqual(make_app.macho_rpaths(app / 'Contents/MacOS/portal2-native'), [make_app.FRAMEWORKS_RPATH])
+
+    def test_sdl3_found_in_homebrew_keg_or_bundle_lib(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = Path(tmp)
+            with self.assertRaises(SystemExit):
+                make_app.sdl3_library(prefix)
+            (prefix / 'lib').mkdir()
+            (prefix / 'lib/libSDL3.0.dylib').write_bytes(b'')
+            self.assertEqual(make_app.sdl3_library(prefix), (prefix / 'lib/libSDL3.0.dylib').resolve())
+            (prefix / 'opt/sdl3/lib').mkdir(parents=True)
+            (prefix / 'opt/sdl3/lib/libSDL3.0.dylib').write_bytes(b'')
+            self.assertEqual(make_app.sdl3_library(prefix), (prefix / 'opt/sdl3/lib/libSDL3.0.dylib').resolve())
 
 
 if __name__ == '__main__':
