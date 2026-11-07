@@ -245,8 +245,10 @@ static void fill_host(void) {
         .size = sizeof(D3D9MetalHost), .user = NULL,
         .metal_layer = host_metal_layer, .alloc_app = host_alloc_app, .free_app = host_free_app,
         .blocking_begin = host_blocking_begin, .blocking_end = host_blocking_end,
-        // Apple par défaut : aucune branche propre à un fabricant dans Source.
-        .vendor_id = env_id("P2_D3D9_VENDOR_ID", 0x106b), .device_id = env_id("P2_D3D9_DEVICE_ID", 0),
+        // NVIDIA par défaut : avec un fabricant inconnu (Apple, 0x106b), shaderapivk
+        // désactive les textures de profondeur des ombres dynamiques
+        // (r_flashlightdepthtexture 0, issue #20). OpenGL les a déjà.
+        .vendor_id = env_id("P2_D3D9_VENDOR_ID", 0x10de), .device_id = env_id("P2_D3D9_DEVICE_ID", 0),
         .cache_dir = NULL,
     };
     const char *env = getenv("P2_D3D9_CACHE"), *user = rt_user_root();

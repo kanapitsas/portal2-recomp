@@ -331,7 +331,7 @@ RT_CHECK(d3d9_bridge_against_fake_native_library) {
     assert(rt_shim(&c, "Direct3DCreate9") == 1);
     uint32_t d3d_proxy = c.eax;
     assert(d3d_proxy && R32(d3d_proxy + 4) == tag(D3D9_IDirect3D9) && R64(d3d_proxy + 8) == (uintptr_t)&d3d);
-    assert(fake_host && fake_host->vendor_id == 0x106b && fake_host->metal_layer && fake_host->alloc_app);
+    assert(fake_host && fake_host->vendor_id == 0x10de && fake_host->metal_layer && fake_host->alloc_app);
     assert(!strcmp(rt_dynamic_import_name(R32(R32(d3d_proxy) + 4 * 16)), "IDirect3D9::CreateDevice"));
 
     // D3DADAPTER_IDENTIFIER9 : 1100 octets i386, rien au-delà.
@@ -339,7 +339,7 @@ RT_CHECK(d3d9_bridge_against_fake_native_library) {
     memset(GPTR(id), 0xcc, 1104);
     assert(CALL(d3d_proxy, IDirect3D9, GetAdapterIdentifier, 0, 0, id).eax == 0);
     assert(!strcmp((const char *)GPTR(id + 512), "Fake Metal GPU") && R64(id + 1056) == 0x0001000200030004ull);
-    assert(R32(id + 1064) == 0x106b && R32(id + 1068) == 0x1234 && R8(id + 1095) == 0x5a && R32(id + 1096) == 0xabcd);
+    assert(R32(id + 1064) == 0x10de && R32(id + 1068) == 0x1234 && R8(id + 1095) == 0x5a && R32(id + 1096) == 0xabcd);
     assert(R32(id + 1100) == 0xccccccccu);
 
     // CreateDevice : D3DPRESENT_PARAMETERS i386 (56 octets, HWND en 0x1c) traduits et réécrits.
