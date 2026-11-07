@@ -388,10 +388,18 @@ static void *hook_thread(void *unused) {
     steam_test_warning_hook(rt_dynamic_import("__steam_test_hook"), 1, "id 76561197960287930 warn");
     return NULL;
 }
+// Depuis un thread Steam : rien d'invité sur ce thread (porte non prise),
+// livré ensuite sur un thread invité, comme par SteamAPI_RunCallbacks.
 RT_CHECK(steam_warning_hook_reaches_guest_from_steam_thread) {
     pthread_t thread;
     assert(!pthread_create(&thread, NULL, hook_thread, NULL) && !pthread_join(thread, NULL));
+    assert(hook_severity == -1);
+    CPU c; rt_cpu_reset(&c); c.esp = 0x20010000;
+    rt_guest_enter(); steam_deliver_warnings(&c); rt_guest_leave();
     assert(hook_severity == 1 && strstr(hook_text, "warn") && !strstr(hook_text, "76561197960287930"));
+    hook_severity = -1;
+    rt_guest_enter(); steam_deliver_warnings(&c); rt_guest_leave();
+    assert(hook_severity == -1);                                   // file vidée
 }
 
 // Faux ISteamGameCoordinator001 hôte : vraie table de méthodes virtuelles.
