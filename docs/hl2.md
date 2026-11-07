@@ -109,6 +109,22 @@ git) and `--release --pgo-use build/game/pgo-hl2.profdata`.
   than native gives about 130–165 fps.
 - **Beyond that**: overlapping the render thread (`mat_queue_mode 2`) would
   first need the guest gate removed, plus x86 memory ordering on ARM.
+- **The call share is mostly not protocol instructions.** In the release
+  build, the protocol adds about 5 instructions per call: the poll, plus
+  setting and checking `eip`. The flags save adds up to 13 when the flags are
+  live, and the callee-saved register save and restore adds 10. Profiling at
+  instruction level (`sample`, PCs disassembled with `llvm-mc`) puts 13 % of
+  translated time on the first instruction of a function and 15 % on the host
+  register save and restore. That looks like front-end stalls on a large hot
+  code footprint (4.7 MB of functions called more than a million times during
+  the PGO runs). Three experiments, none of which helped:
+  - grouping those functions first with an order file built from the PGO
+    profile (`--order-file`): 68.0 → 65.7 fps, within noise;
+  - the `preserve_none` calling convention for translated functions: code
+    grew by 6 % because callers now spill `c` around every call, and the
+    bench did not change (×0.96–1.01);
+  - dropping the poll and the `eip` store would save ~5 instructions per
+    call, about 1–3 % at the estimated 300–650 k calls per frame; not done.
 - **Typing guest accesses** so that clang keeps guest registers in host
   registers across guest stores is unsound, because 8/16/32-bit accesses to
   the same address must still alias. As an experiment it gained only 2–10 %
