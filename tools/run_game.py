@@ -9,6 +9,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import games  # noqa: E402
+import language  # noqa: E402
 import localconfig  # noqa: E402
 
 parser = argparse.ArgumentParser(description=__doc__)
@@ -33,9 +34,7 @@ game_args = args.arguments
 if game_args[:1] == ['--']: game_args = game_args[1:]
 if not game_args: game_args = ['-game', game['mod'], '-novid', '-windowed', '-w', '1280', '-h', '720']
 # Langue du jeu (P2_LANGUAGE, config/local.json, Steam, système) : voir tools/language.py.
-language_args = subprocess.run([sys.executable, str(Path(__file__).with_name('language.py')), '--', *game_args],
-                               capture_output=True, text=True).stdout.split()
-game_args = [*game_args, *language_args]
+game_args = [*game_args, *language.language_args(config, game_args)]   # the game's config: its folder and appmanifest
 # Les lancements de diagnostic (fenêtre cachée) travaillent sur une copie des
 # données utilisateur : jamais deux instances sur les mêmes sauvegardes et
 # réglages, ni de modification des réglages de l'utilisateur.
