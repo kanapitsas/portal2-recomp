@@ -754,6 +754,15 @@ RT_CHECK(d3d9_event_query_reached_after_present) {
     assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0);
     assert(CALL(q, IDirect3DQuery9, GetData, data, 4, 1).eax == 0);
     assert(event_seen.issues == 4 && event_seen.get_data == 8);
+    // Deux événements dont les adresses tombent dans la même case : chacun garde son entrée.
+    static uint8_t arena[64 * 16 + sizeof(Fake)] __attribute__((aligned(16)));
+    Fake *pair[2] = {(Fake *)arena, (Fake *)(arena + 64 * 16)};   // 1 Kio d'écart : même case de départ
+    *pair[0] = *pair[1] = (Fake){event_query_vtbl, 1, 8, NULL, NULL};
+    uint32_t t0 = d3d9_proxy(&c, pair[0], D3D9_IDirect3DQuery9), t1 = d3d9_proxy(&c, pair[1], D3D9_IDirect3DQuery9);
+    assert(CALL(t0, IDirect3DQuery9, Issue, 1).eax == 0 && CALL(t1, IDirect3DQuery9, Issue, 1).eax == 0);
+    assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0);
+    assert(CALL(t0, IDirect3DQuery9, GetData, data, 4, 1).eax == 0 && CALL(t1, IDirect3DQuery9, GetData, data, 4, 1).eax == 0);
+    CALL0(t0, IUnknown, Release); CALL0(t1, IUnknown, Release);
     CALL0(q, IUnknown, Release); CALL0(o, IUnknown, Release); CALL0(dev, IUnknown, Release);
 }
 

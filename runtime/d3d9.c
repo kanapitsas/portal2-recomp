@@ -961,10 +961,13 @@ void rt_d3d9_draw_overlay(void *dev) {   // aussi appelé par tests/checks_d3d9.
 // le ferait demande P2_D3D9_STRICT_EVENTS=1 (réponse de la bibliothèque).
 // Compteurs : un Issue fait pendant un Present (le verrou invité y est
 // relâché) compte comme postérieur, donc attend le Present suivant.
-enum { D3DQUERYTYPE_EVENT = 8, D3DISSUE_END = 1, EVENT_SLOTS = 64, SLOT_QUERY_GETTYPE = 4 };
+enum { D3DQUERYTYPE_EVENT = 8, D3DISSUE_END = 1, EVENT_SLOTS = 64, EVENT_PROBE = 4, SLOT_QUERY_GETTYPE = 4 };
 static uint64_t presents_started, presents_done;     // sous le verrou invité
-// Correspondance directe requête -> Present : une collision écrase l'entrée,
-// ce qui ne fait que rendre la réponse de la bibliothèque à l'autre requête.
+// Requête -> Present : sondage sur EVENT_PROBE cases, puis éviction de la
+// case d'origine, ce qui ne fait que rendre la réponse de la bibliothèque à
+// la requête évincée. Les compteurs sont communs au processus : Source n'a
+// qu'un appareil (un second appareil qui présente libérerait les événements
+// du premier).
 static struct { void *query; uint64_t issued; } event_issued[EVENT_SLOTS];
 static int strict_events(void) {
     static int value = -1;
@@ -974,12 +977,22 @@ static int strict_events(void) {
 static int is_event(void *query) {
     return ((uint32_t (*)(void *))D3D9_VTBL(query)[SLOT_QUERY_GETTYPE])(query) == D3DQUERYTYPE_EVENT;
 }
-static size_t event_slot(void *query) { return ((uintptr_t)query >> 4) % EVENT_SLOTS; }
+static size_t event_find(void *query) {             // SIZE_MAX si absente
+    for (size_t k = 0, h = ((uintptr_t)query >> 4) % EVENT_SLOTS; k < EVENT_PROBE; ++k)
+        if (event_issued[(h + k) % EVENT_SLOTS].query == query) return (h + k) % EVENT_SLOTS;
+    return SIZE_MAX;
+}
+static size_t event_place(void *query) {
+    size_t i = event_find(query), h = ((uintptr_t)query >> 4) % EVENT_SLOTS;
+    for (size_t k = 0; i == SIZE_MAX && k < EVENT_PROBE; ++k)
+        if (!event_issued[(h + k) % EVENT_SLOTS].query) i = (h + k) % EVENT_SLOTS;
+    return i == SIZE_MAX ? h : i;
+}
 void d3d9_manual_IDirect3DQuery9_Issue(CPU *c, void *self, uint32_t a) {
     uint32_t flags = R32(a);
     c->eax = (uint32_t)((int32_t (*)(void *, uint32_t))D3D9_VTBL(self)[D3D9_SLOT_IDirect3DQuery9_Issue])(self, flags);
     if ((int32_t)c->eax < 0 || !(flags & D3DISSUE_END) || strict_events() || !is_event(self)) return;
-    size_t i = event_slot(self);
+    size_t i = event_place(self);
     event_issued[i].query = self; event_issued[i].issued = presents_started;
 }
 void d3d9_manual_IDirect3DQuery9_GetData(CPU *c, void *self, uint32_t a) {
@@ -987,9 +1000,8 @@ void d3d9_manual_IDirect3DQuery9_GetData(CPU *c, void *self, uint32_t a) {
     void *out = d3d9_out(c, data, size);
     int32_t hr = ((int32_t (*)(void *, void *, uint32_t, uint32_t))D3D9_VTBL(self)[D3D9_SLOT_IDirect3DQuery9_GetData])(
         self, out, size, flags);
-    size_t i = event_slot(self);
-    if (hr == 1 /* S_FALSE */ && !strict_events() && event_issued[i].query == self
-        && event_issued[i].issued < presents_done && is_event(self)) {
+    size_t i = hr == 1 /* S_FALSE */ && !strict_events() ? event_find(self) : SIZE_MAX;
+    if (i != SIZE_MAX && event_issued[i].issued < presents_done && is_event(self)) {
         if (out) { uint32_t yes = 1; memcpy(out, &yes, size < 4 ? size : 4); }   // BOOL TRUE (octets bas)
         hr = 0;
     }
