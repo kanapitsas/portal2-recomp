@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Create "Portal 2 Natif.app", launchable from the Finder or the Dock.
+"""Create "Portal 2 Natif.app" (or the app of the game named in
+config/local.json, e.g. "Half-Life 2 Natif.app"; tools/games.py), launchable
+from the Finder or the Dock.
 
 The app does not copy the game data; it embeds a copy of build/portal2-native
 and the Homebrew dylibs it depends on (Contents/Frameworks), so it runs without
 Homebrew. Re-run this script after a rebuild to update the app. The launcher
 takes its paths from config/local.json, starts Steam if it is not running and
-logs to ~/Library/Logs/Portal2Natif.log.
+logs to ~/Library/Logs/Portal2Natif.log (HalfLife2Natif.log for HL2).
 
 The prepared modules (build/game/prep, ~75 MB) are copied into
 Contents/Resources/prep: rebuild the app after tools/gameprep.py. Without
 user_dir in config/local.json, saves go to
-~/Library/Application Support/Portal 2 Natif/userdata (the old default
+~/Library/Application Support/<app name>/userdata (Portal 2's old default
 ../work/portal2-userdata is copied there once). ./uninstall.sh removes it all.
 
     python3 tools/make_app.py                      # ~/Applications
@@ -28,20 +30,17 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import games  # noqa: E402
 import localconfig  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-NAME = localconfig.APP_NAME
-# Sans -w/-h/-windowed : résolution et mode choisis dans le menu Vidéo du jeu
-# (enregistrés dans update/cfg/video.txt) ; Retina selon la résolution.
-DEFAULT_ARGS = ['-game', 'portal2', '-novid']
 # Données propres à l'app, hors du dépôt : ./uninstall.sh supprime ce dossier.
 SUPPORT = localconfig.SUPPORT
 OLD_USER_DIR = '../work/portal2-userdata'  # ancien défaut, relatif au dépôt
 
 LAUNCHER = '''#!/bin/bash
 # Lanceur généré par tools/make_app.py : le modifier là-bas.
-LOG="$HOME/Library/Logs/Portal2Natif.log"
+LOG="$HOME/Library/Logs/{log_name}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 alert() {{ /usr/bin/osascript -e "display alert \\"{name}\\" message \\"$1\\" as critical" >/dev/null 2>&1; }}
 GAME_DIR={game_dir}   # quoted by shlex: never re-parsed by the shell
@@ -53,8 +52,8 @@ if ! /usr/bin/pgrep -qx steam_osx; then
     for _ in $(seq 60); do /usr/bin/pgrep -qx steam_osx && break; sleep 0.5; done
     sleep 5
 fi
-export SteamAppId=620 SteamGameId=620
-# libsteam_api.dylib de Valve, copiée dans l'app : le runtime la cherche sinon
+export SteamAppId={appid} SteamGameId={appid}
+{renderer}# libsteam_api.dylib de Valve, copiée dans l'app : le runtime la cherche sinon
 # à côté du dépôt, absent ici.
 export P2_STEAM_API_DYLIB="$HERE/../Frameworks/libsteam_api.dylib"
 # Configuration Fontconfig embarquée (sinon cherchée dans le préfixe de compilation).
@@ -210,9 +209,11 @@ def sign_app(app):
 
 
 def user_dir(config):
-    """Saves folder: user_dir of the config, else SUPPORT/userdata, initialised
-    once by copying (never moving) the old default."""
+    """Saves folder: user_dir of the config, else the game's support folder
+    (SUPPORT for Portal 2), whose userdata Portal 2 initialises once by
+    copying (never moving) the old default."""
     if config.get('user_dir'): return localconfig.user_dir(config)
+    if games.profile(config)['name'] != 'portal2': return localconfig.user_dir(config)
     new, old = localconfig.user_dir(config, support=SUPPORT), ROOT / OLD_USER_DIR
     if not new.exists() and old.is_dir():
         partial = new.with_name(new.name + '.partial')
@@ -231,6 +232,20 @@ def copy_tree(source, dest):
         shutil.copytree(source, dest)
 
 
+def default_args(game):
+    """Game arguments of the app when make_app.py is given none."""
+    # Sans -w/-h/-windowed : résolution et mode choisis dans le menu Vidéo du jeu
+    # (enregistrés dans update/cfg/video.txt) ; Retina selon la résolution.
+    return ['-game', game['mod'], '-novid']
+
+
+def renderer_line(game):
+    """Launcher line for a game that starts on a given renderer (P2_RENDERER
+    set by the user still wins), empty otherwise."""
+    if not game.get('renderer'): return ''
+    return f'export P2_RENDERER="${{P2_RENDERER:-{game["renderer"]}}}"   # see tools/games.py\n'
+
+
 def build_app(app, binary, prep, config, paths, game_args):
     macos = app / 'Contents/MacOS'
     resources = app / 'Contents/Resources'
@@ -245,19 +260,22 @@ def build_app(app, binary, prep, config, paths, game_args):
     shutil.copy(ROOT / 'tools/language.py', resources / 'language.py')
     shutil.copy(ROOT / 'config/local.json', resources / 'local.json')
 
+    game = games.profile(config)
     launcher = macos / 'launcher'
     launcher.write_text(LAUNCHER.format(
-        name=NAME, game_args=shlex.join(game_args or DEFAULT_ARGS),
+        name=game['app_name'], log_name=game['log_name'], appid=int(game['steam_appid']),
+        renderer=renderer_line(game), game_args=shlex.join(game_args or default_args(game)),
         **{key: shlex.quote(str(value)) for key, value in paths.items()}))
     launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     bundle_libraries(app, binary, localconfig.host_prefix(config))
     bundle_steam_api(app, config)
     bundle_d3d9metal(app, config)
 
-    icon = paths['game_dir'] / 'portal2/resource/game.icns'
+    icon = paths['game_dir'] / game['icon']
     if icon.exists(): shutil.copy(icon, resources / 'portal2.icns')
     plist = {
-        'CFBundleName': NAME, 'CFBundleDisplayName': NAME, 'CFBundleIdentifier': 'fr.kanapitsas.portal2-native',
+        'CFBundleName': game['app_name'], 'CFBundleDisplayName': game['app_name'],
+        'CFBundleIdentifier': game['bundle_id'],
         'CFBundleExecutable': 'launcher', 'CFBundlePackageType': 'APPL', 'CFBundleVersion': '1',
         'CFBundleShortVersionString': '1.0', 'CFBundleIconFile': 'portal2', 'LSMinimumSystemVersion': '13.0',
         'NSHighResolutionCapable': True, 'LSApplicationCategoryType': 'public.app-category.games',
@@ -283,15 +301,16 @@ def main():
 
     # Construite à côté puis échangée : un échec en cours de route laisse
     # l'app existante intacte.
-    final = args.dest / f'{NAME}.app'
-    app = args.dest / f'.{NAME}.app.partial'
+    name = games.profile(config)['app_name']
+    final = args.dest / f'{name}.app'
+    app = args.dest / f'.{name}.app.partial'
     if app.exists(): shutil.rmtree(app)
     try:
         build_app(app, binary, prep, config, paths, game_args)
     except BaseException:
         shutil.rmtree(app, ignore_errors=True)
         raise
-    old = args.dest / f'.{NAME}.app.old'
+    old = args.dest / f'.{name}.app.old'
     if old.exists(): shutil.rmtree(old)
     if final.exists(): final.rename(old)
     app.rename(final)

@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import plistlib
 from pathlib import Path
 import subprocess
 import sys
@@ -47,7 +48,7 @@ class MakeAppTests(unittest.TestCase):
         dest = self.tmp / 'Applications'
         with mock.patch.object(sys, 'argv', ['make_app.py', '--dest', str(dest)]), mock.patch('builtins.print'):
             make_app.main()
-        return dest / 'Portal 2 Natif.app'
+        return dest / f"{make_app.games.profile(self.config)['app_name']}.app"
 
     def test_launcher_reads_nothing_from_repo(self):
         app = self.run_main()
@@ -109,6 +110,40 @@ class MakeAppTests(unittest.TestCase):
         library.unlink()
         with self.assertRaises(SystemExit):
             self.run_main()
+
+    def test_portal2_app_identity_unchanged(self):
+        app = self.run_main()
+        launcher = (app / 'Contents/MacOS/launcher').read_text()
+        self.assertIn('Library/Logs/Portal2Natif.log', launcher)
+        self.assertIn('export SteamAppId=620 SteamGameId=620', launcher)
+        self.assertIn('-game portal2 -novid', launcher)
+        self.assertNotIn('P2_RENDERER', launcher)   # Metal when bundled
+        with (app / 'Contents/Info.plist').open('rb') as f:
+            self.assertEqual(plistlib.load(f)['CFBundleIdentifier'], 'fr.kanapitsas.portal2-native')
+
+    def test_hl2_gets_its_own_app_and_data_folder(self):
+        # Portal 2's old saves location must not leak into Half-Life 2's folder.
+        (self.old / 'portal2').mkdir(parents=True)
+        support_root = self.tmp / 'Application Support'
+        self.config['game'] = 'hl2'
+        with mock.patch.object(make_app.localconfig, 'SUPPORT', support_root / 'Portal 2 Natif'):
+            app = self.run_main()
+        self.assertEqual(app.name, 'Half-Life 2 Natif.app')
+        self.assertTrue(app.is_dir())
+        self.assertFalse(app.with_name('Portal 2 Natif.app').exists())
+        launcher = (app / 'Contents/MacOS/launcher').read_text()
+        self.assertIn('Library/Logs/HalfLife2Natif.log', launcher)
+        self.assertIn('export SteamAppId=220 SteamGameId=220', launcher)
+        self.assertIn('export P2_RENDERER="${P2_RENDERER:-opengl}"', launcher)
+        self.assertIn('-game hl2_complete -novid', launcher)
+        self.assertIn(str(support_root / 'Half-Life 2 Natif/userdata'), launcher)
+        self.assertNotIn('Portal 2 Natif', launcher)
+        self.assertFalse(self.support.exists())
+        self.assertEqual(subprocess.run(['bash', '-n', str(app / 'Contents/MacOS/launcher')]).returncode, 0)
+        with (app / 'Contents/Info.plist').open('rb') as f:
+            plist = plistlib.load(f)
+        self.assertEqual((plist['CFBundleName'], plist['CFBundleIdentifier']),
+                         ('Half-Life 2 Natif', 'fr.kanapitsas.hl2-native'))
 
     def test_missing_prep_keeps_existing_app(self):
         app = self.run_main()
