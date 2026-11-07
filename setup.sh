@@ -165,7 +165,8 @@ locate() {  # game id [game folder [Linux folder]] -> FOUND_GAME FOUND_LINUX (em
     if [ "$1" = portal2 ]; then
         if [ -z "$FOUND_GAME" ]; then
             for c in "$(config_get portal2 game_root)" "$STEAM_SUPPORT/steamapps/common/Portal 2" "$(find_depot 620 621)"; do
-                [ -n "$c" ] && [ -d "$c/portal2" ] && { FOUND_GAME="$c"; break; }
+                # pak01_dir.vpk, not just portal2/: Steam can leave a nearly empty Portal 2 folder.
+                [ -n "$c" ] && [ -f "$c/portal2/pak01_dir.vpk" ] && { FOUND_GAME="$c"; break; }
             done
         fi
         if [ -z "$FOUND_LINUX" ]; then
@@ -176,7 +177,7 @@ locate() {  # game id [game folder [Linux folder]] -> FOUND_GAME FOUND_LINUX (em
     else   # hl2: the Mac game from Steam, the Linux binaries from depot 224
         if [ -z "$FOUND_GAME" ]; then
             for c in "$(config_get hl2 game_root)" "$STEAM_SUPPORT/steamapps/common/Half-Life 2"; do
-                [ -n "$c" ] && [ -d "$c/hl2_complete" ] && { FOUND_GAME="$c"; break; }
+                [ -n "$c" ] && [ -f "$c/hl2_complete/gameinfo.txt" ] && { FOUND_GAME="$c"; break; }
             done
         fi
         if [ -z "$FOUND_LINUX" ]; then

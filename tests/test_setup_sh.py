@@ -125,6 +125,15 @@ class GameDetectionTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn('download_depot 220 224', result.stderr)
 
+    def test_leftover_portal2_folder_does_not_stop_hl2(self):
+        # Steam on a Mac can keep steamapps/common/Portal 2 with only an empty
+        # portal2/ folder (no macOS version any more): it is not an install.
+        self.touch(self.steam / 'steamapps/common/Portal 2/portal2/.keep')
+        linux = self.steam / 'steamapps/content/app_620/depot_661'   # depot fetched earlier
+        self.touch(linux / 'bin/linux32/engine.so', linux / 'portal2/bin/linux32/server.so')
+        self.install_hl2()
+        self.assert_builds(self.detect(), 'hl2')
+
     def test_nothing_found(self):
         result = self.detect()
         self.assertEqual(result.returncode, 1)

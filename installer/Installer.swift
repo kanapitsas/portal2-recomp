@@ -30,6 +30,7 @@ struct Game: Identifiable, Equatable {
     let linuxDepot: Int
     let linuxSize: String
     let marker: String          // folder inside the game folder
+    let markerFile: String      // file that only a complete install has (Steam can leave an empty marker folder)
     let installFolder: String   // under steamapps/common
     let linuxFiles: [String]    // files of the Linux depot (setup.sh's checks)
     let minutes: Int
@@ -38,7 +39,9 @@ struct Game: Identifiable, Equatable {
     var installedApp: URL { home.appendingPathComponent("Applications/\(appName).app") }
     var depotCommand: String { "download_depot \(appID) \(linuxDepot)" }
 
-    func isGameFolder(_ url: URL) -> Bool { isDir(url.appendingPathComponent(marker)) }
+    func isGameFolder(_ url: URL) -> Bool {
+        FileManager.default.fileExists(atPath: url.appendingPathComponent(markerFile).path)
+    }
     func isLinuxDepot(_ url: URL) -> Bool {
         linuxFiles.allSatisfy { FileManager.default.fileExists(atPath: url.appendingPathComponent($0).path) }
     }
@@ -56,10 +59,10 @@ struct Game: Identifiable, Equatable {
 
 let allGames = [
     Game(id: "portal2", title: "Portal 2", appID: 620, dataDepot: 621, linuxDepot: 661, linuxSize: "about 90 MB",
-         marker: "portal2", installFolder: "Portal 2",
+         marker: "portal2", markerFile: "portal2/pak01_dir.vpk", installFolder: "Portal 2",
          linuxFiles: ["bin/linux32/engine.so", "portal2/bin/linux32/server.so"], minutes: 10),
     Game(id: "hl2", title: "Half-Life 2", appID: 220, dataDepot: nil, linuxDepot: 224, linuxSize: "about 320 MB",
-         marker: "hl2_complete", installFolder: "Half-Life 2",
+         marker: "hl2_complete", markerFile: "hl2_complete/gameinfo.txt", installFolder: "Half-Life 2",
          linuxFiles: ["hl2_linux", "bin/engine.so", "hl2_complete/bin/server.so"], minutes: 20),
 ]
 
