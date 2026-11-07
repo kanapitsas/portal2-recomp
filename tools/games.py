@@ -57,10 +57,7 @@ GAMES = {
         log_name='HalfLife2Natif.log',
         bundle_id='fr.kanapitsas.hl2-native',
         icon='hl2/resource/game.icns',
-        # OpenGL is faster than Metal for HL2 (77 vs 60-67 fps, docs/hl2.md)
-        # and Metal still draws the HDR sky wrong: the app starts on OpenGL
-        # unless P2_RENDERER says otherwise.
-        renderer='opengl',
+        renderer=None,   # Metal when libd3d9metal is there, as for Portal 2 (docs/hl2.md)
     ),
 }
 

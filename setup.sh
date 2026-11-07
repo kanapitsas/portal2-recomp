@@ -447,8 +447,7 @@ fi
 SAVES_DIR="$(config_get user_dir)"
 SAVES_DIR="${SAVES_DIR:-$HOME/Library/Application Support/$APP_NAME/userdata}"
 D3D9METAL="${D3D9METAL:-$(config_get d3d9metal_dylib)}"
-if [ "$GAME_ID" = hl2 ]; then RENDERER="OpenGL (faster than Metal for HL2, docs/hl2.md)"
-elif [ -n "$D3D9METAL" ]; then RENDERER="Metal (libd3d9metal); P2_RENDERER=opengl forces OpenGL"
+if [ -n "$D3D9METAL" ]; then RENDERER="Metal (libd3d9metal); P2_RENDERER=opengl forces OpenGL"
 elif [ $METAL_OFF = 1 ]; then RENDERER="OpenGL (P2_NO_METAL set)"
 else RENDERER="OpenGL (libd3d9metal unavailable: see the warning above)"; fi
 cat <<EOF

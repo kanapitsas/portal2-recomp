@@ -134,7 +134,7 @@ class MakeAppTests(unittest.TestCase):
         launcher = (app / 'Contents/MacOS/launcher').read_text()
         self.assertIn('Library/Logs/HalfLife2Natif.log', launcher)
         self.assertIn('export SteamAppId=220 SteamGameId=220', launcher)
-        self.assertIn('export P2_RENDERER="${P2_RENDERER:-opengl}"', launcher)
+        self.assertNotIn('P2_RENDERER', launcher)   # same default as Portal 2: Metal when bundled
         self.assertIn('-game hl2_complete -novid', launcher)
         self.assertIn(str(support_root / 'Half-Life 2 Natif/userdata'), launcher)
         self.assertNotIn('Portal 2 Natif', launcher)
