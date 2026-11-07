@@ -109,7 +109,15 @@ static int sincosf_handler(CPU *c, const char *name, void *data) {
     WF(s, sv); WF(co, cv);
     return 1;
 }
+static int fminmaxf_handler(CPU *c, const char *name, void *data) {
+    (void)name;
+    float x = arg_f(c, 0), y = arg_f(c, 4);
+    rt_return_st0(c, data ? fmaxf(x, y) : fminf(x, y));   // sans errno, comme le fournisseur
+    return 1;
+}
 static int math_resolve(const char *name, RtShimRoute *route) {
+    if (!strcmp(name, "fmaxf")) { route->handler = fminmaxf_handler; route->data = (void *)1; return 1; }
+    if (!strcmp(name, "fminf")) { route->handler = fminmaxf_handler; route->data = NULL; return 1; }
     for (size_t i = 0; i < sizeof(unary) / sizeof(*unary); ++i)
         if (!strcmp(name, unary[i].name)) { route->handler = unary_handler; route->data = (void *)(uintptr_t)i; return 1; }
     if (!strcmp(name, "sincosf")) { route->handler = sincosf_handler; return 1; }

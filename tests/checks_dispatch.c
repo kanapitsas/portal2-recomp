@@ -196,3 +196,46 @@ RT_CHECK(dispatch_hot_imports_have_direct_routes) {
     route_call("sincosf", &sincos, sc, 3);
     assert(RF(0x20011020u) == sinf(0.5f) && RF(0x20011024u) == cosf(0.5f));
 }
+
+// Routes directes ajoutées pour Half-Life 2 (clés TLS, pthread_self, fminf/fmaxf) :
+// même résultat que la recherche par nom, cas d'erreur compris.
+static CPU routed(const char *name, int direct, const uint32_t *args, unsigned count) {
+    CPU c; rt_cpu_reset(&c); c.esp = 0x20010000u;
+    for (unsigned i = 0; i < count; ++i) W32(c.esp + 4 + 4 * i, args[i]);
+    RtShimRoute route = {0};
+    if (direct) {
+        assert(rt_shim_route(&c, name, &route) == 1 && route.handler);
+        rt_cpu_reset(&c); c.esp = 0x20010000u;
+        for (unsigned i = 0; i < count; ++i) W32(c.esp + 4 + 4 * i, args[i]);
+        assert(rt_route_call(&route, &c, name) == 1);
+    } else assert(rt_shim(&c, name) == 1);
+    return c;
+}
+RT_CHECK(dispatch_tls_self_and_minmax_routes_match_names) {
+    CPU c; rt_cpu_reset(&c); c.esp = 0x20010000u;
+    W32(c.esp + 4, 0x20011100u); W32(c.esp + 8, 0);
+    assert(rt_shim(&c, "pthread_key_create") == 1 && c.eax == 0);
+    uint32_t key = R32(0x20011100u);
+    for (int direct = 0; direct < 2; ++direct) {
+        uint32_t set[] = {key, 0x1234u + (uint32_t)direct};
+        assert(routed("pthread_setspecific", direct, set, 2).eax == 0);
+        uint32_t get[] = {key};
+        assert(routed("pthread_getspecific", direct, get, 1).eax == 0x1234u + (uint32_t)direct);
+        uint32_t bad[] = {key + 50, 0};
+        assert(routed("pthread_getspecific", direct, bad, 1).eax == 22);   // comportement du fournisseur
+        assert(routed("pthread_setspecific", direct, bad, 2).eax == 22);
+    }
+    assert(routed("pthread_self", 1, NULL, 0).eax == routed("pthread_self", 0, NULL, 0).eax);
+    float values[][2] = {{1.5f, -2.0f}, {NAN, 3.0f}, {-0.0f, 0.0f}};
+    for (unsigned i = 0; i < 3; ++i) {
+        uint32_t a[2]; memcpy(&a[0], &values[i][0], 4); memcpy(&a[1], &values[i][1], 4);
+        for (int max = 0; max < 2; ++max) {
+            const char *name = max ? "fmaxf" : "fminf";
+            CPU n = routed(name, 0, a, 2), d = routed(name, 1, a, 2);
+            CPU *x = &n; double vn = 0, vd = 0;
+            { CPU *c = x; vn = ST(0); } { CPU *c = &d; vd = ST(0); }
+            assert(memcmp(&vn, &vd, sizeof(vn)) == 0);
+        }
+    }
+    W32(c.esp + 4, key); assert(rt_shim(&c, "pthread_key_delete") == 1);
+}
