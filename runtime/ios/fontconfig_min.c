@@ -149,6 +149,27 @@ static const char *get_string(const FcPattern *p, const char *object) {
 // ---------------------------------------------------------------- configuration
 FcBool FcInit(void) { pthread_once(&once, build_index); return FcTrue; }
 FcConfig *FcConfigGetCurrent(void) { FcInit(); return &config; }
+// Une seule configuration (Half-Life 2 en charge une « nouvelle » et la rend
+// courante avant d'y ajouter ses polices) : référence et remplacement sans effet.
+FcConfig *FcConfigReference(FcConfig *c) { FcInit(); return c ? c : &config; }
+FcConfig *FcInitLoadConfigAndFonts(void) { FcInit(); return &config; }
+FcBool FcConfigSetCurrent(FcConfig *c) { (void)c; FcInit(); return FcTrue; }
+// Police du jeu (HL2 : resource/*.ttf, dont les icônes du HUD), ajoutée à
+// l'index ; FcFalse si FreeType ne la lit pas.
+FcBool FcConfigAppFontAddFile(FcConfig *c, const FcChar8 *file) {
+    (void)c;
+    FcInit();
+    if (!file) return FcFalse;
+    // Le jeu ajoute ses polices à chaque rechargement du schéma : une fois suffit.
+    for (int i = 0; i < font_count; ++i) if (!strcmp(fonts[i].file, (const char *)file)) return FcTrue;
+    FT_Library library;
+    if (FT_Init_FreeType(&library)) return FcFalse;
+    int before = font_count;
+    add_font(library, (const char *)file);
+    FT_Done_FreeType(library);
+    fprintf(stderr, "[fontconfig-ios] police du jeu %s : %d face(s)\n", file, font_count - before);
+    return font_count > before;
+}
 FcBool FcConfigSubstitute(FcConfig *c, FcPattern *p, FcMatchKind kind) { (void)c; (void)p; (void)kind; return FcTrue; }
 void FcDefaultSubstitute(FcPattern *p) { (void)p; }
 
