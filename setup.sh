@@ -11,12 +11,18 @@
 # the same bundle. P2_NO_METAL=1 skips it: the game then uses OpenGL.
 #
 # usage: ./setup.sh [--ios] ["/path/to/Portal 2" ["/path/to/depot_661"]]
+#        ./setup.sh --game hl2 ["/path/to/Half-Life 2" ["/path/to/depot_224"]]
 #
 # Without paths, the script reuses config/local.json from a previous run, or
 # looks where Steam puts them on this Mac (a Portal 2 install, or depots
 # fetched with the Steam console's download_depot command).
 #
 # P2_APP_DIR puts the app elsewhere than ~/Applications.
+# --game hl2 builds Half-Life 2 instead (experimental, Mac only, docs/hl2.md):
+# "Half-Life 2 Natif.app", with Steamworks.NET 2024.8.0's libsteam_api.dylib.
+# One checkout builds one game (build/ is shared): clone the repository a
+# second time to have both. Later runs remember the game.
+#
 # Re-running is safe: finished steps are skipped and unchanged code is not
 # recompiled. Downloads and iOS libraries go to ./deps (P2_DEPS overrides it).
 # Saves go to ~/Library/Application Support/Portal 2 Natif/userdata (config key
@@ -27,10 +33,15 @@ REPO="$(cd "$(dirname "$0")" && pwd)"
 DEPS="${P2_DEPS:-$REPO/deps}"
 CONFIG="$REPO/config/local.json"
 IOS=0
+GAME_ID=""
 ARGS=()
-for a in "$@"; do
+while [ $# -gt 0 ]; do
+    a="$1"; shift
     case "$a" in
         --ios) IOS=1 ;;
+        --game) [ $# -gt 0 ] || { echo "--game needs a value: portal2 or hl2" >&2; exit 2; }
+                GAME_ID="$1"; shift ;;
+        --game=*) GAME_ID="${a#--game=}" ;;
         -h|--help) awk 'NR > 1 && !/^#/ {exit} NR > 1 {sub(/^# ?/, ""); print}' "$0"; exit 0 ;;  # leading comment block
         -*) echo "unknown option $a" >&2; exit 2 ;;
         *) ARGS+=("$a") ;;
@@ -39,8 +50,36 @@ done
 GAME="${ARGS[0]:-}"
 LINUX="${ARGS[1]:-}"
 
-STEAMWORKS_URL="https://github.com/rlabrecque/Steamworks.NET/releases/download/20.1.0/Steamworks.NET_20.1.0.unitypackage"
-STEAMWORKS_SHA256="3be79e6bdf53c86210267bf39f46362bb839130896006aec26364c5efc37e314"
+# Which game: --game, else the one this checkout was set up for, else Portal 2.
+# Never switch a configured checkout: its build/ and app belong to the other game.
+CONFIGURED_GAME=""
+[ -f "$CONFIG" ] && CONFIGURED_GAME="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("game") or "portal2")' "$CONFIG" 2>/dev/null || true)"
+GAME_ID="${GAME_ID:-${CONFIGURED_GAME:-portal2}}"
+# Per game: title, Steam app and depots, app name and log (tools/games.py), and
+# the Steamworks.NET release whose libsteam_api.dylib has the SDK the game asks for.
+case "$GAME_ID" in
+    portal2)
+        TITLE="Portal 2"; APPID=620; LINUX_DEPOT=661
+        STEAMWORKS_VERSION=20.1.0
+        STEAMWORKS_SHA256="3be79e6bdf53c86210267bf39f46362bb839130896006aec26364c5efc37e314" ;;
+    hl2)
+        TITLE="Half-Life 2"; APPID=220; LINUX_DEPOT=224
+        STEAMWORKS_VERSION=2024.8.0   # SDK 1.60: HL2's client.so asks for newer interfaces (docs/steam.md)
+        STEAMWORKS_SHA256="0a8e9b8c95760e81fcb16477a8962a4c230ea887b3731b1f9bc0690677f6f087" ;;
+    *) echo "unknown game $GAME_ID: use --game portal2 or --game hl2" >&2; exit 2 ;;
+esac
+if [ -n "$CONFIGURED_GAME" ] && [ "$CONFIGURED_GAME" != "$GAME_ID" ]; then
+    echo "error: this checkout is set up for $CONFIGURED_GAME (config/local.json), not $GAME_ID.
+  One checkout builds one game: clone the repository again into another folder
+  and run ./setup.sh --game $GAME_ID there." >&2
+    exit 2
+fi
+if [ $IOS = 1 ] && [ "$GAME_ID" != portal2 ]; then
+    echo "--ios builds Portal 2 only: $TITLE runs on Mac for now" >&2; exit 2
+fi
+APP_NAME="$TITLE Natif"
+LOG_NAME="$(printf '%s' "$TITLE" | tr -d ' -')Natif.log"
+STEAMWORKS_URL="https://github.com/rlabrecque/Steamworks.NET/releases/download/$STEAMWORKS_VERSION/Steamworks.NET_$STEAMWORKS_VERSION.unitypackage"
 STEAM_SUPPORT="$HOME/Library/Application Support/Steam"
 # Metal renderer: libd3d9metal, built from mtld3d's native host branch (zlib).
 MTLD3D_URL="https://github.com/kanapitsas/mtld3d.git"
@@ -60,8 +99,8 @@ config_get() {  # key -> value from config/local.json, empty if absent
     python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get(sys.argv[2]) or "")' "$CONFIG" "$1"
 }
 find_depot() {  # depot id -> folder written by the Steam console's download_depot
-    [ -d "$STEAM_SUPPORT" ] || return 0
-    find "$STEAM_SUPPORT" -maxdepth 9 -type d -path "*/content/app_620/depot_$1" 2>/dev/null | head -1
+    [ -d "$STEAM_SUPPORT" ] && [ -n "$1" ] || return 0
+    find "$STEAM_SUPPORT" -maxdepth 9 -type d -path "*/content/app_${APPID}/depot_$1" 2>/dev/null | head -1
 }
 
 # --- Checks ---------------------------------------------------------------
@@ -108,42 +147,73 @@ unescape_path() {
 }
 [ -n "$GAME" ] && GAME="$(unescape_path "$GAME")"
 [ -n "$LINUX" ] && LINUX="$(unescape_path "$LINUX")"
-if [ -z "$GAME" ]; then
-    for c in "$(config_get game_root)" "$STEAM_SUPPORT/steamapps/common/Portal 2" "$(find_depot 621)"; do
-        [ -n "$c" ] && [ -d "$c/portal2" ] && { GAME="$c"; break; }
-    done
-fi
-[ -n "$GAME" ] || die "Portal 2 data not found. Pass the game folder (the one with portal2/ and platform/), or fetch it:
+if [ "$GAME_ID" = portal2 ]; then
+    if [ -z "$GAME" ]; then
+        for c in "$(config_get game_root)" "$STEAM_SUPPORT/steamapps/common/Portal 2" "$(find_depot 621)"; do
+            [ -n "$c" ] && [ -d "$c/portal2" ] && { GAME="$c"; break; }
+        done
+    fi
+    [ -n "$GAME" ] || die "Portal 2 data not found. Pass the game folder (the one with portal2/ and platform/), or fetch it:
   open steam://open/console, type: download_depot 620 621   (12.6 GB), then re-run."
-[ -f "$GAME/portal2/pak01_dir.vpk" ] && [ -d "$GAME/platform" ] \
-    || die "$GAME does not look like Portal 2 (no portal2/pak01_dir.vpk or platform/)"
-for f in mssmp3.asi mssvoice.asi binkawin.asi; do
-    [ -f "$GAME/bin/linux32/$f" ] || warn "$GAME/bin/linux32/$f is missing: some audio (music, voice) may be silent"
-done
-if [ -z "$LINUX" ]; then
-    for c in "$(config_get linux_root)" "$(find_depot 661)"; do
-        [ -n "$c" ] && [ -f "$c/bin/linux32/engine.so" ] && { LINUX="$c"; break; }
+    [ -f "$GAME/portal2/pak01_dir.vpk" ] && [ -d "$GAME/platform" ] \
+        || die "$GAME does not look like Portal 2 (no portal2/pak01_dir.vpk or platform/)"
+    for f in mssmp3.asi mssvoice.asi binkawin.asi; do
+        [ -f "$GAME/bin/linux32/$f" ] || warn "$GAME/bin/linux32/$f is missing: some audio (music, voice) may be silent"
     done
-fi
-[ -n "$LINUX" ] || die "Portal 2's Linux binaries not found. Fetch them with your Steam account:
+    if [ -z "$LINUX" ]; then
+        for c in "$(config_get linux_root)" "$(find_depot 661)"; do
+            [ -n "$c" ] && [ -f "$c/bin/linux32/engine.so" ] && { LINUX="$c"; break; }
+        done
+    fi
+    [ -n "$LINUX" ] || die "Portal 2's Linux binaries not found. Fetch them with your Steam account:
   open steam://open/console, type: download_depot 620 661   (about 90 MB), wait for
   'Depot download complete', then re-run (or pass that folder as the second argument)."
-[ -f "$LINUX/bin/linux32/engine.so" ] && [ -f "$LINUX/portal2/bin/linux32/server.so" ] \
-    || die "$LINUX does not look like depot 661 (no bin/linux32/engine.so or portal2/bin/linux32/server.so)"
+    [ -f "$LINUX/bin/linux32/engine.so" ] && [ -f "$LINUX/portal2/bin/linux32/server.so" ] \
+        || die "$LINUX does not look like depot 661 (no bin/linux32/engine.so or portal2/bin/linux32/server.so)"
+else   # hl2: the Mac game from Steam, the Linux binaries from depot 224
+    if [ -z "$GAME" ]; then
+        for c in "$(config_get game_root)" "$STEAM_SUPPORT/steamapps/common/Half-Life 2"; do
+            [ -n "$c" ] && [ -d "$c/hl2_complete" ] && { GAME="$c"; break; }
+        done
+    fi
+    [ -n "$GAME" ] || die "Half-Life 2 not found. Install it with Steam (the current version, with hl2_complete/),
+  or pass the game folder (the one with hl2/, hl2_complete/ and platform/)."
+    [ -f "$GAME/hl2/hl2_pak_dir.vpk" ] && [ -f "$GAME/hl2_complete/gameinfo.txt" ] && [ -d "$GAME/platform" ] \
+        || die "$GAME does not look like Half-Life 2 (no hl2/hl2_pak_dir.vpk, hl2_complete/gameinfo.txt or platform/).
+  Only the current Steam version (20th anniversary update, with hl2_complete/) is supported."
+    if [ -z "$LINUX" ]; then
+        for c in "$(config_get linux_root)" "$(find_depot 224)"; do
+            [ -n "$c" ] && [ -f "$c/hl2_linux" ] && { LINUX="$c"; break; }
+        done
+    fi
+    [ -n "$LINUX" ] || die "Half-Life 2's Linux binaries not found. Fetch them with your Steam account:
+  open steam://open/console, type: download_depot 220 224   (about 320 MB), wait for
+  'Depot download complete', then re-run (or pass that folder as the second argument)."
+    [ -f "$LINUX/hl2_linux" ] && [ -f "$LINUX/bin/engine.so" ] && [ -f "$LINUX/hl2_complete/bin/server.so" ] \
+        || die "$LINUX does not look like depot 224 (no hl2_linux, bin/engine.so or hl2_complete/bin/server.so)"
+    for f in mssmp3.asi binkawin.asi mssmixer.mix; do
+        [ -f "$LINUX/bin/linux32/$f" ] || warn "$LINUX/bin/linux32/$f is missing: some audio may be silent"
+    done
+fi
 echo "game data:      $GAME"
 echo "Linux binaries: $LINUX"
 
-# --- Steamworks.NET 20.1.0: steam_api.bundle ------------------------------
+# --- Steamworks.NET (20.1.0, 2024.8.0 for HL2): steam_api.bundle ----------
 DYLIB="$(config_get steam_api_dylib)"
-DEFAULT_DYLIB="$REPO/../work/downloads/steamworks/steam_api.bundle/Contents/MacOS/libsteam_api.dylib"
+if [ "$GAME_ID" = portal2 ]; then
+    DEFAULT_DYLIB="$REPO/../work/downloads/steamworks/steam_api.bundle/Contents/MacOS/libsteam_api.dylib"
+    STEAM_BUNDLE="$DEPS/steam_api.bundle"
+else
+    DEFAULT_DYLIB="$REPO/../work/downloads/steamworks-$STEAMWORKS_VERSION/steam_api.bundle/Contents/MacOS/libsteam_api.dylib"
+    STEAM_BUNDLE="$DEPS/steamworks-$STEAMWORKS_VERSION/steam_api.bundle"
+fi
 [ -z "$DYLIB" ] && [ -f "$DEFAULT_DYLIB" ] && DYLIB="$DEFAULT_DYLIB"
 if [ -z "$DYLIB" ] || [ ! -f "$DYLIB" ]; then
-    STEAM_BUNDLE="$DEPS/steam_api.bundle"
     DYLIB="$STEAM_BUNDLE/Contents/MacOS/libsteam_api.dylib"
     if [ ! -f "$DYLIB" ]; then
-        step "Downloading Steamworks.NET 20.1.0 (Valve's libsteam_api.dylib)"
+        step "Downloading Steamworks.NET $STEAMWORKS_VERSION (Valve's libsteam_api.dylib)"
         mkdir -p "$DEPS"
-        SW="$DEPS/Steamworks.NET_20.1.0.unitypackage"
+        SW="$DEPS/Steamworks.NET_$STEAMWORKS_VERSION.unitypackage"
         [ -f "$SW" ] || curl -fsSL --retry 3 -o "$SW" "$STEAMWORKS_URL"
         got=$(shasum -a 256 "$SW" | cut -d' ' -f1)
         [ "$got" = "$STEAMWORKS_SHA256" ] || die "$SW: SHA-256 $got, expected $STEAMWORKS_SHA256 (delete it and re-run)"
@@ -285,6 +355,7 @@ fi
 # --- config/local.json ----------------------------------------------------
 step "Writing config/local.json"
 mkdir -p "$REPO/config"
+export P2_SETUP_GAME="$GAME_ID" P2_SETUP_APPID="$APPID" P2_SETUP_DEPOT="$LINUX_DEPOT" P2_SETUP_APP_NAME="$APP_NAME"
 python3 - "$CONFIG" "$GAME" "$LINUX" "$DYLIB" "$TEAM" "$D3D9METAL" "$D3D9METAL_IOS" "$METAL_OFF" "$HOST_PREFIX" <<'EOF'
 import json, os, sys
 from pathlib import Path
@@ -313,10 +384,12 @@ else:
     if metal_ios: ios['device'] = metal_ios
     if ios: config['d3d9metal_ios'] = ios
     else: config.pop('d3d9metal_ios', None)
-config.setdefault('steam_appid', 620)
-config.setdefault('depot_id', 661)
-if fresh:
-    config['user_dir'] = str(Path.home() / 'Library/Application Support/Portal 2 Natif/userdata')
+# The game (tools/games.py) and its Steam ids, from the case at the top of setup.sh.
+config['game'] = os.environ['P2_SETUP_GAME']
+config.setdefault('steam_appid', int(os.environ['P2_SETUP_APPID']))
+config.setdefault('depot_id', int(os.environ['P2_SETUP_DEPOT']))
+if fresh:   # each game its own folder (tools/localconfig.py)
+    config['user_dir'] = str(Path.home() / 'Library/Application Support' / os.environ['P2_SETUP_APP_NAME'] / 'userdata')
 if team and not config.get('ios_bundle_id'):
     # Unique to the team: free accounts cannot reuse an identifier taken elsewhere.
     config['ios_bundle_id'] = f'local.portal2recomp.{team.lower()}'
@@ -332,7 +405,7 @@ python3 tools/gameprep.py
 step "Recompiling the game (about 10 minutes the first time, seconds afterwards)"
 python3 tools/build_game.py --release
 APP_DIR="${P2_APP_DIR:-$HOME/Applications}"
-step "Creating $APP_DIR/Portal 2 Natif.app"
+step "Creating $APP_DIR/$APP_NAME.app"
 python3 tools/make_app.py --dest "$APP_DIR"
 
 # --- iOS ------------------------------------------------------------------
@@ -372,17 +445,18 @@ if [ $IOS = 1 ]; then
 fi
 
 SAVES_DIR="$(config_get user_dir)"
-SAVES_DIR="${SAVES_DIR:-$HOME/Library/Application Support/Portal 2 Natif/userdata}"
+SAVES_DIR="${SAVES_DIR:-$HOME/Library/Application Support/$APP_NAME/userdata}"
 D3D9METAL="${D3D9METAL:-$(config_get d3d9metal_dylib)}"
-if [ -n "$D3D9METAL" ]; then RENDERER="Metal (libd3d9metal); P2_RENDERER=opengl forces OpenGL"
+if [ "$GAME_ID" = hl2 ]; then RENDERER="OpenGL (faster for HL2; Metal still draws the sky wrong, docs/hl2.md)"
+elif [ -n "$D3D9METAL" ]; then RENDERER="Metal (libd3d9metal); P2_RENDERER=opengl forces OpenGL"
 elif [ $METAL_OFF = 1 ]; then RENDERER="OpenGL (P2_NO_METAL set)"
 else RENDERER="OpenGL (libd3d9metal unavailable: see the warning above)"; fi
 cat <<EOF
 
-Done: $APP_DIR/Portal 2 Natif.app
+Done: $APP_DIR/$APP_NAME.app
 - Renderer: ${RENDERER}
-- Start Steam and sign in with the account that owns Portal 2, then open the app
-  (it starts Steam itself if needed). Log: ~/Library/Logs/Portal2Natif.log
+- Start Steam and sign in with the account that owns $TITLE, then open the app
+  (it starts Steam itself if needed). Log: ~/Library/Logs/$LOG_NAME
 - The app carries its own copy of the game binary and libraries; after a rebuild,
   run python3 tools/make_app.py to update it.
 - Keep the build to yourself: it is made from Valve's game.

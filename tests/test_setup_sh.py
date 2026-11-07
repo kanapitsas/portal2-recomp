@@ -1,9 +1,20 @@
 """setup.sh without running it: syntax, --help and option errors (all before any check)."""
+import json
+import re
+import shutil
 import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / 'tools'))
+import games  # noqa: E402
+
+
+def run_setup(*args, setup=ROOT / 'setup.sh'):
+    return subprocess.run(['bash', str(setup), *args], capture_output=True, text=True)
 
 
 class SetupScriptTests(unittest.TestCase):
@@ -23,6 +34,41 @@ class SetupScriptTests(unittest.TestCase):
         result = subprocess.run(['bash', str(ROOT / 'setup.sh'), '--bogus'], capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
         self.assertIn('unknown option --bogus', result.stderr)
+
+    def test_game_option_errors(self):
+        for args, message in ((['--game'], '--game needs a value'),
+                              (['--game', 'quake'], 'unknown game quake'),
+                              (['--game=quake'], 'unknown game quake'),
+                              (['--ios', '--game', 'hl2'], '--ios builds Portal 2 only')):
+            result = run_setup(*args)
+            self.assertEqual(result.returncode, 2, args)
+            self.assertIn(message, result.stderr, args)
+
+    def test_configured_checkout_never_switches_game(self):
+        # build/ and the app belong to the configured game: switching needs another clone.
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            shutil.copy(ROOT / 'setup.sh', repo / 'setup.sh')
+            (repo / 'config').mkdir()
+            for config, args, configured in (({}, ['--game', 'hl2'], 'portal2'),   # no "game": Portal 2
+                                             ({'game': 'portal2'}, ['--game=hl2'], 'portal2'),
+                                             ({'game': 'hl2'}, ['--game', 'portal2'], 'hl2')):
+                (repo / 'config/local.json').write_text(json.dumps(config))
+                result = run_setup(*args, setup=repo / 'setup.sh')
+                self.assertEqual(result.returncode, 2, config)
+                self.assertIn(f'set up for {configured}', result.stderr)
+                self.assertIn('clone the repository again', result.stderr)
+
+    def test_game_table_matches_profiles(self):
+        # setup.sh names the app, log and Steam ids itself; tools/games.py must agree.
+        text = (ROOT / 'setup.sh').read_text()
+        for name, profile in games.GAMES.items():
+            block = re.search(rf'^    {name}\)\n(.*?);;', text, re.M | re.S).group(1)
+            title = re.search(r'TITLE="([^"]+)"', block).group(1)
+            self.assertEqual(f'{title} Natif', profile['app_name'])
+            self.assertEqual(title.replace(' ', '').replace('-', '') + 'Natif.log', profile['log_name'])
+            self.assertEqual(int(re.search(r'APPID=(\d+)', block).group(1)), profile['steam_appid'])
+            self.assertEqual(int(re.search(r'LINUX_DEPOT=(\d+)', block).group(1)), profile['depot_id'])
 
 
 if __name__ == '__main__':
