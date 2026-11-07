@@ -79,6 +79,62 @@ allow it.
 Only the connection and the map load were checked. A full co-op map played
 by two people has not been tried yet.
 
+## Saves between Mac and iPhone
+
+Over the cable, with the iPhone unlocked and the game quit on both sides
+(`tools/ios_device.sh`, logic in `tools/save_sync.py`):
+
+```sh
+tools/ios_device.sh saves status             # both sides, dates, which is newer per file
+tools/ios_device.sh saves pull --dry-run     # what pull would do, without copying
+tools/ios_device.sh saves pull               # iPhone -> Mac
+tools/ios_device.sh saves push               # Mac -> iPhone
+```
+
+What is copied: the save files (`*.sav`, and `*.tga` screenshots if there are
+any) of `portal2/SAVE/<SteamID64>/`, nothing else:
+
+- Mac: `<user_dir>/portal2/SAVE/<your SteamID64>/` (the folder with the most
+  recent change; `P2_SAVE_ID=<SteamID64>` picks another one). Saves the game
+  sees in the Steam game folder (`<game_root>/portal2/SAVE/<id>/`, under the
+  user data) count as Mac saves for `push`, unless deleted in the game.
+- iPhone: `Documents/portal2-userdata/portal2/SAVE/76561197960265729/`, the ID
+  of the offline Steam stub (`runtime/ios/steam_stub.c`). A file keeps its name
+  and moves to the other side's folder.
+- Not copied: `cfg/config.cfg` and `update/cfg/video.txt` (bindings, mouse,
+  controller and touch settings, video modes: different on each device),
+  `*.hl1`/`*.hl2`/`*.hl3` (level state that the engine rebuilds from a `.sav`),
+  `steam_autocloud.vdf` (Steam Cloud's account marker),
+  `update/save/game_instructor_counts.txt` (hint counters). Chapter progress
+  in the menu: `sv_unlockedchapters` in `config.cfg` stays at 1 on the Mac even
+  with late saves, so it is not what unlocks chapters on PC; not synced.
+
+Never silently overwritten: after each copy, `~/Library/Application
+Support/Portal 2 Natif/save-sync/<device>.json` records both sides' date and
+size. A file changed on one side only since then is copied that way; with no
+record yet, the newer date wins and the same size within 2 s counts as the
+same file. A file newer on the destination, or changed on both sides, is kept
+and named in the output; `--force` copies it anyway. Before any overwrite, the
+old copy goes to `save-sync/backups/<date>-pull|push/` (for `push`, pulled from
+the iPhone first). A pulled save arrives as `<name>.p2part` and replaces the
+save only once complete, with the iPhone's date (the game sorts saves by date).
+`pull` refuses to run while `portal2-native` runs on the Mac. `./uninstall.sh`
+treats `save-sync/` like the rest of the app's folder (Trash, after asking).
+
+Deletions are not synced: devicectl cannot delete a file on the device, so a
+save deleted on one side comes back from the other on the next copy.
+
+Steam Cloud: the cloud keeps the saves of the Steam game folder
+(`<game_root>/portal2/SAVE/<id>/`, marked by `steam_autocloud.vdf`), synced by
+the Steam client that launches the game from that folder. This app never writes
+there: it reads that folder under its own user data and writes its saves to
+`user_dir`. `saves pull` follows the same rule, so it never competes with Steam
+Cloud; the other side of it is that saves made in this app (and those pulled
+from the iPhone) do not reach Steam Cloud. The iPhone has no Steam client.
+
+A version over iCloud, without the cable, needs the iCloud capability, which
+free Apple developer accounts cannot sign: it would need a paid account.
+
 ## Manual build
 
 `config/local.json` (ignored by git; `setup.sh` writes it):

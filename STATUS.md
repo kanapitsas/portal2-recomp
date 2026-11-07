@@ -20,6 +20,10 @@ run and diagnostics instructions that used to live here are in
 [docs/usage.md](docs/usage.md#run); the conventions for native bridges are in
 [CLAUDE.md](CLAUDE.md).
 
+## 6 November 2026 — saves between Mac and iPhone (branch feat/save-sync)
+
+- 2026-11-06: `tools/ios_device.sh saves status|pull|push` copies the `.sav` files between the Mac user data and the iPhone over the cable, newer side only, with backups (`tools/save_sync.py`); not tested on a device yet.
+
 ## 6 November 2026 — iPhone polish (branch feat/ios-polish, not yet tested on the phone)
 
 - 2026-11-06: iPhone: game data kept out of iCloud backups, game paused while
