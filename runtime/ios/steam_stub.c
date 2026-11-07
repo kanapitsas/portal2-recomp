@@ -24,22 +24,27 @@
 // Le pont n'appelle la vtable hôte que pour quelques interfaces hors API
 // plate (GameCoordinator, GameStats, GetCSERIPPort) : « rien » leur convient.
 static uint64_t zero_method(void) { return 0; }
-static void *zero_vtable[64];
+// Assez d'emplacements pour la plus grande interface (ISteamUGC : ~90).
+static void *zero_vtable[256];
 typedef struct { void **vtable; char version[64]; } StubInterface;
 static StubInterface interfaces[64];
 static int interface_count;
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
+void **steam_stub_vtable(const char *version);   // steam_stub_generated.c
+
 void *steam_stub_interface(const char *version) {
     if (!version) return NULL;
     pthread_mutex_lock(&lock);
-    if (!zero_vtable[0]) for (int i = 0; i < 64; ++i) zero_vtable[i] = (void *)zero_method;
+    if (!zero_vtable[0]) for (int i = 0; i < 256; ++i) zero_vtable[i] = (void *)zero_method;
     StubInterface *found = NULL;
     for (int i = 0; i < interface_count && !found; ++i)
         if (!strcmp(interfaces[i].version, version)) found = &interfaces[i];
     if (!found && interface_count < 64) {
         found = &interfaces[interface_count++];
-        found->vtable = zero_vtable;
+        // SDK récents (HL2) : appels par emplacement, table générée par version.
+        void **table = steam_stub_vtable(version);
+        found->vtable = table ? table : zero_vtable;
         snprintf(found->version, sizeof(found->version), "%s", version);
         fprintf(stderr, "[steam-stub] interface %s\n", version);
     }
@@ -57,6 +62,13 @@ uint32_t steam_stub_app_id(void) {
 
 // ---- cycle de vie ----
 EXPORT bool SteamAPI_InitSafe(void) { fprintf(stderr, "[steam-stub] hors ligne : stub iOS, app %u\n", steam_stub_app_id()); return true; }
+// Initialisation du SDK 1.60+ (Half-Life 2) : ESteamAPIInitResult, 0 = OK.
+EXPORT int32_t SteamInternal_SteamAPI_Init(const char *versions, char *message) {
+    (void)versions; if (message) message[0] = 0;
+    static int logged;
+    if (!logged++) fprintf(stderr, "[steam-stub] hors ligne : stub iOS, app %u (SteamAPI_InitEx)\n", steam_stub_app_id());
+    return 0;
+}
 EXPORT void SteamAPI_Shutdown(void) {}
 EXPORT bool SteamAPI_RestartAppIfNecessary(uint32_t app) { (void)app; return false; }
 EXPORT int32_t SteamAPI_GetHSteamPipe(void) { return 1; }
@@ -69,6 +81,13 @@ EXPORT uint32_t SteamGameServer_GetIPCCallCount(void) { return 0; }
 EXPORT void SteamGameServer_Shutdown(void) {}
 EXPORT bool SteamInternal_GameServer_Init(uint32_t ip, uint16_t a, uint16_t b, uint16_t q, int32_t mode, const char *v) {
     (void)ip; (void)a; (void)b; (void)q; (void)mode; (void)v; return false;
+}
+// Serveur de jeu Steam : refusé, comme l'ancienne version (1 = échec générique).
+EXPORT int32_t SteamInternal_GameServer_Init_V2(uint32_t ip, uint16_t a, uint16_t q, int32_t mode, const char *v,
+                                                const char *versions, char *message) {
+    (void)ip; (void)a; (void)q; (void)mode; (void)v; (void)versions;
+    if (message) snprintf(message, 1024, "no Steam game server on iOS");
+    return 1;
 }
 
 // ---- callbacks : aucun ----
