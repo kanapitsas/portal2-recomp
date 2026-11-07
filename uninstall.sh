@@ -99,15 +99,20 @@ for id in "${GAME_IDS[@]}"; do
     for a in "$H/Applications/$NAME.app" "$SYSTEM_APPS/$NAME.app"; do
         [ -e "$a" ] && APPS+=("$a")
     done
-    SAVES=()
-    [ -e "$SUPPORT" ] && SAVES+=("$SUPPORT")
-    USER_DIR="$(config_get "$id" user_dir)"
-    USER_DIR="${USER_DIR/#\~/$H}"
-    OTHERS=()   # the other games' data folders: never offered from this game
+    OTHERS=()   # the other games' data folders and saves: never offered from this game
     for other in "${GAME_IDS[@]}"; do
         [ "$other" = "$id" ] && continue
         OTHERS+=("$SUPPORT_ROOT/$(game_info "$other"; printf '%s' "$NAME")")
+        o="$(config_get "$other" user_dir)"
+        [ -n "$o" ] && OTHERS+=("${o/#\~/$H}")
     done
+    SAVES=()
+    if [ -e "$SUPPORT" ]; then
+        if safe_user_dir "$SUPPORT" "${PROTECTED[@]}" "${OTHERS[@]}"; then SAVES+=("$SUPPORT")
+        else echo "Not offering to trash $SUPPORT: it overlaps a game, a depot, this folder or another game's saves." >&2; fi
+    fi
+    USER_DIR="$(config_get "$id" user_dir)"
+    USER_DIR="${USER_DIR/#\~/$H}"
     case "$USER_DIR" in
         ""|"$SUPPORT"|"$SUPPORT"/*) ;;
         *)
@@ -145,7 +150,15 @@ for id in "${GAME_IDS[@]}"; do
     echo
 done
 
-if [ -e "$BUILD_DIR" ] && [ "$REPO" != "$BUILD_DIR" ]; then
+BUILD_OTHERS=()   # saves of any game, if someone put them in there
+for id in "${GAME_IDS[@]}"; do
+    o="$(config_get "$id" user_dir)"
+    [ -n "$o" ] && BUILD_OTHERS+=("${o/#\~/$H}")
+done
+if [ -e "$BUILD_DIR" ] && [ "$REPO" != "$BUILD_DIR" ] &&
+   ! safe_user_dir "$BUILD_DIR" "${PROTECTED[@]}" ${BUILD_OTHERS[@]+"${BUILD_OTHERS[@]}"}; then
+    echo "Not offering to trash $BUILD_DIR: it overlaps a game, a depot or saves." >&2
+elif [ -e "$BUILD_DIR" ] && [ "$REPO" != "$BUILD_DIR" ]; then
     ANYTHING=1
     echo "Installer app's copy of the code and build:"
     echo "  $BUILD_DIR (source and build, $(size "$BUILD_DIR"))"

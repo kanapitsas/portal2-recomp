@@ -159,6 +159,30 @@ class UninstallTests(unittest.TestCase):
             self.run_script('n\nn\ny\ny\n')   # Portal 2: no, no; HL2: yes, yes
             self.assertTrue((self.support / 'userdata/portal2/SAVE').is_dir(), user_dir)
 
+    def test_one_game_never_takes_the_other_games_custom_saves(self):
+        # Both user_dirs custom, equal or nested: a yes for Portal 2's saves must not move HL2's.
+        self.add_hl2()
+        for hl2_dir in (self.explicit, self.explicit / 'hl2'):
+            hl2_dir.mkdir(parents=True, exist_ok=True)
+            config = json.loads(self.config.read_text())
+            config['games']['hl2']['user_dir'] = str(hl2_dir)
+            self.config.write_text(json.dumps(config))
+            self.run_script('n\ny\nn\nn\n')   # Portal 2: app no, saves yes; HL2: no, no
+            self.assertTrue(hl2_dir.is_dir(), hl2_dir)
+
+    def test_folders_holding_a_game_or_depot_are_never_offered(self):
+        # A game copied into the data folder, a depot left in the installer's build folder.
+        build = self.home / 'Library/Application Support/Portal 2 Natif Build'
+        depot = build / 'depot_661'
+        depot.mkdir(parents=True)
+        game = self.support / 'Portal 2'
+        game.mkdir()
+        self.config.write_text(json.dumps({'game_root': str(game), 'linux_root': str(depot)}))
+        self.run_script('y\ny\ny\n')
+        self.assertTrue(game.is_dir())
+        self.assertTrue(depot.is_dir())
+        self.assertFalse(self.app.exists())
+
     def test_nothing_installed(self):
         self.run_script('y\ny\n')
         out = self.run_script('y\ny\n')
