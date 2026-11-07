@@ -43,7 +43,7 @@ owns Half-Life 2, then open the app.
 - Saves and settings: `~/Library/Application Support/Half-Life 2 Natif/userdata`.
 - Log: `~/Library/Logs/HalfLife2Natif.log`.
 - Renderer: **OpenGL** by default, because it is faster than Metal for HL2
-  (see Performance) and Metal still draws the HDR sky wrong (Known limits).
+  (see Performance).
   To try Metal anyway:
   `open --env P2_RENDERER=d3d9 -a "Half-Life 2 Natif"`.
 - `./uninstall.sh` in that clone removes the HL2 app, and the saves if you

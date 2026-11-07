@@ -214,8 +214,7 @@ It creates `~/Applications/Half-Life 2 Natif.app`, with its own saves folder.
 
 - **Tested**: a few hours of the main game on an M3 Pro, about 77 fps at
   1280×720 with OpenGL (`--release` build).
-- **Renderer**: OpenGL by default. Metal is slower for HL2 (60–67 fps) and
-  still draws the HDR sky wrong.
+- **Renderer**: OpenGL by default, because Metal is slower for HL2 (60–67 fps).
 - **Not yet**: iPhone; Episode One, Episode Two and Lost Coast are
   untested; and some indirect call targets are still being found: a
   crash ending with `target not recompiled` is one more to add (please
@@ -274,7 +273,7 @@ profiles.
 | Community | Community maps copied by hand, loaded with `+map` | 📅 |
 | Community | Steam Workshop on Mac (needs the UGC part of the Steam bridge) | 💡 |
 | Half-Life 2 | Mac app from the same recompiler (`setup.sh --game hl2`), OpenGL, main game played for a few hours | 🚧 |
-| Half-Life 2 | Metal renderer without the HDR sky bug, the episodes and Lost Coast, iPhone | 📅 |
+| Half-Life 2 | Metal renderer as fast as OpenGL, the episodes and Lost Coast, iPhone | 📅 |
 | Rendering | Ray-traced lighting with Metal on M3 and A17 Pro GPUs, in the spirit of Portal with RTX (NVIDIA's RTX Remix is Windows and NVIDIA only, so it cannot be reused) | 💡 |
 
 ## Repository layout
