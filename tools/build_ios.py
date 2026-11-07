@@ -14,6 +14,9 @@ the profile Xcode obtained for a device (ios/signing).
 Metal renderer (native Direct3D 9, docs/d3d9-bridge.md): --d3d9metal links
 libd3d9metal.a (mtld3d, make native-ios) into the executable, no dlopen; it is
 the default renderer, the player can go back to OpenGL in Settings > Portal 2 > Renderer.
+
+Portal 2 only: its build tree and iPhone builds are build/game and build/ios
+(tools/games.py); Half-Life 2 has no iPhone build yet.
 """
 import argparse
 import json
@@ -29,6 +32,8 @@ from ios_bundle_id import bundle_id
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_game
+import games
+import localconfig
 
 ROOT = Path(__file__).resolve().parent.parent
 FRAMEWORKS = ['UIKit', 'Foundation', 'CoreGraphics', 'QuartzCore', 'OpenGLES', 'Metal', 'AVFoundation',
@@ -53,21 +58,28 @@ def main():
     ap.add_argument('--d3d9metal', type=Path,
                     help='libd3d9metal.a for this target (default: "d3d9metal_ios" of config/local.json, '
                          'one path per target: {"device": ..., "sim": ...}); without it, OpenGL only')
-    ap.add_argument('--layout', type=Path, default=Path('build/game/prep/layout.json'))
+    games.add_argument(ap)
+    ap.add_argument('--layout', type=Path, help='default: build/game/prep/layout.json')
     ap.add_argument('--jobs', type=int, default=os.cpu_count() or 1)
     args = ap.parse_args()
     if args.release:
         args.opt, args.fast_memory = '2', True
     os.chdir(ROOT)
+    config = localconfig.for_game(args.game)
+    game = games.profile(config)
+    if not game['ios']:
+        sys.exit(f'build_ios: {game["app_name"]} has no iPhone build yet (Portal 2 only)')
+    build_dir, ios_dir = Path(game['build_dir']), Path(game['ios_dir']) / args.target
+    args.layout = args.layout or build_dir / 'prep/layout.json'
     target = TARGETS[args.target]
     deps = (args.deps or ROOT.parent / 'work/ios-deps' / args.target).resolve()
-    d3d9metal = d3d9metal_library(args.d3d9metal, args.target)
+    d3d9metal = d3d9metal_library(args.d3d9metal, args.target, config)
     sdk = subprocess.run(['xcrun', '--sdk', target['sdk'], '--show-sdk-path'], check=True,
                          capture_output=True, text=True).stdout.strip()
     started = time.time()
     layout = json.loads(args.layout.read_text())
     manifest, _ = build_game.generate(SimpleNamespace(layout=args.layout, all=True, jobs=args.jobs),
-                                      layout, build_game.roots(layout))
+                                      layout, build_game.roots(layout, game['roots']), build_dir / 'gen')
     base = ['-target', target['triple'], '-isysroot', sdk]
     memory = ['-DRT_FAST_MEMORY'] if args.fast_memory else []
     runtime_flags = [*base, f'-O{args.opt}', '-g', *build_game.WARNINGS, *memory, '-Iruntime', '-Iruntime/ios',
@@ -75,7 +87,7 @@ def main():
                      f'-I{deps}/include/freetype2', '-DGL_SILENCE_DEPRECATION', '-DGLES_SILENCE_DEPRECATION',
                      '-DOPENAL_DEPRECATED=', '-DAL_SILENCE_DEPRECATION']
     generated_flags = [*base, f'-O{args.opt}', '-gline-tables-only', *build_game.GENERATED_TUNING, *build_game.WARNINGS, *memory, '-Iruntime']
-    sources = Path('build/game/gen/src')
+    sources = build_dir / 'gen/src'
     # runtime/d3d9.c : symboles de libd3d9metal.a liés, pas de dlopen ;
     # runtime/ios/metal_ios.m s'en sert pour savoir si Metal est disponible.
     static = ['-DRT_D3D9METAL_STATIC'] if d3d9metal else []
@@ -87,16 +99,16 @@ def main():
     units += [(str(sources / name), generated_flags) for name in sorted(manifest['shards'])]
     units.append((str(sources / 'dispatch.c'), generated_flags))
     # Greffons PE de Miles traduits (voix MP3...), comme le build macOS.
-    plugin_sources, _ = build_game.generate_plugins(Path('config/local.json'))
+    plugin_sources, _ = build_game.generate_plugins(config, build_dir / 'gen/pe')
     units += [(str(p), generated_flags) for p in plugin_sources]
     identity = subprocess.run(['clang', '--version'], capture_output=True, text=True, check=True).stdout
-    cache = Path(f'build/ios/{args.target}/obj')
+    cache = ios_dir / 'obj'
     objects, compiled, cpu = build_game.compile_units(units, cache, args.jobs, identity)
     print(f'{compiled}/{len(units)} fichiers compilés ({cpu:.0f} s CPU)')
 
-    app = Path(f'build/ios/{args.target}/Portal2.app')
+    app = ios_dir / 'Portal2.app'
     app.mkdir(parents=True, exist_ok=True)
-    response = Path(f'build/ios/{args.target}/link.rsp')
+    response = ios_dir / 'link.rsp'
     response.write_text('\n'.join(str(o) for o in objects) + '\n')
     libs = [str(deps / 'lib' / n) for n in ('libSDL2main.a', 'libSDL2.a', 'libgl4es.a', 'libfreetype.a')]
     frameworks = FRAMEWORKS + (D3D9METAL_FRAMEWORKS if d3d9metal else [])
@@ -114,7 +126,7 @@ def main():
     (app / 'Info.plist').write_text(plist)
     # Page du jeu dans l'app Réglages d'iOS (lue par runtime/ios/settings.c).
     shutil.copytree(ROOT / 'ios/Settings.bundle', app / 'Settings.bundle', dirs_exist_ok=True)
-    app_icon(app)
+    app_icon(app, config)
     # Lancement depuis l'écran d'accueil : arguments du jeu par défaut (les
     # dossiers de données sont ajoutés par ios/main_ios.c).
     # La langue vient de tools/language.py au moment du build : pour la changer,
@@ -130,10 +142,9 @@ def main():
     print(f'rendu Metal : {d3d9metal}' if d3d9metal else 'rendu Metal : absent (OpenGL seulement, voir --d3d9metal)')
 
 
-def d3d9metal_library(given, target):
+def d3d9metal_library(given, target, config):
     """libd3d9metal.a to link for this target (argument, else config/local.json), or None."""
     if given is None:
-        config = json.loads(Path('config/local.json').read_text()) if Path('config/local.json').exists() else {}
         entry = config.get('d3d9metal_ios')
         given = entry.get(target) if isinstance(entry, dict) else None
         if not given:
@@ -144,12 +155,11 @@ def d3d9metal_library(given, target):
     return path
 
 
-def app_icon(app):
+def app_icon(app, config):
     """App icon taken from the game's macOS icon (portal2/resource/game.icns):
     a Valve image, read from the player's copy instead of being versioned.
     Old-style files (CFBundleIconFiles of ios/Info.plist.in), no asset
     catalog. Without the file: iOS default icon."""
-    config = json.loads(Path('config/local.json').read_text()) if Path('config/local.json').exists() else {}
     icns = Path(config.get('game_root', '')) / 'portal2/resource/game.icns'
     if not icns.is_file():
         print(f'icône : {icns} absent, icône par défaut')

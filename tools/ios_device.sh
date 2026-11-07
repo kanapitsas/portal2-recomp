@@ -19,6 +19,7 @@ DEVICE=${P2_DEVICE:-$(xcrun devicectl list devices 2>/dev/null |
 [ -n "$DEVICE" ] || { echo "aucun appareil connecté (câble, appareil déverrouillé, mode développeur)"; exit 1; }
 APP_ID=$(python3 tools/ios_bundle_id.py)
 PROBE_ID=$(python3 tools/ios_bundle_id.py --probe)
+# Portal 2 only: its build tree (build/game) and iPhone build (build/ios), tools/games.py.
 GAME_ROOT=$(python3 -c "import json;print(json.load(open('config/local.json'))['game_root'])")
 LINUX_ROOT=$(python3 -c "import json;print(json.load(open('config/local.json'))['linux_root'])")
 dc() {  # sous-commande de trois mots, --device, puis le reste (options et arguments)

@@ -15,21 +15,25 @@ import games
 import localconfig
 
 parser = argparse.ArgumentParser(description=__doc__)
+games.add_argument(parser)
 parser.add_argument('--steps', type=int, default=10)
 parser.add_argument('--timeout', type=int, default=30)
 parser.add_argument('--opt', default='0', choices=['0','1','2','3'])
 parser.add_argument('game_args', nargs=argparse.REMAINDER, help='after --: game arguments (e.g. +load save)')
 args = parser.parse_args()
-layout = json.loads(Path('build/game/prep/layout.json').read_text())
-roots_path = Path(games.profile(localconfig.load())['roots'])
+game = games.profile(localconfig.for_game(args.game))
+build_dir = Path(game['build_dir'])
+layout = json.loads((build_dir / 'prep/layout.json').read_text())
+roots_path = Path(game['roots'])
 for attempt in range(args.steps):
-    built = subprocess.run([sys.executable, '-u', 'tools/build_game.py', '--opt', args.opt])
+    built = subprocess.run([sys.executable, '-u', 'tools/build_game.py', '--game', game['name'], '--opt', args.opt])
     if built.returncode: sys.exit(built.returncode)
-    result = subprocess.run([sys.executable, 'tools/run_game.py', '--timeout', str(args.timeout), *args.game_args])
+    result = subprocess.run([sys.executable, 'tools/run_game.py', '--game', game['name'], '--timeout', str(args.timeout),
+                             *args.game_args])
     if not result.returncode:
         print('The native process returned normally; this is not a launch-success claim.')
         break
-    log = Path('build/game/launch.log').read_text()
+    log = (build_dir / 'launch.log').read_text()
     matches = re.findall(r'guest trap at (0x[0-9a-f]+).*?: target not recompiled', log)
     if not matches:
         sys.exit(result.returncode)

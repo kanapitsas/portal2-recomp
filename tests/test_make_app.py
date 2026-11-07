@@ -38,17 +38,18 @@ class MakeAppTests(unittest.TestCase):
         self.old = self.tmp / 'work/portal2-userdata'
         # The fake binary is not Mach-O: skip dylib bundling and signing here.
         for patch in (mock.patch.object(make_app, 'ROOT', self.root), mock.patch.object(make_app, 'SUPPORT', self.support),
-                      mock.patch.object(make_app, 'bundle_libraries', lambda app, binary, prefix: None),
+                      mock.patch.object(make_app, 'bundle_libraries', lambda app, binary, prefix, **kw: None),
                       mock.patch.object(make_app, 'sign_app', lambda app: None)):
             patch.start()
             self.addCleanup(patch.stop)
 
-    def run_main(self):
+    def run_main(self, *args):
         (self.root / 'config/local.json').write_text(json.dumps(self.config))
         dest = self.tmp / 'Applications'
-        with mock.patch.object(sys, 'argv', ['make_app.py', '--dest', str(dest)]), mock.patch('builtins.print'):
+        with mock.patch.object(sys, 'argv', ['make_app.py', '--dest', str(dest), *args]), mock.patch('builtins.print'):
             make_app.main()
-        return dest / f"{make_app.games.profile(self.config)['app_name']}.app"
+        config = make_app.localconfig.game_config(self.config, args[1] if args[:1] == ('--game',) else None)
+        return dest / f"{make_app.games.profile(config)['app_name']}.app"
 
     def test_launcher_reads_nothing_from_repo(self):
         app = self.run_main()
@@ -122,8 +123,12 @@ class MakeAppTests(unittest.TestCase):
             self.assertEqual(plistlib.load(f)['CFBundleIdentifier'], 'fr.kanapitsas.portal2-native')
 
     def test_hl2_gets_its_own_app_and_data_folder(self):
-        # Portal 2's old saves location must not leak into Half-Life 2's folder.
+        # Portal 2's old saves location must not leak into Half-Life 2's folder. Older
+        # single-game format: "game": "hl2" and its keys at the top level.
         (self.old / 'portal2').mkdir(parents=True)
+        (self.root / 'build/hl2/prep').mkdir(parents=True)
+        (self.root / 'build/hl2/prep/layout.json').write_text('{}')
+        (self.root / 'build/hl2/hl2-native').write_text('')
         support_root = self.tmp / 'Application Support'
         self.config['game'] = 'hl2'
         with mock.patch.object(make_app.localconfig, 'SUPPORT', support_root / 'Portal 2 Natif'):
@@ -144,6 +149,53 @@ class MakeAppTests(unittest.TestCase):
             plist = plistlib.load(f)
         self.assertEqual((plist['CFBundleName'], plist['CFBundleIdentifier']),
                          ('Half-Life 2 Natif', 'fr.kanapitsas.hl2-native'))
+
+    def add_hl2(self):
+        """Half-Life 2 set up beside Portal 2: its section and its own build tree."""
+        (self.root / 'build/hl2/prep').mkdir(parents=True)
+        (self.root / 'build/hl2/prep/layout.json').write_text('{}')
+        (self.root / 'build/hl2/prep/engine.so').write_bytes(b'hl2')
+        (self.root / 'build/hl2/hl2-native').write_text('')
+        self.hl2_game = self.tmp / 'Half-Life 2'
+        self.config['games'] = {'hl2': {'game_root': str(self.hl2_game), 'linux_root': str(self.tmp / 'depot_224'),
+                                        'steam_appid': 220, 'steam_api_dylib': self.config['steam_api_dylib']}}
+
+    def test_both_games_from_one_checkout(self):
+        self.add_hl2()
+        support_root = self.tmp / 'Application Support'
+        calls = []
+        with mock.patch.object(make_app.localconfig, 'SUPPORT', support_root / 'Portal 2 Natif'), \
+                mock.patch.object(make_app, 'bundle_libraries', lambda app, binary, prefix, **kw: calls.append((binary, kw))):
+            portal2 = self.run_main()
+            hl2 = self.run_main('--game', 'hl2')
+        self.assertEqual((portal2.name, hl2.name), ('Portal 2 Natif.app', 'Half-Life 2 Natif.app'))
+        self.assertTrue(portal2.is_dir())
+        self.assertEqual(calls, [(self.root / 'build/portal2-native', {'executable': 'portal2-native'}),
+                                 (self.root / 'build/hl2/hl2-native', {'executable': 'hl2-native'})])
+        self.assertEqual((hl2 / 'Contents/Resources/prep/engine.so').read_bytes(), b'hl2')
+        self.assertEqual((portal2 / 'Contents/Resources/prep/engine.so').read_bytes(), b'\x7fELF')
+        launcher = (hl2 / 'Contents/MacOS/launcher').read_text()
+        self.assertIn('exec "$HERE/hl2-native"', launcher)
+        self.assertIn(str(self.hl2_game), launcher)
+        self.assertIn('export SteamAppId=220', launcher)
+        self.assertNotIn(self.config['game_root'], launcher)
+        self.assertIn('exec "$HERE/portal2-native"', (portal2 / 'Contents/MacOS/launcher').read_text())
+        # The app's config snapshot is the game's merged view (language.py reads its game_root).
+        snapshot = json.loads((hl2 / 'Contents/Resources/local.json').read_text())
+        self.assertEqual((snapshot['game'], snapshot['game_root']), ('hl2', str(self.hl2_game)))
+        self.assertNotIn('games', snapshot)
+
+    def test_game_not_set_up_is_refused(self):
+        with self.assertRaises(SystemExit) as raised:
+            self.run_main('--game', 'hl2')
+        self.assertIn('./setup.sh --game hl2', str(raised.exception))
+
+    def test_hl2_without_its_build_is_refused(self):
+        self.add_hl2()
+        (self.root / 'build/hl2/hl2-native').unlink()
+        with self.assertRaises(SystemExit) as raised:
+            self.run_main('--game', 'hl2')
+        self.assertIn('build_game.py --game hl2', str(raised.exception))
 
     def test_missing_prep_keeps_existing_app(self):
         app = self.run_main()

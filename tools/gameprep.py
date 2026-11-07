@@ -7,6 +7,7 @@ import subprocess
 import sys
 from elfprep import Elf
 import games
+import localconfig
 
 
 def plan(config):
@@ -40,10 +41,14 @@ def plan(config):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    games.add_argument(parser)
     parser.add_argument('--config', type=Path, default=Path('config/local.json'))
-    parser.add_argument('--out', type=Path, default=Path('build/game/prep'))
+    parser.add_argument('--out', type=Path, help='default: <build_dir>/prep of the game (tools/games.py)')
     args = parser.parse_args()
-    config = json.loads(args.config.read_text())
+    config = localconfig.game_config(localconfig.load(args.config), args.game)
+    if not config.get('linux_root'):
+        parser.exit(1, f'no linux_root for {config["game"]} in {args.config}: run ./setup.sh --game {config["game"]}\n')
+    args.out = args.out or Path(games.profile(config)['build_dir']) / 'prep'
     modules = plan(config)
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / 'plan.json').write_text(json.dumps([{'path': str(p), 'base': hex(base), 'size': size}

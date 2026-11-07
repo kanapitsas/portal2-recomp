@@ -232,7 +232,8 @@ def print_summary(result, top):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--layout', type=Path,
-                    help='prepared layout (default: build/game/prep/layout.json with --all, else build/prep/layout.json)')
+                    help='prepared layout (default: build/game/prep/layout.json with --all, else build/prep/layout.json; '
+                         'build/hl2/prep/layout.json for Half-Life 2)')
     ap.add_argument('--out', default='build/progress.json', type=Path)
     ap.add_argument('--objdump', default='objdump')
     ap.add_argument('--all', action='store_true', help='audit every function of every prepared module')

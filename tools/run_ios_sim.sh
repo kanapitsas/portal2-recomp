@@ -10,6 +10,7 @@ DEVICE=${DEVICE:-$(xcrun simctl list devices available | grep iPhone | grep -oE 
 APP_ID=$(python3 tools/ios_bundle_id.py)
 SECONDS_MAX=${1:-120}; shift || true
 GAME_ARGS=("$@"); [ ${#GAME_ARGS[@]} -eq 0 ] && GAME_ARGS=(-game portal2 -novid -fullscreen)
+# Portal 2 only: its build tree (build/game) and iPhone build (build/ios), tools/games.py.
 GAME_ROOT=$(python3 -c "import json;print(json.load(open('config/local.json'))['game_root'])")
 LINUX_ROOT=$(python3 -c "import json;print(json.load(open('config/local.json'))['linux_root'])")
 xcrun simctl bootstatus "$DEVICE" -b >/dev/null 2>&1 || xcrun simctl boot "$DEVICE"

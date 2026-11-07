@@ -20,7 +20,8 @@ TEXT_BASE = 0x100000000   # vmaddr de __TEXT (exécutable arm64 non PIE-décalé
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--binary', type=Path, default=Path('build/portal2-native'))
+    parser.add_argument('--binary', type=Path, default=Path('build/portal2-native'),
+                        help='build/hl2/hl2-native for Half-Life 2')
     parser.add_argument('-o', '--output', type=Path, required=True)
     parser.add_argument('profiles', nargs='+', type=Path)
     args = parser.parse_args()
