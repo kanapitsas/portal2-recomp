@@ -16,8 +16,12 @@
   `linux_root` in `config/local.json` when present, else
   `../work/portal2-linux/bin`). `make sanitize` is the UBSan variant.
 - `P2_STEAM_TESTS=1 make test`: live Steam tests, with the client running.
-- `make clean` also wipes `build/game/prep`; regenerate it with
-  `python3 tools/gameprep.py` (a few seconds).
+- `make clean` also wipes `build/game/prep` (and `build/hl2`); regenerate it
+  with `python3 tools/gameprep.py [--game hl2]` (a few seconds).
+- Both games share one checkout: Portal 2 in `build/game` and
+  `build/portal2-native`, Half-Life 2 in `build/hl2`; paths in
+  `tools/games.py`, config merge in `tools/localconfig.py` (`game_config`).
+  Tools take `--game`; never hard-code a game path.
 
 ## Conventions for native bridges
 

@@ -19,12 +19,11 @@ Half-Life 2 installed by Steam on your Mac, and its Linux binaries:
 2. Open the Steam console (`open steam://open/console`) and type
    `download_depot 220 224` (about 320 MB). Wait for "Depot download
    complete".
-3. In a **separate clone** from your Portal 2 one (a checkout builds one
-   game, `build/` is shared):
+3. Open the Natif Installer and tick Half-Life 2, or, in a checkout (the
+   same one as Portal 2 if you have it):
 
    ```sh
-   git clone https://github.com/kanapitsas/portal2-recomp.git hl2-recomp
-   cd hl2-recomp
+   ./setup.sh               # every game found, or:
    ./setup.sh --game hl2
    ```
 
@@ -32,11 +31,11 @@ Half-Life 2 installed by Steam on your Mac, and its Linux binaries:
    `~/Library/Application Support/Steam/steamapps/common/Half-Life 2` and the
    depot where `download_depot` put it; otherwise pass them:
    `./setup.sh --game hl2 "/path/to/Half-Life 2" "/path/to/depot_224"`.
-   Later runs remember the game, so `./setup.sh` is enough.
 
 `setup.sh` downloads Valve's `libsteam_api.dylib` from Steamworks.NET
 2024.8.0 (SHA-256 checked; HL2 needs a newer SDK than Portal 2), builds the
-game with `--release` (about 20 minutes and 4 GB the first time) and creates
+game with `--release` in `build/hl2` (about 20 minutes and 4 GB the first
+time; Portal 2's build in `build/game` is left alone) and creates
 `~/Applications/Half-Life 2 Natif.app`. Open Steam with the account that
 owns Half-Life 2, then open the app.
 
@@ -45,15 +44,16 @@ owns Half-Life 2, then open the app.
 - Renderer: **Metal** when `libd3d9metal` is there, as for Portal 2 (about
   118 fps against 91 with OpenGL, see Performance). To force OpenGL:
   `open --env P2_RENDERER=opengl -a "Half-Life 2 Natif"`.
-- `./uninstall.sh` in that clone removes the HL2 app, and the saves if you
-  confirm.
+- `./uninstall.sh` offers to remove the HL2 app and, if you confirm, its
+  saves, with separate questions for Portal 2's.
 
 ## What differs from Portal 2
 
 - **Game profile** (`tools/games.py`): program `hl2_linux`, game libraries
   under `bin/` and `hl2_complete/bin/`, roots in `config/hl2-roots.json`,
-  app name, log and data folder. `config/local.json` picks it with
-  `"game": "hl2"` (written by `setup.sh --game hl2`).
+  app name, log, data folder, and build paths: `build/hl2` (prep, gen, obj,
+  `launch.log`) and the binary `build/hl2/hl2-native` (also its name in the
+  app). The tools pick it with `--game hl2` (or `P2_GAME=hl2`).
 - **Linux binaries**: depot 224 (all i386), with Miles' plugins
   (`bin/linux32/*.asi`), which Portal 2 takes from the game folder instead.
 - **Steamworks**: HL2's `client.so` asks for interfaces from SDK 1.60 and
@@ -77,26 +77,31 @@ owns Half-Life 2, then open the app.
 
 ## Manual setup
 
-What `setup.sh --game hl2` writes, for a hand-made `config/local.json`:
+What `setup.sh --game hl2` adds to `config/local.json` (beside Portal 2's
+keys, if any; [usage.md](usage.md#manual-build)):
 
 ```json
 {
-  "game": "hl2",
-  "game_root": "~/Library/Application Support/Steam/steamapps/common/Half-Life 2",
-  "linux_root": "/path/to/depot_224",
-  "steam_api_dylib": "/path/to/steamworks-2024.8.0/libsteam_api.dylib",
-  "steam_appid": 220,
-  "d3d9metal_dylib": "/path/to/libd3d9metal.dylib"
+  "d3d9metal_dylib": "/path/to/libd3d9metal.dylib",
+  "games": {
+    "hl2": {
+      "game_root": "~/Library/Application Support/Steam/steamapps/common/Half-Life 2",
+      "linux_root": "/path/to/depot_224",
+      "steam_api_dylib": "/path/to/steamworks-2024.8.0/libsteam_api.dylib",
+      "steam_appid": 220,
+      "depot_id": 224
+    }
+  }
 }
 ```
 
 Then:
 
 ```sh
-python3 tools/gameprep.py
-python3 tools/build_game.py --release
-python3 tools/make_app.py                            # the app, or:
-python3 tools/run_game.py --show --timeout 3600      # from the terminal
+python3 tools/gameprep.py --game hl2
+python3 tools/build_game.py --game hl2 --release
+python3 tools/make_app.py --game hl2                         # the app, or:
+python3 tools/run_game.py --game hl2 --show --timeout 3600   # from the terminal
 ```
 
 `run_game.py` uses Metal when `d3d9metal_dylib` is set (unlike the app);
@@ -135,11 +140,11 @@ OpenGL time is ~30 % of the frame: ~1,100 draw calls at ~1.8 µs, the
 buffer swap and `glBlitFramebuffer` (`P2_GL_TIMING=1`).
 
 PGO profile: an instrumented build
-(`--release --pgo-generate --out build/portal2-native-pgogen`), runs with
+(`--game hl2 --release --pgo-generate --out build/hl2/hl2-native-pgogen`), runs with
 `LLVM_PROFILE_FILE=…/%p.profraw` (the save on OpenGL and Metal,
 `+map d1_trainstation_02`, `+map d3_c17_01`, ~1.2 GB each), then
-`xcrun llvm-profdata merge -o build/game/pgo-hl2.profdata …` (155 MB, not in
-git) and `--release --pgo-use build/game/pgo-hl2.profdata`.
+`xcrun llvm-profdata merge -o build/hl2/pgo-hl2.profdata …` (155 MB, not in
+git) and `--game hl2 --release --pgo-use build/hl2/pgo-hl2.profdata`.
 
 ### Ceiling (estimate, 7 Nov. 2026)
 
@@ -198,12 +203,10 @@ risk for now.
 - Indirect call targets are still being discovered; a crash ending with
   `target not recompiled` means one more root. Please open an issue with the
   end of `~/Library/Logs/HalfLife2Natif.log` and where it happened.
-  `tools/discover_game.py` finds them from real runs (arguments after `--`
+  `tools/discover_game.py --game hl2` finds them from real runs (arguments after `--`
   go to the game, e.g. `+load <save>`).
 - The game wants the `en_US.UTF-8` locale and warns about glyph support: the
   runtime only provides `C` and `C.UTF-8`.
 - Mac only: no iPhone build.
-- One game per checkout: Portal 2 and HL2 need two clones (`build/` is
-  shared).
 - Only the main game has been played (a few hours); Episode One, Episode Two
   and Lost Coast, which the same `hl2_complete` build contains, are untested.

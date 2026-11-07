@@ -35,11 +35,12 @@ share them.
 - **Co-op** over the local network: a Mac hosts, an iPhone or a second copy
   on the same Mac joins. Connection and map load are checked; a full co-op
   course has not been played yet.
-- **Install**: the Portal 2 Installer app from the
+- **Install**: the Natif Installer app from the
   [releases](https://github.com/kanapitsas/portal2-recomp/releases), or one
-  command, `setup.sh`. Only the Xcode command line tools are required.
+  command, `setup.sh`, for either game or both. Only the Xcode command line
+  tools are required.
 - **Half-Life 2** (experimental): plays on Mac at about 118 fps with Metal
-  (M3 Pro, 720p), installed with `./setup.sh --game hl2`; see
+  (M3 Pro, 720p), from the same installer or checkout; see
   [below](#half-life-2-experimental).
 
 ## How it works
@@ -49,7 +50,7 @@ share them.
    relocations offline and record imports, exports and entry points.
 2. `tools/lift.py` translates every x86 function into a C function; `clang`
    compiles the result together with the runtime into one ARM64 executable
-   (`build/portal2-native`). Indirect call targets that the static pass
+   (`build/portal2-native`; `build/hl2/hl2-native` for Half-Life 2). Indirect call targets that the static pass
    misses are collected at run time into `config/game-roots.json`.
 3. The runtime (`runtime/`) implements what the binaries import: libc,
    pthreads and futexes, SDL2, OpenGL, Direct3D 9 and Steam. Guest threads
@@ -79,6 +80,9 @@ share them.
     Windows version works;
   - the Linux binaries: open the Steam console (`open steam://open/console`)
     and type `download_depot 620 661` (about 90 MB).
+- And/or Half-Life 2 on Steam: the game installed by Steam on the Mac (the
+  current version, with `hl2_complete/`), and its Linux binaries:
+  `download_depot 220 224` in the Steam console (about 320 MB).
 - Optional: Rust 1.99 or newer from [rustup](https://rustup.rs) builds the
   Metal renderer from source instead of using the prebuilt one; the iPhone
   app needs it for Metal (Homebrew's `rust` has no iOS target).
@@ -89,35 +93,43 @@ share them.
 
 ## Install on Mac
 
-**Without Terminal**: download `Portal-2-Installer-<version>.zip` from the
+**Without Terminal**: download `Natif-Installer-<version>.zip` from the
 [latest release](https://github.com/kanapitsas/portal2-recomp/releases/latest),
-unzip it and open **Portal 2 Installer** (signed and notarized by Apple; if
+unzip it and open **Natif Installer** (signed and notarized by Apple; if
 macOS still refuses to open it, go to System Settings > Privacy & Security
 and click **Open Anyway**). The installer checks the Xcode command
-line tools (and offers to install them), finds the game and the Linux
-binaries (with the Steam console commands to paste when they are missing),
-then runs `setup.sh` for you. Its copy of the code and the build (about 5 GB)
-live in `~/Library/Application Support/Portal 2 Natif Build`; its log in
-`~/Library/Logs/Portal2Installer.log`.
+line tools (and offers to install them), finds Portal 2, Half-Life 2 and
+their Linux binaries (with the Steam console commands to paste when they are
+missing), lets you tick the games to build, then runs `setup.sh` for you.
+Its copy of the code and the builds (about 5 GB per game) live in
+`~/Library/Application Support/Portal 2 Natif Build`, as with the first
+Portal 2 installer, so an update rebuilds only what changed; its log is
+`~/Library/Logs/NatifInstaller.log`.
 
 **With Terminal**:
 
 ```sh
 git clone https://github.com/kanapitsas/portal2-recomp.git
 cd portal2-recomp
-./setup.sh "/path/to/Portal 2" "/path/to/depot_661"
+./setup.sh                    # every game found: Portal 2, Half-Life 2 or both
+./setup.sh --game hl2         # one game (portal2, hl2), or --game all for both
+./setup.sh "/path/to/Portal 2" "/path/to/depot_661"   # folders Steam did not put in the usual place
 ```
 
-Without paths, `setup.sh` looks where Steam usually puts them. It downloads
-Valve's `libsteam_api.dylib` (Steamworks.NET 20.1.0, SHA-256 checked),
-builds the game (about 10 minutes the first time) and creates
-`~/Applications/Portal 2 Natif.app`. Re-running it is safe and quick.
-"Natif" is French for native; the name is kept so existing installs are
-updated in place.
+Without paths, `setup.sh` looks where Steam usually puts the games and their
+Linux binaries, and builds each game it finds complete (`./setup.sh --detect`
+lists them without building). It downloads Valve's `libsteam_api.dylib`
+(from Steamworks.NET, SHA-256 checked), builds each game (about 10 minutes
+for Portal 2 and 20 for Half-Life 2 the first time) and creates
+`~/Applications/Portal 2 Natif.app` and/or `Half-Life 2 Natif.app`.
+Re-running it is safe and quick, and adding the second game later does not
+rebuild the first. "Natif" is French for native; the name is kept so
+existing installs are updated in place.
 
-The app contains its own executable and libraries; the game files stay where
-Steam put them. After a rebuild or a change to `config/local.json`, run
-`python3 tools/make_app.py` to update the app (`--dest` for another folder).
+Each app contains its own executable and libraries; the game files stay
+where Steam put them. After a rebuild or a change to `config/local.json`, run
+`python3 tools/make_app.py` (`--game hl2` for Half-Life 2) to update the app
+(`--dest` for another folder).
 Downloads and iOS libraries go to `deps/` (`P2_DEPS` overrides it).
 `P2_HOST_DEPS=homebrew` or `bundle` forces where the host libraries come
 from; `P2_APP_DIR` puts the app elsewhere than `~/Applications`.
@@ -190,8 +202,9 @@ Details: [docs/d3d9-bridge.md](docs/d3d9-bridge.md).
 ./uninstall.sh
 ```
 
-It asks before moving the app and its log to the Trash, and asks again for
-the saves. It never touches the Steam game files or the Linux binaries.
+For each game installed, it asks before moving the app and its log to the
+Trash, and asks again for the saves; then, on its own yes, the installer's
+build folder. It never touches the Steam game files or the Linux binaries.
 
 ## Half-Life 2 (experimental)
 
@@ -200,17 +213,11 @@ current Steam build, 20th anniversary update) into a native Mac app. **You
 must own Half-Life 2**; as for Portal 2, nothing from Valve is in this
 repository.
 
-Install Half-Life 2 with Steam, fetch its Linux binaries from the Steam
-console with `download_depot 220 224` (about 320 MB), then, in a separate
-clone (one checkout builds one game):
-
-```sh
-git clone https://github.com/kanapitsas/portal2-recomp.git hl2-recomp
-cd hl2-recomp
-./setup.sh --game hl2
-```
-
-It creates `~/Applications/Half-Life 2 Natif.app`, with its own saves folder.
+Install Half-Life 2 with Steam and fetch its Linux binaries from the Steam
+console with `download_depot 220 224` (about 320 MB). Then tick it in the
+installer, or run `./setup.sh` (or `./setup.sh --game hl2`) in the same
+checkout as Portal 2: each game has its own build folder. It creates
+`~/Applications/Half-Life 2 Natif.app`, with its own saves folder.
 
 - **Tested**: a few hours of the main game on an M3 Pro, at 1280×720:
   about 118 fps with Metal (the default, as for Portal 2) and 91 with
@@ -272,7 +279,7 @@ profiles.
 | Controllers | Button prompts and default bindings that match the controller | 💡 |
 | Community | Community maps copied by hand, loaded with `+map` | 📅 |
 | Community | Steam Workshop on Mac (needs the UGC part of the Steam bridge) | 💡 |
-| Half-Life 2 | Mac app from the same recompiler (`setup.sh --game hl2`), OpenGL, main game played for a few hours | 🚧 |
+| Half-Life 2 | Mac app from the same recompiler, installer and checkout as Portal 2, main game played for a few hours | 🚧 |
 | Half-Life 2 | The episodes and Lost Coast, iPhone | 📅 |
 | Rendering | Ray-traced lighting with Metal on M3 and A17 Pro GPUs, in the spirit of Portal with RTX (NVIDIA's RTX Remix is Windows and NVIDIA only, so it cannot be reused) | 💡 |
 
@@ -290,7 +297,8 @@ profiles.
 - `config/`: `game-roots.json` and `hl2-roots.json` (indirect call roots
   of Portal 2 and Half-Life 2); `local.json` is yours and ignored by git.
 - `docs/`: the documents listed below. `experiments/`: the Steam probe.
-- `build/` and `deps/`: generated, ignored by git.
+- `build/` and `deps/`: generated, ignored by git. Portal 2 builds in
+  `build/game` (and `build/ios`), Half-Life 2 in `build/hl2`.
 
 ## Development and tests
 
