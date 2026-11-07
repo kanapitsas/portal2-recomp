@@ -43,5 +43,7 @@ typedef struct {
 
 // Boutons de cette disposition ; *count reçoit leur nombre.
 const rt_touch_button *rt_touch_layout(rt_ios_layout layout, int *count);
+// Abscisse (fraction de la zone sûre) du stick de la caméra au repos.
+double rt_touch_look_rest(rt_ios_layout layout);
 // Centre d'un bouton dans la zone (x, y, w, h).
 void rt_touch_place(const rt_touch_button *b, double x, double y, double w, double h, double *cx, double *cy);

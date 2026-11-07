@@ -37,12 +37,17 @@ RT_CHECK(ios_touch_layout_fits_the_screen) {
             double corner_w = x + 8 + (7 * 6 - 1) * 2 + 8 + 20, corner_h = y + 8 + 16 * 2 + 8 + 20;
             // Stick gauche au repos (restingStick: et stickRadius de touch_controls.m).
             double stick_x = x + w * .16, stick_y = y + h * .72, stick_r = fmin(66, h * .15);
+            double look_x = x + w * rt_touch_look_rest((rt_ios_layout)layout);
             for (int i = 0; i < n; ++i) {
                 double cx, cy, r = b[i].size / 2;
                 rt_touch_place(&b[i], x, y, w, h, &cx, &cy);
                 assert(cx - r >= x - .5 && cx + r <= x + w + .5 && cy - r >= y - .5 && cy + r <= y + h + .5);
                 assert(!(cx < corner_w && cy < corner_h));
+                if (layout == RT_IOS_LAYOUT_HL2) assert(!(cx - r < corner_w && cy - r < corner_h));   // pas même le bord
                 assert(hypot(cx - stick_x, cy - stick_y) > stick_r + r);
+                // HL2 : aucun bouton sur le stick de la caméra au repos (Portal 2 :
+                // le saut et l'accroupi y touchent, disposition d'origine).
+                if (layout == RT_IOS_LAYOUT_HL2) assert(hypot(cx - look_x, cy - stick_y) > stick_r + r);
                 for (int j = 0; j < i; ++j) {
                     // Portal 2 sur iPhone SE : le portail bleu de droite touche la
                     // pause (disposition d'origine ; ses boutons ne s'affichent

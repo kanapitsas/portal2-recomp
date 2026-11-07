@@ -152,8 +152,9 @@ int main(int argc, char **argv) {
         exclude_from_backup(documents);
     }
     // Échelle de rendu choisie (Réglages ou P2_IOS_RENDER_SCALE) : la
-    // résolution du jeu suit, sinon video.txt garderait l'ancienne.
-    if (getenv("P2_IOS_RENDER_SCALE") && count + 4 < 256) {
+    // résolution du jeu suit, sinon video.txt garderait l'ancienne. HL2 : toujours
+    // (sinon il démarre en 640×480, étiré sur l'écran).
+    if ((getenv("P2_IOS_RENDER_SCALE") || strcmp(game->name, "portal2")) && count + 4 < 256) {
         int present = 0;
         for (int i = 1; i < count; ++i) present |= !strcmp(arguments[i], "-w") || !strcmp(arguments[i], "-width");
         int w = 0, h = 0;
@@ -162,7 +163,8 @@ int main(int argc, char **argv) {
             char value[16];
             push("-w"); snprintf(value, sizeof(value), "%d", w); push(value);
             push("-h"); snprintf(value, sizeof(value), "%d", h); push(value);
-            fprintf(stderr, "[ios] résolution %dx%d (échelle %s)\n", w, h, getenv("P2_IOS_RENDER_SCALE"));
+            fprintf(stderr, "[ios] résolution %dx%d (échelle %s)\n", w, h,
+                    getenv("P2_IOS_RENDER_SCALE") ? getenv("P2_IOS_RENDER_SCALE") : "par défaut");
         }
     }
     arguments[count] = NULL;

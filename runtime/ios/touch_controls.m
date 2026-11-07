@@ -677,7 +677,9 @@ static void haptic_fire(void) {
 - (CGFloat)stickRadius { return MIN(66, self.area.size.height * .15); }
 - (CGPoint)restingStick:(BOOL)right {
     CGRect a = self.area;
-    return CGPointMake(CGRectGetMinX(a) + a.size.width * (right ? .80 : .16), CGRectGetMinY(a) + a.size.height * .72);
+    // HL2 : stick de la caméra plus au centre, à l'écart de la grappe du tir.
+    CGFloat x = right ? rt_touch_look_rest(rt_ios_current_game()->layout) : .16;
+    return CGPointMake(CGRectGetMinX(a) + a.size.width * x, CGRectGetMinY(a) + a.size.height * .72);
 }
 static BOOL portal_buttons(void) {
     const char *e = getenv("P2_PORTAL_BUTTONS");

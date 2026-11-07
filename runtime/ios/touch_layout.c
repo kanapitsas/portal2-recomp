@@ -36,7 +36,8 @@ static const rt_touch_button portal2[] = {
 //   visant ou en marchant (conduits, saut accroupi : sauter pendant qu'il est allumé).
 // - Haut, petits : armes précédente et suivante au centre, sous la liste des
 //   armes que le jeu y affiche (le tir choisit) ; lampe, sauvegarde rapide et
-//   pause à droite ; mode de la caméra en bas à gauche, comme Portal 2.
+//   pause à droite ; mode de la caméra en haut à gauche (en bas, il cacherait
+//   la santé du HUD).
 // Décalages à partir du bord droit : la grappe garde sa forme sur tous les
 // écrans (de l'iPhone SE à l'iPad).
 static const rt_touch_button hl2[] = {
@@ -52,7 +53,9 @@ static const rt_touch_button hl2[] = {
     {RT_TOUCH_FLASHLIGHT, "flashlight.on.fill", RT_TOUCH_INK, 1, 0, -B * 2.25f, EDGE, SMALL, 0},
     {RT_TOUCH_QUICKSAVE, "tray.and.arrow.down.fill", RT_TOUCH_INK, 1, 0, -B * 1.35f, EDGE, SMALL, 0},
     {RT_TOUCH_PAUSE, "pause.fill", RT_TOUCH_INK, 1, 0, -EDGE, EDGE, SMALL, 0},
-    {RT_TOUCH_LOOK_MODE, "r.joystick.fill", RT_TOUCH_INK, 0, 1, EDGE, -EDGE, SMALL, 0},
+    // En haut à gauche, après le compteur d'images : le coin bas gauche
+    // cacherait la santé du HUD.
+    {RT_TOUCH_LOOK_MODE, "r.joystick.fill", RT_TOUCH_INK, 0, 0, 170, EDGE, SMALL, 0},
 };
 
 const rt_touch_button *rt_touch_layout(rt_ios_layout layout, int *count) {
@@ -60,6 +63,8 @@ const rt_touch_button *rt_touch_layout(rt_ios_layout layout, int *count) {
     *count = (int)(sizeof(portal2) / sizeof(*portal2));
     return portal2;
 }
+
+double rt_touch_look_rest(rt_ios_layout layout) { return layout == RT_IOS_LAYOUT_HL2 ? .64 : .80; }
 
 void rt_touch_place(const rt_touch_button *b, double x, double y, double w, double h, double *cx, double *cy) {
     *cx = x + w * b->ax + b->ox;
