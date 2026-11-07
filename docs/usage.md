@@ -94,6 +94,7 @@ by two people has not been tried yet.
   "d3d9metal_dylib": "/path/to/libd3d9metal.dylib",
   "d3d9metal_ios": {"device": "/path/to/libd3d9metal.a"},
   "ios_bundle_id": "com.yourname.portal2",
+  "host_prefix": "/path/to/deps/p2-host-deps-1-macos-arm64",
   "depot_id": 661
 }
 ```
@@ -108,6 +109,10 @@ by two people has not been tried yet.
   the same default for `run_game.py`, `make_app.py` and `bench_renderer.py`);
   `tools/make_app.py` copies the older default `../work/portal2-userdata`
   there once if it exists (the original stays).
+- `host_prefix` is where SDL2, FreeType and Fontconfig are compiled from
+  (`tools/localconfig.py`; `P2_HOST_PREFIX` overrides it, the Makefile reads
+  it too): `setup.sh` sets it to the prebuilt bundle when Homebrew lacks
+  them, and removes it to build against `/opt/homebrew`.
 - `depot_id` is written by `setup.sh` for information only: nothing in the
   repository reads it.
 
@@ -143,10 +148,11 @@ launch) takes `--images <prep dir> --game-dir <game> [--linux-root <depot>]
 
 To play without a terminal: `python3 tools/make_app.py` creates
 `~/Applications/Portal 2 Natif.app` (`--dest` for another folder): a copy of
-`build/portal2-native` with its Homebrew dylibs — SDL2/sdl2-compat and the
+`build/portal2-native` with its host dylibs (Homebrew's or the prebuilt
+bundle's) — SDL2/sdl2-compat and the
 SDL3 it loads, FreeType, Fontconfig and their dependencies — in
 `Contents/Frameworks` and the Fontconfig configuration in
-`Contents/Resources/fonts`, so it runs without Homebrew; paths from
+`Contents/Resources/fonts`, so it runs without them; paths from
 `config/local.json`, starts Steam if needed, no `-w/-h`: resolution and mode
 come from the Video menu, saved in `update/cfg/video.txt`. Log:
 `~/Library/Logs/Portal2Natif.log`. Re-run it after a rebuild (the app holds a
@@ -195,3 +201,31 @@ Environment variables read by the runtime on Mac (the iPhone list is in
 | `P2_GL_STREAM_UNSYNC=0` | disables unsynchronized `glBufferSubData` appends |
 
 Host faults are translated into a guest address plus a guest stack.
+
+## Releases
+
+Maintainer steps; users never need them.
+
+1. **Host libraries**, when a version in `tools/build_host_deps.sh` or
+   `MTLD3D_REV` in `setup.sh` changes: bump `BUNDLE_VERSION`, run
+   `tools/build_host_deps.sh` (needs `cmake`, `ninja`, `pkg-config`, Rust;
+   meson goes in a venv), upload `p2-host-deps-<n>-macos-arm64.tar.xz` to a
+   release tagged `host-deps-<n>`, then set `HOST_DEPS_NAME`,
+   `HOST_DEPS_URL` and `HOST_DEPS_SHA256` in `setup.sh`. The script checks
+   that every library is relocatable (`@rpath`), targets macOS 13 and holds
+   no path of the build machine. Sources and checksums are Homebrew's.
+2. **Signing, once per Mac**: a "Developer ID Application" certificate in
+   the keychain (Xcode > Settings > Accounts > your team > Manage
+   Certificates > + > Developer ID Application; the team's Account Holder
+   creates it) and a notarytool profile with an app-specific password from
+   account.apple.com:
+   `xcrun notarytool store-credentials p2-notary --apple-id <Apple ID> --team-id <team ID>`.
+3. **Installer**: tag the release, run `tools/build_installer.sh` (the app
+   embeds `git archive HEAD`, so commit first) and upload
+   `build/installer/Portal-2-Installer-<tag>.zip`. With the certificate and
+   the profile, the script signs with the hardened runtime, notarizes, staples
+   and checks the result with `spctl`; it prints which of these it did.
+   Without the certificate the app is ad hoc signed and users go through
+   System Settings > Privacy & Security > Open Anyway once.
+   `P2_SIGN_IDENTITY` picks another certificate, `P2_NOTARY_PROFILE` another
+   profile.
