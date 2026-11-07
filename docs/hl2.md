@@ -84,6 +84,37 @@ PGO profile: an instrumented build
 `xcrun llvm-profdata merge -o build/game/pgo-hl2.profdata …` (155 MB, not in
 git) and `--release --pgo-use build/game/pgo-hl2.profdata`.
 
+### Ceiling (estimate, 7 Nov. 2026)
+
+- **CPU-bound and single-threaded**: 640×480 runs at the same 80 fps as
+  1280×720, and every thread but the main one sleeps (one guest CPU, guest
+  gate).
+- **Per frame** (hardware counters, `proc_pid_rusage`): 101 M ARM instructions,
+  46 M cycles (IPC 2.2, 3.7 GHz). Of the 12.5 ms: ~8.2 ms translated code,
+  ~0.9 ms runtime, ~2.7 ms OpenGL driver and kernel.
+- **Code expansion**: 5.0 ARM instructions per x86 instruction (static, whole
+  game), 6.0 weighted by the profile.
+- **Where translated time goes** (samples mapped to generated lines):
+  - ~38 % in the call protocol: calls, returns, entry and exit, tail jumps,
+    polls;
+  - ~29 % in memory accesses and push/pop;
+  - ~11 % in flags;
+  - ~7 % in SSE and x87.
+- **Native-equivalent ceiling**: assuming about one native ARM instruction
+  per x86 instruction and the same IPC, translated code would take about
+  1.4–2 ms. With the same GL driver that is about 4.5–5 ms per frame, or
+  200–230 fps. Native Source builds on Apple Silicon report 250–300 fps
+  (often at the `fps_max 300` cap).
+- **Realistic ceiling for this approach**: translated code 1.5–2× slower
+  than native gives about 130–165 fps.
+- **Beyond that**: overlapping the render thread (`mat_queue_mode 2`) would
+  first need the guest gate removed, plus x86 memory ordering on ARM.
+- **Typing guest accesses** so that clang keeps guest registers in host
+  registers across guest stores is unsound, because 8/16/32-bit accesses to
+  the same address must still alias. As an experiment it gained only 2–10 %
+  on `tools/bench.py`. Inside functions with loops, clang reloads `c->…`
+  after every guest store despite `CPU *restrict c`.
+
 Rejected with measurements: dropping the flag save before every call (the
 unsound version of the interprocedural flags analysis described in
 STATUS.md) gains only +2.8 % here, so the sound version is not worth its
