@@ -166,8 +166,8 @@ def d3d9metal_library(given, target, config):
 
 def settings_for_game(root_plist, game):
     """Half-Life 2 has no portals: the Portals group of the settings page (back
-    taps, portal buttons, vibration when firing) is left out, and back taps stay
-    off (runtime/ios/game_ios.c)."""
+    taps, portal buttons, vibration when firing) is left out, back taps stay
+    off (runtime/ios/game_ios.c), and gyro aiming is shown on, its default there."""
     if game == 'portal2':
         return
     with open(root_plist, 'rb') as f:
@@ -176,6 +176,8 @@ def settings_for_game(root_plist, game):
     for item in root['PreferenceSpecifiers']:
         if item.get('Type') == 'PSGroupSpecifier':
             skipping = item.get('Title') == 'Portals'
+        if item.get('Key') == 'P2Gyro':
+            item['DefaultValue'] = True   # gyro aiming on by default (touch_controls.m)
         if not skipping:
             kept.append(item)
     root['PreferenceSpecifiers'] = kept

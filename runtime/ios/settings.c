@@ -23,6 +23,8 @@ const rt_ios_setting rt_ios_settings[] = {
     {"P2TouchControls", "P2_TOUCH_CONTROLS", NULL, NULL},       // auto, 1, 0
     {"P2TouchLook", "P2_TOUCH_LOOK", NULL, NULL},               // vitesse de la caméra
     {"P2TouchAccel", "P2_TOUCH_ACCEL", NULL, NULL},             // accélération du trackpad (1 : aucune)
+    {"P2Gyro", "P2_GYRO", "1", "0"},                           // visée au gyroscope (gyro_aim.c ; défaut du jeu sinon)
+    {"P2GyroSpeed", "P2_GYRO_SPEED", NULL, NULL},               // multiplicateur de RT_GYRO_COUNTS_PER_RAD
     {"P2BackTap", "P2_BACKTAP", "1", "0"},
     {"P2Haptics", "P2_HAPTICS", "1", "0"},                     // vibration au tir (touch_controls.m)
     {"P2BackTapSensitivity", "P2_BACKTAP_SENSITIVITY", NULL, NULL},

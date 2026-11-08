@@ -132,7 +132,7 @@
 		</dict>
 		<dict>
 			<key>FooterText</key>
-			<string>Trackpad mode turns the camera as you slide a finger on the right half of the screen; the button at the bottom left also toggles this in game.</string>
+			<string>Trackpad mode turns the camera as you slide a finger on the right half of the screen; the camera mode button also toggles this in game. Gyro aiming turns the camera as you turn the phone, on top of the touch camera (on by default in Half-Life 2).</string>
 			<key>Title</key>
 			<string>Touch controls</string>
 			<key>Type</key>
@@ -220,6 +220,42 @@
 				<string>1.75</string>
 				<string>2.5</string>
 				<string>4</string>
+			</array>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<false/>
+			<key>Key</key>
+			<string>P2Gyro</string>
+			<key>Title</key>
+			<string>Gyro aiming</string>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<string>1</string>
+			<key>Key</key>
+			<string>P2GyroSpeed</string>
+			<key>Title</key>
+			<string>Gyro speed</string>
+			<key>Titles</key>
+			<array>
+				<string>Very slow (×0.5)</string>
+				<string>Slow (×0.75)</string>
+				<string>Normal</string>
+				<string>Fast (×1.5)</string>
+				<string>Very fast (×2)</string>
+			</array>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Values</key>
+			<array>
+				<string>0.5</string>
+				<string>0.75</string>
+				<string>1</string>
+				<string>1.5</string>
+				<string>2</string>
 			</array>
 		</dict>
 		<dict>

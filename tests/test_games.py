@@ -101,7 +101,13 @@ class IosProfiles(unittest.TestCase):
                 path = Path(tmp) / f'{game}.plist'
                 shutil.copy(self.ROOT / 'ios/Settings.bundle/Root.plist', path)
                 build_ios.settings_for_game(path, game)
-                keys = [i.get('Key') for i in plistlib.loads(path.read_bytes())['PreferenceSpecifiers']]
+                items = plistlib.loads(path.read_bytes())['PreferenceSpecifiers']
+                keys = [i.get('Key') for i in items]
+                # Gyro aiming: off by default in Portal 2 (back taps shake the
+                # phone), on in Half-Life 2, as rt_gyro_enabled's default.
+                gyro = next(i for i in items if i.get('Key') == 'P2Gyro')
+                self.assertEqual(gyro['DefaultValue'], game == 'hl2')
+                self.assertIn('P2GyroSpeed', keys)
                 if game == 'portal2':
                     self.assertIn('P2BackTap', keys)
                     self.assertIn('P2PortalButtons', keys)
