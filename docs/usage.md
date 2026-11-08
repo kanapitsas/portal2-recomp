@@ -175,7 +175,8 @@ free Apple developer accounts cannot sign: it would need a paid account.
   game`), else `P2_GAME`, else `"game"` in this file, else the only game set
   up, else Portal 2. Portal 2 builds in `build/game` (binary
   `build/portal2-native`, iPhone builds in `build/ios`), Half-Life 2 in
-  `build/hl2` (binary `build/hl2/hl2-native`).
+  `build/hl2` (binary `build/hl2/hl2-native`, iPhone builds in
+  `build/hl2/ios`).
 
 - `language`, `d3d9metal_dylib` and `d3d9metal_ios` are optional:
   [game language](#game-language), [Metal renderer](d3d9-bridge.md#using-it),

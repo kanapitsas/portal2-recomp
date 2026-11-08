@@ -68,5 +68,54 @@ class GameProfiles(unittest.TestCase):
         self.assertEqual(roots, ['portal2_linux:symbol:main'])
 
 
+class IosProfiles(unittest.TestCase):
+    """tools/build_ios.py and runtime/ios/game_ios.c agree on each game."""
+    ROOT = Path(__file__).resolve().parent.parent
+
+    def c_table(self):
+        import re
+        text = (self.ROOT / 'runtime/ios/game_ios.c').read_text()
+        rows = re.findall(r'\{"(\w+)", "(\w+)", "([\w-]+)", "(\d+)", (\d), (\w+), "(\w+)", (\d+)\}', text)
+        return {r[0]: r for r in rows}
+
+    def test_every_game_has_an_ios_profile(self):
+        table = self.c_table()
+        self.assertEqual(set(table), set(games.GAMES))
+        for name, game in games.GAMES.items():
+            row = table[name]
+            self.assertEqual(row[1], game['mod'])
+            self.assertEqual(int(row[3]), game['steam_appid'])
+            self.assertTrue(game['ios_name'] and game['ios_executable'].isidentifier())
+            self.assertIn(game['mod'], game['ios_data'])
+        # Portal 2 keeps the folder of existing installs.
+        self.assertEqual(table['portal2'][2], 'portal2-userdata')
+        self.assertEqual(table['hl2'][5], 'RT_IOS_LAYOUT_HL2')
+
+    def test_hl2_settings_page_has_no_portals(self):
+        import plistlib
+        import shutil
+        import tempfile
+        import build_ios
+        with tempfile.TemporaryDirectory() as tmp:
+            for game in ('portal2', 'hl2'):
+                path = Path(tmp) / f'{game}.plist'
+                shutil.copy(self.ROOT / 'ios/Settings.bundle/Root.plist', path)
+                build_ios.settings_for_game(path, game)
+                keys = [i.get('Key') for i in plistlib.loads(path.read_bytes())['PreferenceSpecifiers']]
+                if game == 'portal2':
+                    self.assertIn('P2BackTap', keys)
+                    self.assertIn('P2PortalButtons', keys)
+                else:
+                    for key in ('P2BackTap', 'P2Haptics', 'P2BackTapRecord', 'P2PortalButtons'):
+                        self.assertNotIn(key, keys)
+                    for key in ('P2Renderer', 'P2TouchControls', 'P2TouchTrackpad', 'P2Log'):
+                        self.assertIn(key, keys)
+
+    def test_info_plist_names_the_game(self):
+        plist = (self.ROOT / 'ios/Info.plist.in').read_text()
+        self.assertIn('<key>P2Game</key><string>@GAME@</string>', plist)
+        self.assertNotIn('Portal 2', plist)   # the name comes from the profile (@NAME@)
+
+
 if __name__ == '__main__':
     unittest.main()

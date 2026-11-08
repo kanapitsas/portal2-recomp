@@ -145,6 +145,8 @@ Manage Certificates > + > Apple Development), then:
 
 It builds, signs and installs the app and copies the game data (about
 11.5 GB, once; `tools/ios_device.sh data` copies it again after a reinstall).
+`./setup.sh --ios` alone does it for every game it builds; Half-Life 2's
+iPhone app is experimental ([docs/hl2.md](docs/hl2.md#iphone)).
 On the phone, trust your account in Settings > General > VPN & Device
 Management. With a free account, re-run `./setup.sh --ios` every 7 days.
 `P2_TEAM_ID` sets the team when it cannot be read from the certificate;
@@ -222,7 +224,9 @@ checkout as Portal 2: each game has its own build folder. It creates
 - **Tested**: a few hours of the main game on an M3 Pro, at 1280×720:
   about 118 fps with Metal (the default, as for Portal 2) and 91 with
   OpenGL (`--release` build).
-- **Not yet**: iPhone; Episode One, Episode Two and Lost Coast are
+- **iPhone**: `./setup.sh --game hl2 --ios` builds the app; it runs in the
+  iOS Simulator, untested on a device ([docs/hl2.md](docs/hl2.md#iphone)).
+- **Not yet**: Episode One, Episode Two and Lost Coast are
   untested; and some indirect call targets are still being found: a
   crash ending with `target not recompiled` is one more to add (please
   report it with the log, `~/Library/Logs/HalfLife2Natif.log`).
@@ -280,7 +284,8 @@ profiles.
 | Community | Community maps copied by hand, loaded with `+map` | 📅 |
 | Community | Steam Workshop on Mac (needs the UGC part of the Steam bridge) | 💡 |
 | Half-Life 2 | Mac app from the same recompiler, installer and checkout as Portal 2, main game played for a few hours | 🚧 |
-| Half-Life 2 | The episodes and Lost Coast, iPhone | 📅 |
+| Half-Life 2 | iPhone app: builds and runs in the iOS Simulator, untested on a device (`./setup.sh --game hl2 --ios`, [details](docs/hl2.md#iphone)) | 🚧 |
+| Half-Life 2 | The episodes and Lost Coast | 📅 |
 | Rendering | Ray-traced lighting with Metal on M3 and A17 Pro GPUs, in the spirit of Portal with RTX (NVIDIA's RTX Remix is Windows and NVIDIA only, so it cannot be reused) | 💡 |
 
 ## Repository layout

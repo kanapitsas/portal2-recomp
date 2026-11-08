@@ -41,8 +41,7 @@ class SetupScriptTests(unittest.TestCase):
                               (['--game', 'quake'], 'unknown game quake'),
                               (['--game=quake'], 'unknown game quake'),
                               (['--game', 'all', '/a'], 'paths are for one game'),
-                              (['/a', '/b', '/c'], 'too many arguments'),
-                              (['--ios', '--game', 'hl2'], '--ios builds Portal 2 only')):
+                              (['/a', '/b', '/c'], 'too many arguments')):
             result = run_setup(*args)
             self.assertEqual(result.returncode, 2, args)
             self.assertIn(message, result.stderr, args)
@@ -158,11 +157,51 @@ class GameDetectionTests(unittest.TestCase):
         # Paths without --game: a folder with hl2_complete/ is Half-Life 2.
         self.assert_builds(self.detect(str(game), str(linux), config={}), 'hl2')
 
-    def test_ios_needs_portal2(self):
+    def test_ios_builds_each_selected_game(self):
         self.install_hl2()
         result = self.detect('--ios')
-        self.assertEqual(result.returncode, 1)
-        self.assertIn('--ios builds Portal 2 only', result.stderr)
+        self.assert_builds(result, 'hl2')
+        self.assertIn('iPhone apps: hl2', result.stdout)
+        self.install_portal2()
+        for args, line in ((('--ios',), 'portal2 hl2'), (('--ios', '--game', 'hl2'), 'hl2'),
+                           (('--ios', '--game', 'portal2'), 'portal2')):
+            result = self.detect(*args)
+            self.assert_builds(result, line)
+            self.assertIn(f'iPhone apps: {line}', result.stdout)
+        self.assertNotIn('iPhone', self.detect().stdout)
+
+
+class SetupConfigTests(unittest.TestCase):
+    """The config/local.json writer of setup.sh (its Python heredoc), run alone."""
+
+    def write_config(self, config, team, *game_args):
+        text = (ROOT / 'setup.sh').read_text()
+        script = re.search(r'^python3 - "\$REPO/tools" "\$CONFIG".*?<<\'EOF\'\n(.*?)^EOF$', text, re.M | re.S).group(1)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'local.json'
+            if config is not None:
+                path.write_text(json.dumps(config))
+            result = subprocess.run([sys.executable, '-', str(ROOT / 'tools'), str(path), team, '', '', '0', '',
+                                     *game_args], input=script, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return json.loads(path.read_text())
+
+    def test_each_game_gets_its_own_ios_bundle_id(self):
+        both = ('portal2', '/p2', '/p2l', '/p2.dylib', 'hl2', '/hl2', '/hl2l', '/hl2.dylib')
+        config = self.write_config(None, 'ABCDE12345', *both)
+        self.assertEqual(config['ios_bundle_id'], 'local.portal2recomp.abcde12345')
+        self.assertEqual(config['games']['hl2']['ios_bundle_id'], 'local.hl2recomp.abcde12345')
+        # An identifier already set is kept, and HL2 alone does not touch Portal 2's.
+        config = self.write_config({'ios_bundle_id': 'my.portal2', 'games': {'hl2': {'ios_bundle_id': 'my.hl2'}}},
+                                   'ABCDE12345', *both)
+        self.assertEqual((config['ios_bundle_id'], config['games']['hl2']['ios_bundle_id']), ('my.portal2', 'my.hl2'))
+        config = self.write_config({}, 'ABCDE12345', *both[4:])
+        self.assertNotIn('ios_bundle_id', config)
+        self.assertEqual(config['games']['hl2']['ios_bundle_id'], 'local.hl2recomp.abcde12345')
+        # Without --ios (no team), no identifier is written.
+        config = self.write_config(None, '', *both)
+        self.assertNotIn('ios_bundle_id', config)
+        self.assertNotIn('ios_bundle_id', config['games']['hl2'])
 
 
 class SetupTableTests(unittest.TestCase):

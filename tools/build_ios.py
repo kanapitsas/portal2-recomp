@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
-"""Build the recompiled Portal 2 as an iOS app (arm64 simulator by default).
+"""Build a recompiled game as an iOS app (arm64 simulator by default).
 
 Same generated C as the macOS build (tools/build_game.py; generation and object
 cache reused unchanged), compiled for iOS and linked with the work/ios-deps
 dependencies (SDL2, FreeType, gl4es; see its build.sh), the Steam stub and the
 minimal fontconfig of the iOS build (runtime/ios). Produces
-build/ios/<target>/Portal2.app, ad hoc signed for the simulator, or signed with
-the profile Xcode obtained for a device (ios/signing).
+<ios_dir>/<target>/<ios_app> of the game's profile (tools/games.py):
+build/ios/<target>/Portal2.app, build/hl2/ios/<target>/HalfLife2.app; ad hoc
+signed for the simulator, or signed with the profile Xcode obtained for a
+device (ios/signing). The game (--game, else P2_GAME, else config/local.json)
+gives the roots, program, name, icon and Info.plist key P2Game
+(runtime/ios/game_ios.c).
 
-    python3 tools/build_ios.py                       # simulator
-    xcrun simctl install booted build/ios/sim/Portal2.app
+    python3 tools/build_ios.py [--game hl2]          # simulator
+    tools/run_ios_sim.sh [--game hl2]                # headless run
 
 Metal renderer (native Direct3D 9, docs/d3d9-bridge.md): --d3d9metal links
 libd3d9metal.a (mtld3d, make native-ios) into the executable, no dlopen; it is
-the default renderer, the player can go back to OpenGL in Settings > Portal 2 > Renderer.
-
-Portal 2 only: its build tree and iPhone builds are build/game and build/ios
-(tools/games.py); Half-Life 2 has no iPhone build yet.
+the default renderer, the player can go back to OpenGL in Settings > <game> > Renderer.
 """
 import argparse
 import json
+import plistlib
 import os
 import shutil
 import subprocess
@@ -33,6 +35,7 @@ from ios_bundle_id import bundle_id
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_game
 import games
+import language
 import localconfig
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -59,7 +62,7 @@ def main():
                     help='libd3d9metal.a for this target (default: "d3d9metal_ios" of config/local.json, '
                          'one path per target: {"device": ..., "sim": ...}); without it, OpenGL only')
     games.add_argument(ap)
-    ap.add_argument('--layout', type=Path, help='default: build/game/prep/layout.json')
+    ap.add_argument('--layout', type=Path, help='default: <build_dir>/prep/layout.json of the game (build/game, build/hl2)')
     ap.add_argument('--jobs', type=int, default=os.cpu_count() or 1)
     args = ap.parse_args()
     if args.release:
@@ -68,7 +71,7 @@ def main():
     config = localconfig.for_game(args.game)
     game = games.profile(config)
     if not game['ios']:
-        sys.exit(f'build_ios: {game["app_name"]} has no iPhone build yet (Portal 2 only)')
+        sys.exit(f'build_ios: {game["app_name"]} has no iPhone build yet')
     build_dir, ios_dir = Path(game['build_dir']), Path(game['ios_dir']) / args.target
     args.layout = args.layout or build_dir / 'prep/layout.json'
     target = TARGETS[args.target]
@@ -94,7 +97,7 @@ def main():
     units = [(str(p), runtime_flags + (static if p.name == 'd3d9.c' else [])) for p in sorted(Path('runtime').glob('*.c'))]
     units += [(str(p), runtime_flags) for p in sorted(Path('runtime/ios').glob('*.c'))]
     units += [(str(p), runtime_flags + static + ['-fobjc-arc']) for p in sorted(Path('runtime/ios').glob('*.m'))]
-    units.append(('src/main.c', runtime_flags + ['-Dmain=p2_main']))
+    units.append(('src/main.c', runtime_flags + ['-Dmain=p2_main', f'-DRT_GAME_PROGRAM="{game["program"]}"']))
     units.append(('ios/main_ios.c', runtime_flags))
     units += [(str(sources / name), generated_flags) for name in sorted(manifest['shards'])]
     units.append((str(sources / 'dispatch.c'), generated_flags))
@@ -106,7 +109,7 @@ def main():
     objects, compiled, cpu = build_game.compile_units(units, cache, args.jobs, identity)
     print(f'{compiled}/{len(units)} fichiers compilés ({cpu:.0f} s CPU)')
 
-    app = ios_dir / 'Portal2.app'
+    app = games.ios_app(game, args.target)
     app.mkdir(parents=True, exist_ok=True)
     response = ios_dir / 'link.rsp'
     response.write_text('\n'.join(str(o) for o in objects) + '\n')
@@ -117,29 +120,35 @@ def main():
             # Le SDK 27 impose UIScene, que SDL2 ignore : déclarer un SDK 18
             # garde le cycle de vie classique d'UIKit (voir ios/probe).
             f'-Wl,-platform_version,{target["platform"]},17.0,18.0',
-            '-o', str(app / 'portal2')]
+            '-o', str(app / game['ios_executable'])]
     subprocess.run(link, check=True)
     plist = (ROOT / 'ios/Info.plist.in').read_text()
-    for key, value in dict(EXECUTABLE='portal2', IDENTIFIER=bundle_id(), NAME='Portal 2',
-                           PLATFORM=target['plist']).items():
+    for key, value in dict(EXECUTABLE=game['ios_executable'], IDENTIFIER=bundle_id(game=game['name']), NAME=game['ios_name'],
+                           GAME=game['name'], PLATFORM=target['plist']).items():
         plist = plist.replace(f'@{key}@', value)
     (app / 'Info.plist').write_text(plist)
     # Page du jeu dans l'app Réglages d'iOS (lue par runtime/ios/settings.c).
     shutil.copytree(ROOT / 'ios/Settings.bundle', app / 'Settings.bundle', dirs_exist_ok=True)
-    app_icon(app, config)
-    # Lancement depuis l'écran d'accueil : arguments du jeu par défaut (les
-    # dossiers de données sont ajoutés par ios/main_ios.c).
-    # La langue vient de tools/language.py au moment du build : pour la changer,
-    # régler "language" dans config/local.json et refaire le build.
-    language = subprocess.run([sys.executable, str(ROOT / 'tools/language.py')], capture_output=True, text=True).stdout.split()
-    (app / 'launch.args').write_text('--\n-game\nportal2\n-novid\n-fullscreen\n' + ''.join(f'{word}\n' for word in language))
+    settings_for_game(app / 'Settings.bundle/Root.plist', game['name'])
+    app_icon(app, config, game['icon'])
+    (app / 'launch.args').write_text(''.join(f'{word}\n' for word in launch_args(game, config)))
     if args.target == 'sim':
         subprocess.run(['codesign', '-s', '-', '-f', str(app)], check=True, capture_output=True)
     else:
         subprocess.run([sys.executable, str(ROOT / 'ios/signing/sign.py'), str(app)], check=True)
-    size = (app / 'portal2').stat().st_size
+    size = (app / game['ios_executable']).stat().st_size
     print(f'{app} : exécutable {size / 1e6:.0f} Mo, {time.time() - started:.0f} s au total')
     print(f'rendu Metal : {d3d9metal}' if d3d9metal else 'rendu Metal : absent (OpenGL seulement, voir --d3d9metal)')
+
+
+def launch_args(game, config):
+    """Arguments of a launch from the home screen (launch.args; the data
+    folders are added by ios/main_ios.c). The language comes from
+    tools/language.py at build time, for this game's config (its folder and
+    appmanifest): to change it, set "language" in config/local.json and
+    rebuild."""
+    words = ['-game', game['mod'], '-novid', '-fullscreen']
+    return ['--', *words, *language.language_args(config, words)]
 
 
 def d3d9metal_library(given, target, config):
@@ -155,12 +164,32 @@ def d3d9metal_library(given, target, config):
     return path
 
 
-def app_icon(app, config):
-    """App icon taken from the game's macOS icon (portal2/resource/game.icns):
-    a Valve image, read from the player's copy instead of being versioned.
+def settings_for_game(root_plist, game):
+    """Half-Life 2 has no portals: the Portals group of the settings page (back
+    taps, portal buttons, vibration when firing) is left out, and back taps stay
+    off (runtime/ios/game_ios.c)."""
+    if game == 'portal2':
+        return
+    with open(root_plist, 'rb') as f:
+        root = plistlib.load(f)
+    kept, skipping = [], False
+    for item in root['PreferenceSpecifiers']:
+        if item.get('Type') == 'PSGroupSpecifier':
+            skipping = item.get('Title') == 'Portals'
+        if not skipping:
+            kept.append(item)
+    root['PreferenceSpecifiers'] = kept
+    with open(root_plist, 'wb') as f:
+        plistlib.dump(root, f, fmt=plistlib.FMT_BINARY)
+
+
+def app_icon(app, config, relative):
+    """App icon taken from the game's macOS icon (`icon` of the profile, e.g.
+    portal2/resource/game.icns, under the game's game_root in `config`): a
+    Valve image, read from the player's copy instead of being versioned.
     Old-style files (CFBundleIconFiles of ios/Info.plist.in), no asset
     catalog. Without the file: iOS default icon."""
-    icns = Path(config.get('game_root', '')) / 'portal2/resource/game.icns'
+    icns = Path(config.get('game_root', '')) / relative
     if not icns.is_file():
         print(f'icône : {icns} absent, icône par défaut')
         return

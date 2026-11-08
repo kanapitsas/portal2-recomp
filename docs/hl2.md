@@ -3,7 +3,8 @@
 The same pipeline also recompiles **Half-Life 2** (20th anniversary build,
 Steam app 220, mod `hl2_complete`). It is experimental: it installs and plays
 on Mac, but only a few hours of play have been tested, the episodes and Lost
-Coast have not been tried, and there is no iPhone build.
+Coast have not been tried, and the iPhone build has only run in the iOS
+Simulator so far (see [iPhone](#iphone)).
 
 **You must own Half-Life 2.** As for Portal 2, everything is generated from
 your own copy and nothing from Valve is in this repository. The app and the
@@ -198,6 +199,27 @@ unsound version of the interprocedural flags analysis described in
 STATUS.md) gains only +2.8 % here, so the sound version is not worth its
 risk for now.
 
+## iPhone
+
+`./setup.sh --game hl2 --ios` builds the Mac app, then the iPhone app
+(`build/hl2/ios/device/HalfLife2.app`, "Half-Life 2" on the home screen,
+identifier `local.hl2recomp.<team>` in `games.hl2.ios_bundle_id` of
+`config/local.json`, so it sits next to Portal 2), installs it and copies
+about 10 GB of data (`bin platform hl2 episodic ep2 lostcoast hl2_complete`).
+`./setup.sh --ios` does the same for every game it builds. By hand:
+`python3 tools/build_ios.py --game hl2 [--target device]`, then
+`tools/ios_device.sh --game hl2 install|data|run` on a phone or
+`tools/run_ios_sim.sh --game hl2 [seconds]` in a headless simulator.
+Saves live in the app's `Documents/hl2-userdata`; `tools/ios_device.sh saves`
+is Portal 2 only for now. Details, the touch layout and what has been checked:
+[ios.md](ios.md#half-life-2).
+
+Touch controls in short: move stick (left), camera stick or trackpad (right),
+fire (bottom right, drag it to aim), alt-fire, reload, jump, use, crouch and
+sprint as toggles, weapon chevrons, flashlight, quick save and pause in the top
+bar. Back taps are off (`P2_BACKTAP=1` maps them to fire and alt-fire). A
+controller hides the overlay, as for Portal 2.
+
 ## Known limits
 
 - Indirect call targets are still being discovered; a crash ending with
@@ -207,6 +229,6 @@ risk for now.
   go to the game, e.g. `+load <save>`).
 - The game wants the `en_US.UTF-8` locale and warns about glyph support: the
   runtime only provides `C` and `C.UTF-8`.
-- Mac only: no iPhone build.
+- iPhone: built and played in the simulator only; untested on a device.
 - Only the main game has been played (a few hours); Episode One, Episode Two
   and Lost Coast, which the same `hl2_complete` build contains, are untested.

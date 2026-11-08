@@ -27,7 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ios_bundle_id import bundle_id  # noqa: E402
 
-APP = bundle_id()
+APP = bundle_id(game='portal2')   # Portal 2 only (build/ios/device, Portal2.app)
 VIDEO = 'Documents/portal2-userdata/update/cfg/video.txt'
 OUT = Path('build/ios/device/bench')
 

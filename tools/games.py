@@ -43,6 +43,15 @@ GAMES = {
         executable='portal2-native',
         ios_dir='build/ios',
         ios=True,
+        # iOS app (tools/build_ios.py): home screen name, executable, bundle
+        # folder name; the Info.plist key P2Game (runtime/ios/game_ios.c) is
+        # the profile's name.
+        ios_name='Portal 2',
+        ios_executable='portal2',
+        ios_app='Portal2.app',   # in ios_dir/<target>
+        # Folders of the game copy that tools/ios_device.sh data copies to the
+        # device (Documents/game), without the soundtrack or sdk_content.
+        ios_data=('bin', 'platform', 'update', 'portal2', 'portal2_dlc1', 'portal2_dlc2'),
     ),
     # Half-Life 2 since the 20th anniversary update (depot 224): episodes and
     # Lost Coast live in the hl2_complete mod; hl2/ and hl2mp/ hold other
@@ -75,7 +84,13 @@ GAMES = {
         binary='build/hl2/hl2-native',
         executable='hl2-native',
         ios_dir='build/hl2/ios',
-        ios=False,   # Mac only for now
+        ios=True,
+        ios_name='Half-Life 2',
+        ios_executable='hl2',
+        ios_app='HalfLife2.app',
+        # hl2_complete mounts the VPKs of hl2, episodic and ep2 (gameinfo.txt);
+        # lostcoast for its map. hl2mp and the macOS launcher are not needed.
+        ios_data=('bin', 'platform', 'hl2', 'episodic', 'ep2', 'lostcoast', 'hl2_complete'),
     ),
 }
 
@@ -113,6 +128,12 @@ def add_argument(parser):
     """--game option of the tools (default: selected())."""
     parser.add_argument('--game', choices=sorted(GAMES),
                         help='game to work on (default: P2_GAME, else "game" of config/local.json, else portal2)')
+
+
+def ios_app(game, target):
+    """Path of a profile's iOS app for a target (sim, device), relative to the
+    checkout: build/ios/sim/Portal2.app, build/hl2/ios/sim/HalfLife2.app."""
+    return Path(game['ios_dir']) / target / game['ios_app']
 
 
 def profile(config):

@@ -3,7 +3,8 @@
 # libsteam_api.dylib (inside Steamworks.NET), writes config/local.json,
 # recompiles each game and creates its app in ~/Applications:
 # "Portal 2 Natif.app" and/or "Half-Life 2 Natif.app" (experimental, docs/hl2.md).
-# With --ios, also builds, signs and installs the Portal 2 iPhone app.
+# With --ios, also builds, signs and installs the iPhone app of each of those
+# games (build/ios/device/Portal2.app, build/hl2/ios/device/HalfLife2.app).
 # Host libraries (SDL2, FreeType, Fontconfig) come from Homebrew when it has
 # them all, else from a prebuilt bundle downloaded from this project's GitHub
 # releases (SHA-256 checked; tools/build_host_deps.sh makes it).
@@ -60,9 +61,6 @@ case "$GAME_OPT" in
 esac
 if [ "$GAME_OPT" = all ] && [ -n "$GIVEN_GAME" ]; then
     echo "paths are for one game: use --game portal2 or --game hl2 with them" >&2; exit 2
-fi
-if [ $IOS = 1 ] && [ "$GAME_OPT" = hl2 ]; then
-    echo "--ios builds Portal 2 only: Half-Life 2 runs on Mac for now" >&2; exit 2
 fi
 
 # Per game: title, Steam app and depots (tools/games.py), and the
@@ -132,7 +130,7 @@ case "${P2_HOST_DEPS:-auto}" in
     auto)     if brew_has_libs; then HOST_LIBS_FROM=homebrew; else HOST_LIBS_FROM=bundle; fi ;;
     *) die "P2_HOST_DEPS must be homebrew or bundle, not $P2_HOST_DEPS" ;;
 esac
-if [ $IOS = 1 ]; then
+if [ $IOS = 1 ] && [ $DETECT = 0 ]; then   # --detect changes nothing: it needs no Xcode
     need xcodebuild "Install Xcode from the App Store, open it once, then: sudo xcode-select -s /Applications/Xcode.app"
     xcrun --sdk iphoneos --show-sdk-path >/dev/null 2>&1 || die "no iOS SDK: install Xcode (not only the command line tools) and select it with xcode-select -s"
     need xcodegen "brew install xcodegen"
@@ -156,7 +154,6 @@ unescape_path() {
 # Paths without --game: a Half-Life 2 folder has hl2_complete/.
 if [ -z "$GAME_OPT" ] && [ -n "$GIVEN_GAME" ]; then
     if [ -d "$GIVEN_GAME/hl2_complete" ]; then GAME_OPT=hl2; else GAME_OPT=portal2; fi
-    [ $IOS = 1 ] && [ $GAME_OPT = hl2 ] && { echo "--ios builds Portal 2 only: Half-Life 2 runs on Mac for now" >&2; exit 2; }
 fi
 
 locate() {  # game id [game folder [Linux folder]] -> FOUND_GAME FOUND_LINUX (empty when not found)
@@ -255,9 +252,6 @@ else
         check_game "$id"   # says what is missing
     fi
 fi
-if [ $IOS = 1 ] && [ "${SELECTED[0]}" != portal2 ]; then
-    die "--ios builds Portal 2 only, and Portal 2 was not found"
-fi
 for i in "${!SELECTED[@]}"; do
     game_info "${SELECTED[$i]}"
     echo "$TITLE:"
@@ -272,6 +266,7 @@ for id in ${SKIPPED[@]+"${SKIPPED[@]}"}; do
     warn "$SKIPPED_NOTE"
 done
 if [ $DETECT = 1 ]; then
+    [ $IOS = 0 ] || echo "iPhone apps: ${SELECTED[*]}"
     echo "would build: ${SELECTED[*]}"
     exit 0
 fi
@@ -488,10 +483,12 @@ for i in range(0, len(game_args), 4):
     target.setdefault('depot_id', games.GAMES[name]['depot_id'])
     if not known:   # each game its own folder (tools/localconfig.py)
         target.setdefault('user_dir', str(localconfig.support_dir({'game': name}) / 'userdata'))
-if team and not config.get('ios_bundle_id'):
-    # Portal 2's iPhone app. Unique to the team: free accounts cannot reuse an
-    # identifier taken elsewhere.
-    config['ios_bundle_id'] = f'local.portal2recomp.{team.lower()}'
+    if team and not localconfig.game_config(config, name).get('ios_bundle_id'):
+        # The game's iPhone app. Unique to the team: free accounts cannot reuse
+        # an identifier taken elsewhere. Portal 2 keeps its identifier; another
+        # game gets its own, so that it does not replace Portal 2's app.
+        prefix = 'portal2recomp' if name == games.DEFAULT else f'{name}recomp'
+        target['ios_bundle_id'] = f'local.{prefix}.{team.lower()}'
 # Sections last: runtime/steam.c reads top-level keys only, but older builds
 # took the first match in the file.
 sections = config.pop('games', None)
@@ -523,32 +520,39 @@ if [ $IOS = 1 ]; then
         step "Building SDL2, FreeType and gl4es for iOS (a few minutes)"
         P2_IOS_DEPS="$IOS_DEPS" ios/deps/build.sh device
     fi
-    BUNDLE_ID=$(python3 tools/ios_bundle_id.py)
     DEVICE=$(xcrun devicectl list devices 2>/dev/null |
         awk '/physical/ && / connected|available \(paired\)/ {for (i = 1; i <= NF; ++i) if ($i ~ /^[0-9A-F]{8}-[0-9A-F]{16}$/) {print $i; exit}}')
-    step "Getting a provisioning profile for $BUNDLE_ID"
     [ -n "$DEVICE" ] || warn "no iPhone connected: a free account needs one registered for its first profile"
-    (cd ios/signing && P2_BUNDLE_ID="$BUNDLE_ID" xcodegen -q &&
-        xcodebuild -quiet -project P2Signing.xcodeproj -scheme Portal2 -destination generic/platform=iOS \
-            -allowProvisioningUpdates DEVELOPMENT_TEAM="$TEAM" build >/dev/null) \
-        || die "Xcode could not create a profile. Connect and unlock the iPhone, enable Developer Mode
+    IOS_APPS=()
+    for id in "${SELECTED[@]}"; do
+        game_info "$id"
+        BUNDLE_ID=$(python3 tools/ios_bundle_id.py --game "$id")
+        step "Getting a provisioning profile for $BUNDLE_ID ($TITLE)"
+        (cd ios/signing && P2_BUNDLE_ID="$BUNDLE_ID" xcodegen -q &&
+            xcodebuild -quiet -project P2Signing.xcodeproj -scheme Portal2 -destination generic/platform=iOS \
+                -allowProvisioningUpdates DEVELOPMENT_TEAM="$TEAM" build >/dev/null) \
+            || die "Xcode could not create a profile. Connect and unlock the iPhone, enable Developer Mode
   (Settings > Privacy & Security), trust this Mac, then re-run."
-    step "Building the iPhone app (about 10 minutes the first time)"
-    python3 tools/build_ios.py --game portal2 --target device --release --deps "$IOS_DEPS/device"
-    if [ -n "$DEVICE" ]; then
-        step "Installing on the iPhone"
-        P2_DEVICE="$DEVICE" tools/ios_device.sh install
-        # The marker lives on the iPhone: a reinstalled app has an empty container.
-        # Older setups only left a local marker; trust it if the game folder is there.
-        OLD_MARK="build/ios/device/data-copied-$DEVICE"
-        if P2_DEVICE="$DEVICE" tools/ios_device.sh has-data; then :
-        elif [ -f "$OLD_MARK" ] && ! P2_DEVICE="$DEVICE" tools/ios_device.sh has-mark &&
-             P2_DEVICE="$DEVICE" tools/ios_device.sh has-game; then :
-        else
-            step "Copying the game data to the iPhone (about 11.5 GB; long, once)"
-            P2_DEVICE="$DEVICE" tools/ios_device.sh data
+        step "Building the $TITLE iPhone app (about 10 minutes the first time)"
+        python3 tools/build_ios.py --game "$id" --target device --release --deps "$IOS_DEPS/device"
+        IOS_APPS+=("$(eval "$(python3 tools/ios_game.py --game "$id" --target device)"; echo "$IOS_APP")")
+        if [ -n "$DEVICE" ]; then
+            step "Installing $TITLE on the iPhone"
+            P2_DEVICE="$DEVICE" tools/ios_device.sh --game "$id" install
+            # The marker lives on the iPhone: a reinstalled app has an empty container.
+            # Older Portal 2 setups only left a local marker; trust it if the game folder is there.
+            OLD_MARK="build/ios/device/data-copied-$DEVICE"
+            SIZE="about 11.5 GB"; [ "$id" = hl2 ] && SIZE="about 10 GB"
+            if P2_DEVICE="$DEVICE" tools/ios_device.sh --game "$id" has-data; then :
+            elif [ "$id" = portal2 ] && [ -f "$OLD_MARK" ] &&
+                 ! P2_DEVICE="$DEVICE" tools/ios_device.sh --game "$id" has-mark &&
+                 P2_DEVICE="$DEVICE" tools/ios_device.sh --game "$id" has-game; then :
+            else
+                step "Copying the $TITLE data to the iPhone ($SIZE; long, once)"
+                P2_DEVICE="$DEVICE" tools/ios_device.sh --game "$id" data
+            fi
         fi
-    fi
+    done
 fi
 
 D3D9METAL="${D3D9METAL:-$(config_get d3d9metal_dylib)}"
@@ -585,14 +589,17 @@ if [ $IOS = 1 ]; then
     elif ! command -v rustup >/dev/null 2>&1; then IOS_RENDERER="OpenGL (Metal needs Rust from https://rustup.rs: Homebrew's rust has no iOS target)"
     else IOS_RENDERER="OpenGL (libd3d9metal for iOS did not build: see the warning above)"; fi
     echo "- iPhone renderer: ${IOS_RENDERER}"
-    if [ -n "$DEVICE" ]; then
-        cat <<EOF
+    for i in "${!SELECTED[@]}"; do
+        game_info "${SELECTED[$i]}"
+        if [ -n "$DEVICE" ]; then
+            cat <<EOF
 - iPhone: on the phone, Settings > General > VPN & Device Management, trust your
-  developer account, then open Portal 2. Options are in Settings > Portal 2.
-  A free account's profile lasts 7 days: re-run ./setup.sh --ios to renew it.
+  developer account, then open $TITLE. Options are in Settings > $TITLE.
 EOF
-    else
-        echo "- iPhone app built in build/ios/device/Portal2.app; connect the phone and run:"
-        echo "  tools/ios_device.sh install && tools/ios_device.sh data"
-    fi
+        else
+            echo "- $TITLE iPhone app built in ${IOS_APPS[$i]}; connect the phone and run:"
+            echo "  tools/ios_device.sh --game ${SELECTED[$i]} install && tools/ios_device.sh --game ${SELECTED[$i]} data"
+        fi
+    done
+    echo "- A free account's profile lasts 7 days: re-run ./setup.sh --ios to renew it."
 fi

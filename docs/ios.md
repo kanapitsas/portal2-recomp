@@ -3,6 +3,9 @@
 The game runs on an iPhone 15 Pro Max (iOS 27):
 menus, gameplay, level transitions, voice lines, on-screen touch controls.
 
+Half-Life 2 builds for iOS from an HL2 checkout too; see
+[Half-Life 2](#half-life-2) below.
+
 ## Rendering pipeline
 
 togl (D3D9 → OpenGL 2.1) → `runtime/gl.c` → `runtime/ios/gl_ios.m` → gl4es
@@ -220,6 +223,88 @@ Control Center over the game, then dismiss it; lock the screen and unlock.
 Each time the game must come back where it was (no restart: a restart means
 iOS killed it), with sound, and `game.log` must show the pause and resume
 lines. Also try during a level load, and with the OpenGL renderer once.
+
+## Half-Life 2
+
+The same checkout builds Half-Life 2's iPhone app (see [hl2.md](hl2.md)):
+`tools/build_ios.py --game hl2` reads the game profile (`tools/games.py`) for
+the lift roots, the program (`hl2_linux`), the build paths (`build/hl2`, app
+in `build/hl2/ios/<target>/HalfLife2.app`), the app name and icon, and writes
+`P2Game` = `hl2` into the Info.plist. At launch
+`runtime/ios/game_ios.c` reads that key (nothing is guessed): saves in
+`Documents/hl2-userdata`, `SteamAppId` 220 for the Steam stub, `-game
+hl2_complete`, back taps off, the HL2 touch layout. An app built before the
+key existed is Portal 2.
+
+```sh
+./setup.sh --game hl2 --ios                # Mac build, then the iPhone app (--ios alone: every game)
+# or by hand, as for Portal 2:
+python3 tools/build_ios.py --game hl2 --target device --release --deps deps/ios-deps/device
+tools/ios_device.sh --game hl2 install && tools/ios_device.sh --game hl2 data   # ~10 GB: bin platform hl2 episodic ep2 lostcoast hl2_complete
+tools/run_ios_sim.sh --game hl2 120        # simulator, headless: build/hl2/ios/sim/game.log
+```
+
+The app identifier must differ from Portal 2's, or installing HL2 replaces
+Portal 2 on the phone: `setup.sh` derives `local.hl2recomp.<team>` (Portal 2
+keeps `local.portal2recomp.<team>`), stored per game: Portal 2's
+`ios_bundle_id` at the top level of `config/local.json`, HL2's in
+`games.hl2.ios_bundle_id` (`tools/ios_bundle_id.py --game hl2` prints it;
+`P2_BUNDLE_ID` overrides both). It needs its own provisioning profile (first
+`setup.sh --ios` run, or the `xcodebuild` command above with the HL2
+identifier). The name on the home screen is "Half-Life 2".
+
+Settings page: the same as Portal 2 without the Portals group.
+
+### Touch controls
+
+Same style and behaviour as Portal 2 (hidden in menus and with a controller,
+move stick on the left half, camera stick or trackpad on the right half; the
+camera stick's resting ring sits nearer the centre, clear of the fire cluster), with
+HL2's commands (`runtime/ios/touch_layout.c`):
+
+| Where | Button | Key | Notes |
+|---|---|---|---|
+| bottom right, largest | fire | left click | dragging the finger while firing also aims (trackpad speed) |
+| left of fire | alt-fire | right click | aims while dragged too |
+| above fire | jump, reload | Space, R | |
+| below fire | crouch | Ctrl | toggle: tap to crouch, tap again to stand; jump while it is lit to crouch-jump |
+| bottom, left of crouch | use | E | |
+| left, above the stick | sprint | Shift | toggle; stops when the thumb leaves the move stick |
+| top centre, small | previous / next weapon | mouse wheel | the game's weapon list opens; fire picks the weapon (lines `+hud_fastswitch` and `1` in `Documents/launch.args` switch at once) |
+| top right, small | flashlight, quick save, pause | F, F6, Escape | |
+| top left, after the FPS counter, small | camera mode | | stick or trackpad, as in Portal 2 (moved off the HUD's health) |
+
+Why toggles: on a phone each thumb is already busy (one on the move stick, one
+on the camera or fire), so a held Shift or Ctrl would stop you from steering or
+aiming; crawling through vents or sprinting down a corridor needs both.
+
+Back taps are off: they produce a 50 ms click, while HL2's automatic weapons
+fire as long as the button is held, and an accidental shot wastes ammo or
+alerts enemies. `P2_BACKTAP=1` turns them back on (left tap: fire, right tap:
+alt-fire); the Settings page has no back-tap entries for HL2.
+
+### Status
+
+Checked in the iOS Simulator (iPhone 18 Pro Max, iOS 27, OpenGL through gl4es,
+`-O1` build, 8 Nov. 2026): main menu with its background map, `+map
+d1_trainstation_02` and `d1_canals_01`, moving with the stick (virtual
+gamepad, `joy_response_move` set to linear through `VEngineCvar004`), aiming by
+dragging the fire button, weapon list with the chevrons then fire to pick,
+flashlight, quick save (`Documents/hl2-userdata/hl2/save/quick.sav`). The
+simulator renders in software: 2–6 fps, a sanity check only.
+
+Not verified: anything on a real iPhone (install, data copy, Metal, frame
+rate, memory, thermal behaviour, signing with the HL2 identifier), real thumbs
+on the layout, sound, a long play session. The ammo readout at the bottom right
+sits partly under the crouch and use buttons.
+
+HL2-specific iOS pieces: the Steam stub answers HL2's SDK 1.60 start-up
+(`SteamInternal_SteamAPI_Init`) and the interfaces it calls by vtable slot
+(`tools/gen_steam_stub.py` generates a table per version); the minimal
+fontconfig accepts the game's own fonts (`FcConfigAppFontAddFile`); HL2
+always gets `-w`/`-h` at the render size (it would start at 640×480).
+Steam Input reloads its action manifest every few seconds in game (one small
+file read; harmless, not fixed).
 
 ## Diagnostics
 
