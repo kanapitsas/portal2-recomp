@@ -30,6 +30,7 @@ every write to guest memory.
 | Option | Effect | Use |
 |---|---|---|
 | (default) | memory checks at 4 KiB granularity, direct calls | development |
+| `--release` | `--opt 2 --fast-memory` | what `setup.sh` builds, to play |
 | `--fast-memory` | `-DRT_FAST_MEMORY` | benchmarking, once the game is validated |
 | `--traced-calls` (alias `--debug-traces`) | `-DRT_TRACED_CALLS`: every call goes through `rt_call` | full guest stack in faults, `P2_WATCH_CALL` |
 
@@ -59,8 +60,8 @@ Measurements from October 25, 2026 (M3 Pro, `-O1`, median of 5):
 
 `unicode` runs almost entirely inside the host's iconv, and `keyvals` largely
 inside host `strcmp`/`strcasecmp`, so this benchmark is a poor measure of the
-generated code on its own. The full game compiles to a 354 MB executable
-(down from 703 MB).
+generated code on its own. The full game compiled to a 354 MB executable
+(down from 703 MB) at the time; 359 MB once `shaderapivk.so` was added.
 
 ## Known limitations
 

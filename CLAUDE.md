@@ -11,13 +11,17 @@
 ## Tests
 
 - `make check`: Python tests and `build/abi-smoke`, no game files needed (what
-  CI runs, plus `build/abi-smoke-ubsan`).
-- `make test`: the full run, needs the Linux depot (`INPUT_DIR`, derived from
-  `linux_root` in `config/local.json` when present, else
+  CI runs, plus `build/abi-smoke-ubsan` and the Python tests on 3.9).
+- `make test`: the full run, needs Portal 2's Linux depot (`INPUT_DIR`,
+  default `<linux_root>/bin/linux32` from `config/local.json`, else
   `../work/portal2-linux/bin`). `make sanitize` is the UBSan variant.
 - `P2_STEAM_TESTS=1 make test`: live Steam tests, with the client running.
-- `make clean` also wipes `build/game/prep` (and `build/hl2`); regenerate it
-  with `python3 tools/gameprep.py [--game hl2]` (a few seconds).
+- `make game [GAME=hl2] [GAME_OPT=0]`: builds a game; `make d3d9metal-check
+  D3D9METAL_A=…/libd3d9metal.a` checks the native library's ABI.
+- `make clean` deletes all of `build/` (both games: prep, generated C, object
+  caches, binaries, iOS builds). Regenerate prep with
+  `python3 tools/gameprep.py [--game hl2]` (a few seconds), then rebuild with
+  `python3 tools/build_game.py --release [--game hl2]` (long).
 - Both games share one checkout: Portal 2 in `build/game` and
   `build/portal2-native`, Half-Life 2 in `build/hl2`; paths in
   `tools/games.py`, config merge in `tools/localconfig.py` (`game_config`).
@@ -35,7 +39,8 @@
   address (range `0xf8000000`); a guest call to it ends up in
   `rt_shim(c, name)` just like a static import.
 - **Host pointers**: `rt_handle_new/get/find/free` (unmapped range
-  `0xe0000000`, typed by an identifier). A structure that guest code reads
+  `0xe8000000`, typed by an identifier; `0xe0000000` holds imported data
+  objects). A structure that guest code reads
   directly (SDL_Surface, FT_Face, SDL_Event...) must be copied into guest
   memory in i386 layout.
 - **Floating-point return**: `rt_return_st0(c, value)`. **Guest callback**

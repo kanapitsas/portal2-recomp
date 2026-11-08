@@ -10,7 +10,7 @@ be tested without a device (tests/test_save_sync.py).
     save_sync.py record --listing L.json --device UDID
 
 Synced: <save dir>/<SteamID64>/*.sav and *.tga under the user data's portal2/
-folder, nothing else (see docs/usage.md#saves-between-mac-and-iphone). The Mac
+folder, nothing else (see docs/usage.md#saves-between-mac-and-iphone-portal-2). The Mac
 saves sit under the Steam account's ID, the iPhone ones under the ID of the
 offline Steam stub (runtime/ios/steam_stub.c): each file keeps its name and
 moves to the other side's folder.

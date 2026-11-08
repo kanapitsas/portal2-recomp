@@ -523,7 +523,9 @@ if [ $IOS = 1 ]; then
         step "Building SDL2, FreeType and gl4es for iOS (a few minutes)"
         P2_IOS_DEPS="$IOS_DEPS" ios/deps/build.sh device
     fi
-    DEVICE=$(xcrun devicectl list devices 2>/dev/null |
+    # P2_DEVICE picks the iPhone when several are connected; else the first one.
+    DEVICE=${P2_DEVICE:-}
+    [ -n "$DEVICE" ] || DEVICE=$(xcrun devicectl list devices 2>/dev/null |
         awk '/physical/ && / connected|available \(paired\)/ {for (i = 1; i <= NF; ++i) if ($i ~ /^[0-9A-F]{8}-[0-9A-F]{16}$/) {print $i; exit}}')
     [ -n "$DEVICE" ] || warn "no iPhone connected: a free account needs one registered for its first profile"
     # One identifier per game, or installing one app replaces the other (and

@@ -213,6 +213,33 @@ class SetupConfigTests(unittest.TestCase):
         self.assertNotIn('ios_bundle_id', config['games']['hl2'])
 
 
+class SetupDeviceTests(unittest.TestCase):
+    """The iPhone choice of setup.sh --ios, run alone with a fake xcrun."""
+
+    def pick(self, p2_device=None):
+        text = (ROOT / 'setup.sh').read_text()
+        block = re.search(r'^    DEVICE=.*?\}\'\)$', text, re.M | re.S).group(0)
+        with tempfile.TemporaryDirectory() as tmp:
+            xcrun = Path(tmp) / 'xcrun'
+            xcrun.write_text('#!/bin/sh\n'
+                             'echo "Larus  a.coredevice.local  00008130-000C25812613803A  available (paired)  iPhone 15 Pro Max (physical)"\n'
+                             'echo "Other  b.coredevice.local  00008110-00112233445566AA  available (paired)  iPhone 13 (physical)"\n')
+            xcrun.chmod(0o755)
+            env = {k: v for k, v in os.environ.items() if not k.startswith('P2_')}
+            env['PATH'] = f"{tmp}:{env['PATH']}"
+            if p2_device:
+                env['P2_DEVICE'] = p2_device
+            result = subprocess.run(['bash', '-c', block + '\necho "$DEVICE"'], capture_output=True, text=True, env=env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return result.stdout.strip()
+
+    def test_first_iphone_by_default(self):
+        self.assertEqual(self.pick(), '00008130-000C25812613803A')
+
+    def test_p2_device_picks_the_iphone(self):
+        self.assertEqual(self.pick('00008110-00112233445566AA'), '00008110-00112233445566AA')
+
+
 class SetupTableTests(unittest.TestCase):
     def test_game_table_matches_profiles(self):
         # setup.sh names the app, log and Steam ids itself; tools/games.py must agree.

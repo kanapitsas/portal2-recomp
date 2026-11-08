@@ -551,7 +551,7 @@ struct ContentView: View {
             ProgressView(value: model.progress)
             Text(model.step).lineLimit(1)
         case .done:
-            Text("\(model.built.map { "“\($0.appName)”" }.joined(separator: " and ")) \(model.built.count > 1 ? "are" : "is") in your Applications folder. Open Steam with the account that owns the game, then open the app.")
+            Text("\(model.built.map { "“\($0.appName)”" }.joined(separator: " and ")) \(model.built.count > 1 ? "are" : "is") in your Applications folder. Open Steam with the account that owns \(model.built.count > 1 ? "the games, then open an app" : "the game, then open the app").")
                 .fixedSize(horizontal: false, vertical: true)
             ForEach(model.warnings, id: \.self) { Text("⚠︎ " + $0).foregroundStyle(.orange) }
         case .failed(let message):

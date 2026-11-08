@@ -14,7 +14,7 @@
 #   tools/ios_device.sh run [seconds] [VAR=value...]   launch (default 180 s), then fetch Documents/game.log
 #   tools/ios_device.sh backtap                  fetch the back-tap dataset (Documents/backtap/dataset.csv)
 #   tools/ios_device.sh saves status|pull|push [--force] [--dry-run]   saves between the Mac and the iPhone
-#                                                (tools/save_sync.py; docs/usage.md#saves-between-mac-and-iphone; Portal 2 only)
+#                                                (tools/save_sync.py; docs/usage.md#saves-between-mac-and-iphone-portal-2; Portal 2 only)
 # Device: P2_DEVICE (UDID or name), else the first connected iPhone/iPad.
 set -euo pipefail
 cd "$(dirname "$0")/.."
