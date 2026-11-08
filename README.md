@@ -41,8 +41,7 @@ share them.
   command, `setup.sh`, for either game or both. Only the Xcode command line
   tools are required.
 - **Half-Life 2** (experimental), with Episode One, Episode Two and Lost
-  Coast: plays on Mac at 120 fps with Metal (M3 Pro, 720p, the display's
-  limit), from the same installer or checkout; runs on iPhone with its
+  Coast: plays on Mac at 120 fps with Metal (M3 Pro, 720p), from the same installer or checkout; runs on iPhone at 60 fps with its
   own touch controls (first short test on an iPhone 15 Pro Max); see
   [below](#half-life-2-experimental).
 
