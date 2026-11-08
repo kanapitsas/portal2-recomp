@@ -1,4 +1,4 @@
-# Portal 2, statically recompiled for Apple silicon
+# Portal 2 and Half-Life 2, statically recompiled for Apple silicon
 
 [![Portal 2 running natively on iPhone (video)](https://img.youtube.com/vi/YWX2BeMnlQI/maxresdefault.jpg)](https://youtu.be/YWX2BeMnlQI)
 
@@ -9,12 +9,13 @@
   <img src="docs/images/iphone-ingame.jpg" alt="Portal 2 in game on iPhone with touch controls" width="49%">
 </p>
 
-This project turns the Linux version of Portal 2 into a native ARM64 app for
-macOS and iPhone. The game's x86 machine code is translated into C and
+This project turns the Linux versions of Portal 2 and Half-Life 2 (with
+Episode One, Episode Two and Lost Coast) into native ARM64 apps for macOS and
+iPhone. The games' x86 machine code is translated into C and
 compiled: no emulator, no Wine, no Rosetta. A small runtime provides what the
 Linux binaries expect (libc, threads, SDL2, graphics, Steam).
 
-**You must own Portal 2.** This repository has no game files and no Valve
+**You must own the games.** This repository has no game files and no Valve
 code: everything is generated on your machine from your own copy. The app and
 the generated code contain Valve's game, so keep them for yourself and don't
 share them.
@@ -23,7 +24,7 @@ share them.
 > Portal 2, Half-Life, Steam and Source are trademarks of Valve Corporation.
 > Provided as is, without warranty.
 
-## Status at a glance (5 November 2026)
+## Status at a glance (8 November 2026)
 
 - **Mac**: fully playable. 235–280 fps with OpenGL (M3 Pro, 720p to
   1512×982, 26 Oct.); Metal, now the default, adds about 50 % (122 vs 81 fps
@@ -39,8 +40,10 @@ share them.
   [releases](https://github.com/kanapitsas/portal2-recomp/releases), or one
   command, `setup.sh`, for either game or both. Only the Xcode command line
   tools are required.
-- **Half-Life 2** (experimental): plays on Mac at about 118 fps with Metal
-  (M3 Pro, 720p), from the same installer or checkout; see
+- **Half-Life 2** (experimental), with Episode One, Episode Two and Lost
+  Coast: plays on Mac at 120 fps with Metal (M3 Pro, 720p, the display's
+  limit), from the same installer or checkout; runs in the iOS Simulator
+  with its own touch controls, untested on an iPhone; see
   [below](#half-life-2-experimental).
 
 ## How it works
@@ -222,14 +225,16 @@ checkout as Portal 2: each game has its own build folder. It creates
 `~/Applications/Half-Life 2 Natif.app`, with its own saves folder.
 
 - **Tested**: a few hours of the main game on an M3 Pro, at 1280×720:
-  about 118 fps with Metal (the default, as for Portal 2) and 91 with
+  120 fps with Metal (the display's limit; the default, as for Portal 2) and 91 with
   OpenGL (`--release` build).
 - **iPhone**: `./setup.sh --game hl2 --ios` builds the app; it runs in the
   iOS Simulator, untested on a device ([docs/hl2.md](docs/hl2.md#iphone)).
-- **Not yet**: Episode One, Episode Two and Lost Coast are
-  untested; and some indirect call targets are still being found: a
-  crash ending with `target not recompiled` is one more to add (please
-  report it with the log, `~/Library/Logs/HalfLife2Natif.log`).
+- **Episodes and Lost Coast**: start them from the main menu (HL2:
+  Episode One, HL2: Episode Two; Lost Coast is under Extras). Their first
+  maps load and render on Metal; they have not been played through.
+- **Not yet**: some indirect call targets are still being found: a crash
+  ending with `target not recompiled` is one more to add (please report it
+  with the log, `~/Library/Logs/HalfLife2Natif.log`).
 
 Details, manual setup and measurements: [docs/hl2.md](docs/hl2.md).
 

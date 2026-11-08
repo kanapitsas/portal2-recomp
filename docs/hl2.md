@@ -3,7 +3,7 @@
 The same pipeline also recompiles **Half-Life 2** (20th anniversary build,
 Steam app 220, mod `hl2_complete`). It is experimental: it installs and plays
 on Mac, but only a few hours of play have been tested, the episodes and Lost
-Coast have not been tried, and the iPhone build has only run in the iOS
+Coast have only been started, and the iPhone build has only run in the iOS
 Simulator so far (see [iPhone](#iphone)).
 
 **You must own Half-Life 2.** As for Portal 2, everything is generated from
@@ -43,7 +43,7 @@ owns Half-Life 2, then open the app.
 - Saves and settings: `~/Library/Application Support/Half-Life 2 Natif/userdata`.
 - Log: `~/Library/Logs/HalfLife2Natif.log`.
 - Renderer: **Metal** when `libd3d9metal` is there, as for Portal 2 (about
-  118 fps against 91 with OpenGL, see Performance). To force OpenGL:
+  120 fps, the display's limit, against 91 with OpenGL, see Performance). To force OpenGL:
   `open --env P2_RENDERER=opengl -a "Half-Life 2 Natif"`.
 - `./uninstall.sh` offers to remove the HL2 app and, if you confirm, its
   saves, with separate questions for Portal 2's.
@@ -123,6 +123,16 @@ simulated focus, idle machine, alternating runs):
 | `--release --pgo-use` | 79.7 fps | ~83 fps | |
 | + Nov. 6 audit (lifter, capture tracking) | ~91–93 fps | ~83 fps | 38 M (GL), 34 M (Metal) |
 | + event queries reached at Present | ~91–93 fps | **~118 fps** | 35 M (Metal) |
+| 8 Nov.: `--release` as `setup.sh` builds it | | **120 fps** (display limit) | 32 M (Metal) |
+| 8 Nov.: same with `--pgo-use` | | 120 fps (display limit) | 30.5 M (Metal) |
+
+On 8 November, Metal held the 120 Hz display's refresh rate with every
+build, so the last column is what to compare: PGO saves about 5 % of the
+CPU per frame (three alternating runs each, cycles from `proc_pid_rusage`).
+`setup.sh` builds without a profile: a 155 MB profile per game is not worth
+shipping for that. The NVIDIA vendor id that turns on flashlight shadow
+depth textures ([d3d9-bridge.md](d3d9-bridge.md)) costs nothing measurable
+on this save.
 
 The audit's `-mllvm -capture-tracking-max-uses-to-explore` lets clang keep
 guest registers in host registers in functions with loops (−9 %
@@ -230,5 +240,11 @@ controller hides the overlay, as for Portal 2.
 - The game wants the `en_US.UTF-8` locale and warns about glyph support: the
   runtime only provides `C` and `C.UTF-8`.
 - iPhone: built and played in the simulator only; untested on a device.
-- Only the main game has been played (a few hours); Episode One, Episode Two
-  and Lost Coast, which the same `hl2_complete` build contains, are untested.
+- Only the main game has been played (a few hours). Episode One, Episode Two
+  and Lost Coast are in the same `hl2_complete` build and start from the
+  main menu, which switches the game's search paths (`SwitchExpansion`), so
+  `+map ep1_citadel_00` alone says "No such map". Their first maps
+  (`ep1_citadel_00`, `ep2_outland_01`, `d2_lostcoast`) load and render on
+  Metal; they have not been played through. To reach one without the menu:
+  launch with `-gamepadui` and run `gamepadui_switchexpansion episodic`
+  (or `ep2`, `lostcoast`), then `map <name>`.
