@@ -1,10 +1,11 @@
 # Development log
 
-## Current state (5 November 2026)
+## Current state (8 November 2026, v0.3.0)
 
 - **Mac**: playable from `~/Applications/Portal 2 Natif.app`. Metal
-  (Direct3D 9 bridge to mtld3d) is the default renderer when `setup.sh` built
-  `libd3d9metal`, OpenGL (togl) otherwise. Measurements: 235–280 fps with
+  (Direct3D 9 bridge to mtld3d) is the default renderer when `libd3d9metal` is
+  available (built by `setup.sh` with Rust, or prebuilt from the host-library
+  download), OpenGL (togl) otherwise. Measurements: 235–280 fps with
   OpenGL (M3 Pro, 720p to 1512×982, 26 Oct.); Metal 122 vs 81 fps at
   2560×1440 MSAA 4 ([docs/d3d9-bridge.md](docs/d3d9-bridge.md)).
 - **iPhone 15 Pro Max**: playable at a steady 60 fps, touch controls, portals
@@ -12,13 +13,118 @@
   ([docs/ios.md](docs/ios.md)).
 - **Co-op** over the LAN: Mac ↔ Mac and Mac ↔ iPhone, connection and map load
   checked ([docs/usage.md](docs/usage.md#lan-co-op)).
-- **Install**: `./setup.sh` (and `--ios`) does everything in one command.
+- **Half-Life 2** (experimental): built from the same checkout into
+  `build/hl2`, Metal by default, 120 fps on Mac, 60 fps on an iPhone 15 Pro Max
+  in a short test; measurements below ([docs/hl2.md](docs/hl2.md) for the rest).
+- **Install**: the Natif Installer app (Developer ID signed, not notarized
+  yet) or `./setup.sh` (and `--ios`), for one game or both.
 
 Everything below is dated and kept as written; sections are newest first, and
 statements that no longer hold are marked _Superseded_ with a date. The Mac
 run and diagnostics instructions that used to live here are in
 [docs/usage.md](docs/usage.md#run); the conventions for native bridges are in
 [CLAUDE.md](CLAUDE.md).
+
+## 7–8 November 2026 — Half-Life 2 performance
+
+Build to play with `python3 tools/build_game.py --release` (`-O2`, without
+memory checks), as `setup.sh` does: the default `--opt 1` checked build is
+2.5 times slower.
+Measured on an M3 Pro (save `half-life-018`, 1280×720, hidden window,
+simulated focus, idle machine, alternating runs):
+
+| build (7 Nov. 2026) | OpenGL | Metal | CPU per frame (process) |
+|---|---|---|---|
+| `--opt 1` checked | 30.7 fps | | |
+| `--release` | 77.0 fps | 60–67 fps | 47 M cycles (GL) |
+| `--release --pgo-use` | 79.7 fps | ~83 fps | |
+| + Nov. 6 audit (lifter, capture tracking) | ~91–93 fps | ~83 fps | 38 M (GL), 34 M (Metal) |
+| + event queries reached at Present | ~91–93 fps | **~118 fps** | 35 M (Metal) |
+| 8 Nov.: `--release` as `setup.sh` builds it | | **120 fps** (display limit) | 32 M (Metal) |
+| 8 Nov.: same with `--pgo-use` | | 120 fps (display limit) | 30.5 M (Metal) |
+
+On 8 November, Metal held the 120 Hz display's refresh rate with every
+build, so the last column is what to compare: PGO saves about 5 % of the
+CPU per frame (three alternating runs each, cycles from `proc_pid_rusage`).
+`setup.sh` builds without a profile: a 155 MB profile per game is not worth
+shipping for that. The NVIDIA vendor id that turns on flashlight shadow
+depth textures ([d3d9-bridge.md](docs/d3d9-bridge.md)) costs nothing measurable
+on this save.
+
+The audit's `-mllvm -capture-tracking-max-uses-to-explore` lets clang keep
+guest registers in host registers in functions with loops (−9 %
+instructions, IPC 2.1 → 2.4). On Metal, the game then slept 30 % of the
+main thread in Source's frame sync: it waits for the event query of the
+previous frame, which libd3d9metal only signals once the whole frame has
+run, since it submits at Present. The bridge now reports an event issued
+before a finished Present as reached ([d3d9-bridge.md](docs/d3d9-bridge.md);
+`P2_D3D9_STRICT_EVENTS=1` restores the library's answer). Metal is then
+not CPU-bound at 640×480 either.
+
+Rejected with measurements: Source's render thread (`mat_queue_mode 2`
+with `P2_GUEST_CPUS=4`, 52 fps: the guest gate serializes both threads)
+and Apple's multithreaded OpenGL engine (`kCGLCEMPEngine`, no gain).
+OpenGL time is ~30 % of the frame: ~1,100 draw calls at ~1.8 µs, the
+buffer swap and `glBlitFramebuffer` (`P2_GL_TIMING=1`).
+
+PGO profile: an instrumented build
+(`--game hl2 --release --pgo-generate --out build/hl2/hl2-native-pgogen`), runs with
+`LLVM_PROFILE_FILE=…/%p.profraw` (the save on OpenGL and Metal,
+`+map d1_trainstation_02`, `+map d3_c17_01`, ~1.2 GB each), then
+`xcrun llvm-profdata merge -o build/hl2/pgo-hl2.profdata …` (155 MB, not in
+git) and `--game hl2 --release --pgo-use build/hl2/pgo-hl2.profdata`.
+
+### Ceiling (estimate, 7 Nov. 2026)
+
+- **CPU-bound and single-threaded**: 640×480 runs at the same 80 fps as
+  1280×720, and every thread but the main one sleeps (one guest CPU, guest
+  gate).
+- **Per frame** (hardware counters, `proc_pid_rusage`): 101 M ARM instructions,
+  46 M cycles (IPC 2.2, 3.7 GHz). Of the 12.5 ms: ~8.2 ms translated code,
+  ~0.9 ms runtime, ~2.7 ms OpenGL driver and kernel.
+- **Code expansion**: 5.0 ARM instructions per x86 instruction (static, whole
+  game), 6.0 weighted by the profile.
+- **Where translated time goes** (samples mapped to generated lines):
+  - ~38 % in the call protocol: calls, returns, entry and exit, tail jumps,
+    polls;
+  - ~29 % in memory accesses and push/pop;
+  - ~11 % in flags;
+  - ~7 % in SSE and x87.
+- **Native-equivalent ceiling**: assuming about one native ARM instruction
+  per x86 instruction and the same IPC, translated code would take about
+  1.4–2 ms. With the same GL driver that is about 4.5–5 ms per frame, or
+  200–230 fps. Native Source builds on Apple Silicon report 250–300 fps
+  (often at the `fps_max 300` cap).
+- **Realistic ceiling for this approach**: translated code 1.5–2× slower
+  than native gives about 130–165 fps.
+- **Beyond that**: overlapping the render thread (`mat_queue_mode 2`) would
+  first need the guest gate removed, plus x86 memory ordering on ARM.
+- **The call share is mostly not protocol instructions.** In the release
+  build, the protocol adds about 5 instructions per call: the poll, plus
+  setting and checking `eip`. The flags save adds up to 13 when the flags are
+  live, and the callee-saved register save and restore adds 10. Profiling at
+  instruction level (`sample`, PCs disassembled with `llvm-mc`) puts 13 % of
+  translated time on the first instruction of a function and 15 % on the host
+  register save and restore. That looks like front-end stalls on a large hot
+  code footprint (4.7 MB of functions called more than a million times during
+  the PGO runs). Three experiments, none of which helped:
+  - grouping those functions first with an order file built from the PGO
+    profile (`--order-file`): 68.0 → 65.7 fps, within noise;
+  - the `preserve_none` calling convention for translated functions: code
+    grew by 6 % because callers now spill `c` around every call, and the
+    bench did not change (×0.96–1.01);
+  - dropping the poll and the `eip` store would save ~5 instructions per
+    call, about 1–3 % at the estimated 300–650 k calls per frame; not done.
+- **Typing guest accesses** so that clang keeps guest registers in host
+  registers across guest stores is unsound, because 8/16/32-bit accesses to
+  the same address must still alias. As an experiment it gained only 2–10 %
+  on `tools/bench.py`. Inside functions with loops, clang reloads `c->…`
+  after every guest store despite `CPU *restrict c`.
+
+Rejected with measurements: dropping the flag save before every call (the
+unsound version of the interprocedural flags analysis described in
+STATUS.md) gains only +2.8 % here, so the sound version is not worth its
+risk for now.
 
 ## 6 November 2026 — saves between Mac and iPhone (branch feat/save-sync)
 
@@ -240,6 +346,34 @@ quadratic), switch tables no longer split into functions, ld.so-style symbol
 scoping (libprotobuf in client.so/server.so), /proc generated from the host,
 Windows binaries in the game copy made invisible (Miles was loading a PE
 .asi), minimal GLX, filtered SDL3 events, Steam GameCoordinator.
+
+## October 2026 — iPhone performance history (OpenGL)
+
+sp_a2_laser_intro, iPhone 15 Pro Max, native 2796×1290 (moved from docs/ios.md):
+
+| Step | fps |
+|---|---|
+| -O1 with checks | ~5 |
+| gl4es | 7-15 |
+| `--release` + optimizations from the Mac work | ~11 |
+| unsynchronized `glBufferSubData` | ~19 |
+| BGRA colors in the buffer, swizzled by the shader | ~47 |
+
+Uncapped by the display (`tools/ios_bench.py`, `P2_IOS_NO_PRESENT=1`; these
+are OpenGL numbers, `ios_bench.py --renderer d3d9` measures Metal, where the
+display caps at 60 fps and `P2_IOS_NO_PRESENT` has no effect),
+sp_a2_laser_stairs at the spawn point: native 2796×1290 90 fps (4× MSAA) or
+94 (without); scale 2 (1864×860) 154; 1.5 178. The GPU is the bottleneck: scale 2 is the
+default on device. Heavy view of the same room (setpos -188.94 -396.92
+-31.97): ~117 fps sustained at scale 2 with 4× MSAA (~150 before the
+phone heats up). For playing: 60 Hz by default, steady;
+`P2_IOS_MAX_FPS=120` requests 120 Hz (frame rate then between 60 and 120). The ProMotion display rounds the displayed frame rate (120, 60,
+40…): a frame taking more than 8.3 ms is shown at 60.
+
+Lessons: the translated game code costs little; the cost is in Apple's ES
+driver, which waits for the GPU on any write to an in-flight buffer and
+copies every vertex as soon as one attribute comes from client memory.
+Profile with `P2_PROFILE_RAW=1` before guessing.
 
 ## 26–27 October 2026 — Playable; performance on Mac (main)
 

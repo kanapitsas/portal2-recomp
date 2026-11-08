@@ -1,5 +1,8 @@
 # i386 → C translator coverage (audit of October 25, 2026)
 
+Portal 2 only, before `shaderapivk.so` was added. For Half-Life 2, pass
+`--layout build/hl2/prep/layout.json`.
+
 Command (≈ 1 min, 11 cores; the disassembly cache lives in `build/disasm-cache`):
 
 ```sh

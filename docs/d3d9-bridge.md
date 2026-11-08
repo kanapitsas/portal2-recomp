@@ -1,6 +1,6 @@
 # Direct3D 9 bridge (native renderer, default)
 
-Portal 2's Linux release ships two renderers: `shaderapidx9.so` + `libtogl.so`
+The Linux releases of Portal 2 and Half-Life 2 ship two renderers: `shaderapidx9.so` + `libtogl.so`
 (Direct3D 9 translated to OpenGL) and `shaderapivk.so`,
 selected with `-vulkan`, which expects DXVK (`libdxvk_d3d9.so`). Its only
 graphics import is `Direct3DCreate9`. Instead of recompiling DXVK, the
@@ -17,10 +17,12 @@ OpenGL, and the map loaded in 13 s instead of 25 s.
 
 ## Using it
 
-`./setup.sh` does all of this when Rust is installed: it fetches a pinned
-commit of the mtld3d native host branch into `deps/mtld3d-native`, builds
-`libd3d9metal`, records it in `config/local.json` and bundles it into the app.
-The steps below are the manual equivalent.
+`./setup.sh` does all of this. With Rust installed, it fetches a pinned
+commit of the mtld3d native host branch into `deps/mtld3d-native` and builds
+`libd3d9metal`; without Rust, it uses the prebuilt library of the same commit
+from the host-library download. It records the library in `config/local.json`
+and bundles it into the app; `P2_NO_METAL=1` skips it. The steps below are the
+manual equivalent (add `--game hl2` for Half-Life 2).
 
 ```sh
 python3 tools/gameprep.py                 # shaderapivk.so is now prepared (module bases shift)
@@ -47,7 +49,8 @@ in the environment.)
   `"d3d9metal_dylib": "/path/to/libd3d9metal.dylib"` (it links only system
   frameworks).
 - From the app: the bundled library is used by default; `P2_RENDERER=opengl
-  "~/Applications/Portal 2 Natif.app/Contents/MacOS/launcher"` forces OpenGL.
+  ~/"Applications/Portal 2 Natif.app/Contents/MacOS/launcher"` forces OpenGL
+  (`Half-Life 2 Natif.app` likewise).
 - `P2_D3D9_VENDOR_ID` / `P2_D3D9_DEVICE_ID` (hex): PCI ids handed to the
   library for `D3DADAPTER_IDENTIFIER9` (default NVIDIA `10de` / `0000`; Source
   keys vendor-specific paths on them, and with Apple `106b` it turns off the
@@ -66,8 +69,8 @@ in the environment.)
   initialization. When the game has not started SDL video yet (the
   `P2_RENDERER` path), SDL video is initialized just long enough to read them.
 - Missing indirect roots in the new module trap with their address, like any
-  other: `P2_RENDERER=d3d9 python3 tools/discover_game.py` adds them to
-  `config/game-roots.json`.
+  other: `P2_RENDERER=d3d9 python3 tools/discover_game.py [--game hl2]` adds them to
+  the game's roots file (`config/game-roots.json`, `config/hl2-roots.json`).
 
 ## How it works
 
@@ -91,8 +94,8 @@ in the environment.)
   another interface pointer of the same object obtained by `QueryInterface`
   shares its count and is retired with it. All bridge state is touched with
   the guest gate held.
-- `tools/gen_d3d9.py` generates the thunks for all 17 interfaces (203
-  methods, `d3d9.h` order) from an explicit signature table in the script.
+- `tools/gen_d3d9.py` generates the thunks for all 20 interfaces (226
+  methods, including D3D9Ex, `d3d9.h` order) from an explicit signature table in the script.
   Every pointer parameter has a rule: in place (same layout on i386 and
   arm64), interface in/out, HWND, present parameters, lock results, shader
   tokens, vertex declarations. `P2_D3D9_HEADER=/path/to/d3d9.h python3 -m
@@ -128,6 +131,11 @@ in the environment.)
   library (optional: without it, `D3DERR_NOTAVAILABLE`). `IDirect3D9Ex`,
   `IDirect3DDevice9Ex` and `IDirect3DSwapChain9Ex` are bridged; Half-Life 2
   needs them (Portal 2 only uses `Direct3DCreate9`).
+- `SetGammaRamp`: Direct3D 9 (and libd3d9metal) applies a gamma ramp only to
+  a fullscreen device. For a windowed device the bridge also sends it to the
+  SDL window (`SDL_SetWindowGammaRamp`, as the OpenGL path does), so the
+  Brightness slider works. The identity ramp leaves the display alone, and
+  going back to it restores the display's own ramp.
 
 ## What the native library must do (beyond `runtime/d3d9/d3d9metal.h`)
 
@@ -202,8 +210,9 @@ in the environment.)
 
 ## Open questions
 
-- Vendor id: Apple (`106b`) avoids NVIDIA/AMD/Intel-specific branches in
-  Source; whether `dxsupport.cfg` then picks sensible defaults is unknown.
+- Vendor id: NVIDIA (`10de`) by default, since Apple (`106b`) turns off the
+  shadow depth textures (#20). Whether `dxsupport.cfg` picks other
+  NVIDIA-specific defaults that hurt on Apple GPUs is not checked.
 - Retina: `metal_layer` reports the game's back buffer size (window points ×
   window scale), the same rule as the OpenGL path; mtld3d resamples to the
   layer's bounds × contentsScale if they differ. Fullscreen in Retina is not

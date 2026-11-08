@@ -74,9 +74,8 @@ temporary `P2_INPUT_PREINIT`, `P2_INPUT_PRECHECK`, `P2_INPUT_KEEP_OPEN`,
 
 ## Still open
 
-- iPhone with a physical controller: not tried. The on-screen controls hide
-  themselves and remove their virtual SDL controller when a `GCController`
-  with an extended gamepad connects (`runtime/ios/touch_controls.m`), and
-  SDL 2.30.9's MFi driver then exposes the physical one.
+- iPhone with a physical controller: tested after PR #14 (the virtual
+  controller is unplugged and plugged back so the physical one gets player 1's
+  slot; see [usage.md](usage.md#controllers)).
 - Gameplay with the controller (camera sensitivity, button prompts, default
   bindings) has not been evaluated beyond the menu.

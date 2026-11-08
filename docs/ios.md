@@ -1,24 +1,8 @@
 # iOS port
 
-The game runs on an iPhone 15 Pro Max (iOS 27):
-menus, gameplay, level transitions, voice lines, on-screen touch controls.
-
-Half-Life 2 builds for iOS from an HL2 checkout too; see
-[Half-Life 2](#half-life-2) below.
-
-## Rendering pipeline
-
-togl (D3D9 → OpenGL 2.1) → `runtime/gl.c` → `runtime/ios/gl_ios.m` → gl4es
-(static, `ios/deps/gl4es-ios.patch`) → OpenGL ES 3 (OpenGLES.framework).
-
-- `runtime/ios/essl3.c` rewrites every GLSL ES 1.00 shader emitted by gl4es as
-  ES 3.00: sRGB emulation (decode per texture unit, encode per output),
-  texture borders, and BGRA color swizzling for the `vN` attributes.
-- `runtime/ios/srgb.c` tracks sRGB/border state between togl and gl4es and sets
-  the uniforms before each draw.
-- `gl_ios.m`, at the gl4es → ES boundary: ES 3 sized formats, 16-bit textures
-  as half floats, unsynchronized `glBufferSubData` writes
-  (`glMapBufferRange` + `GL_MAP_UNSYNCHRONIZED_BIT`).
+Portal 2 runs on an iPhone 15 Pro Max (iOS 27): menus, gameplay, level
+transitions, voice lines, on-screen touch controls. Half-Life 2 has had a
+first short test on the same phone, at 60 fps; see [Half-Life 2](#half-life-2).
 
 ## Metal renderer (default)
 
@@ -29,7 +13,8 @@ library and the GPU supports BC textures; otherwise the app uses gl4es. On an
 iPhone 15 Pro Max it ran at 71–77 fps against 60 for OpenGL (same room, MSAA 4,
 scale 2, no vsync), and fixes the too-dark image of the gl4es path.
 
-`./setup.sh --ios` builds and links the library when Rust is installed. By hand:
+`./setup.sh --ios` builds and links the library when Rust from rustup is
+installed (Homebrew's `rust` has no iOS target; the app then uses OpenGL). By hand:
 
 ```sh
 # in the mtld3d checkout (branch feat/native-host), once per mtld3d change:
@@ -47,16 +32,16 @@ statically (iOS does not `dlopen` a dylib outside the signed app):
 `runtime/d3d9.c` is compiled with `RT_D3D9METAL_STATIC`. Without it the app is
 OpenGL only and the setting below falls back to OpenGL.
 
-On the phone: Settings > Portal 2 > Renderer chooses Metal (default) or OpenGL;
+On the phone: Settings > Portal 2 (or Half-Life 2) > Renderer chooses Metal (default) or OpenGL;
 `P2_RENDERER=opengl` or `=d3d9` in `tools/ios_device.sh run` overrides it. `Documents/game.log` (with the
-Journal setting) then shows `[ios] renderer: Metal (...)`,
+Log setting) then shows `[ios] renderer: Metal (...)`,
 `d3d9: libd3d9metal (linked in) ready` and `[ios] Metal view: ...`.
 
 - Device check first (`runtime/ios/metal_ios.m`): Source's compressed
   textures are DXT, and mtld3d creates BC textures with no CPU fallback
   (gl4es decompressed them). A GPU whose `supportsBCTextureCompression` is
   false stays on OpenGL, with a log line.
-- Resolution: the Metal view takes the app's render scale (Résolution
+- Resolution: the Metal view takes the app's render scale (Resolution
   setting), like the GL view, so the drawable is the game's back buffer
   size and mtld3d does not resample.
 - Frame rate: `present.maxFps` follows `P2_IOS_MAX_FPS` (60 by default) and
@@ -85,6 +70,20 @@ Journal setting) then shows `[ios] renderer: Metal (...)`,
   alone, linked statically as in the app (macOS build of the library); the
   same source links against the iOS library.
 
+## OpenGL renderer (fallback)
+
+togl (D3D9 → OpenGL 2.1) → `runtime/gl.c` → `runtime/ios/gl_ios.m` → gl4es
+(static, `ios/deps/gl4es-ios.patch`) → OpenGL ES 3 (OpenGLES.framework).
+
+- `runtime/ios/essl3.c` rewrites every GLSL ES 1.00 shader emitted by gl4es as
+  ES 3.00: sRGB emulation (decode per texture unit, encode per output),
+  texture borders, and BGRA color swizzling for the `vN` attributes.
+- `runtime/ios/srgb.c` tracks sRGB/border state between togl and gl4es and sets
+  the uniforms before each draw.
+- `gl_ios.m`, at the gl4es → ES boundary: ES 3 sized formats, 16-bit textures
+  as half floats, unsynchronized `glBufferSubData` writes
+  (`glMapBufferRange` + `GL_MAP_UNSYNCHRONIZED_BIT`).
+
 ## Building and running
 
 What `./setup.sh --ios` runs, step by step (`python3 tools/gameprep.py`
@@ -95,7 +94,7 @@ P2_IOS_DEPS=deps/ios-deps ios/deps/build.sh device      # SDL2, FreeType, gl4es 
 python3 tools/build_ios.py --target device --release --deps deps/ios-deps/device   # for playing: -O2 without memory checks
 tools/ios_device.sh install                       # installs on the connected iPhone (unlocked, Developer Mode on)
 tools/ios_device.sh data                          # copies the game data (~11.5 GB, once)
-tools/ios_device.sh run [seconds] [VAR=value…]    # launches, waits (180 s by default), pulls back Documents/game.log
+tools/ios_device.sh run [seconds] [VAR=value…]    # launches with P2_FRAME_LOG=1, waits (180 s by default), pulls back Documents/game.log into build/ios/device/
 ```
 
 `ios/deps/build.sh` writes to `P2_IOS_DEPS` (default `../work/ios-deps`) and
@@ -117,23 +116,27 @@ Signing (free account): 7-day profiles obtained through
 iPhone is locked.
 
 The app identifier must belong to your Apple account: set `ios_bundle_id` in
-`config/local.json` (or `P2_BUNDLE_ID`), read by every tool through
+`config/local.json` (or `P2_BUNDLE_ID`, which applies to both games, so
+`setup.sh --ios` refuses it when it builds both), read by every tool through
 `tools/ios_bundle_id.py`; the probe uses the same identifier plus `.probe`.
 First profile, once per identifier (then again every 7 days):
 
 ```sh
 cd ios/signing
-export P2_BUNDLE_ID=$(python3 ../../tools/ios_bundle_id.py)
+export P2_BUNDLE_ID=$(python3 ../../tools/ios_bundle_id.py)   # --game hl2 for Half-Life 2
 xcodegen
 xcodebuild -project P2Signing.xcodeproj -scheme Portal2 -destination generic/platform=iOS \
   -allowProvisioningUpdates DEVELOPMENT_TEAM=YOURTEAMID build
 ```
 
 Replace `YOURTEAMID` with your team ID (Xcode > Settings > Accounts, or the
-`OU` field of your Apple Development certificate).
+`OU` field of your Apple Development certificate). `setup.sh` takes the team
+of the first Apple Development certificate in the keychain: with several Apple
+accounts in Xcode, set `P2_TEAM_ID` to the one you want.
 
 Saves: `tools/ios_device.sh saves status|pull|push` copies them between the Mac
-and the iPhone over the cable ([details](usage.md#saves-between-mac-and-iphone)).
+and the iPhone over the cable ([details](usage.md#saves-between-mac-and-iphone));
+Portal 2 only for now.
 
 `Documents/launch.args` in the app's container adds arguments
 (one per line), for example `+map` followed by `sp_a2_laser_intro`.
@@ -142,9 +145,24 @@ The game language is written into the app's `launch.args` when it is built
 (`-language <name>`, chosen as on the Mac: see [Game language](usage.md#game-language)).
 To change it, set `"language"` in `config/local.json` and rebuild.
 
+## Touch controls (Portal 2)
+
+Hidden in menus and when a controller connects (`runtime/ios/touch_layout.c`).
+
+| Where | Button |
+|---|---|
+| left half | move stick |
+| right half | camera stick or trackpad |
+| right edge | jump (middle), use (bottom), crouch (left of them) |
+| top left and right | blue and orange portals, only when back taps are off |
+| top right, small | pause; ✗ to report a wrong back tap while recording taps |
+| bottom left, small | camera mode (stick or trackpad) |
+
+Portals are fired by tapping the back of the phone (see [Back taps](#back-taps)).
+
 ## Settings (iOS Settings app)
 
-"Portal 2" page in the Settings app (`ios/Settings.bundle`, copied into the app
+The game's page in the Settings app ("Portal 2" or "Half-Life 2"; `ios/Settings.bundle`, copied into the app
 by `tools/build_ios.py`). At launch, `runtime/ios/settings.c` turns each
 changed setting into a `P2_*` variable; a variable that is already set (devicectl,
 simctl) takes precedence, and a setting that was never touched leaves the code's
@@ -162,7 +180,7 @@ The page is in English, and in French on a device set to French
 | Upscaling (MetalFX) | `P2_IOS_UPSCALE` | Off (1, default), Quality (0.75), Performance (0.5); Metal only, see "Metal renderer" |
 | FPS counter | `P2_SHOW_FPS` | shown by default; tapping the top-left corner shows or hides it (choice is remembered) |
 | On-screen controls | `P2_TOUCH_CONTROLS` | automatic (hidden when a controller is connected), always, never |
-| Trackpad camera | key `P2TouchTrackpad` | also toggled by the button at the bottom left |
+| Trackpad camera | key `P2TouchTrackpad` | also toggled by the button at the bottom left (top left in Half-Life 2) |
 | Camera speed | `P2_TOUCH_LOOK` | ×0.5 to ×3 |
 | Trackpad acceleration | `P2_TOUCH_ACCEL` | none (1) to strong (4), normal 2.5 |
 | Back taps | `P2_BACKTAP` | enabled by default |
@@ -170,6 +188,7 @@ The page is in English, and in French on a device set to French
 | Tap sensitivity | `P2_BACKTAP_SENSITIVITY` | 0.75 / 1 / 1.33: thresholds are divided by this value |
 | Swap left and right | `P2_BACKTAP_INVERT` | |
 | Portal buttons | `P2_PORTAL_BUTTONS` | automatic (when back taps are off), always, never |
+| Record taps | `P2_BACKTAP_RAW=Documents/backtap/` | off; see [backtap.md](backtap.md) |
 | Log | `P2_LOG_FILE=Documents/game.log` | |
 
 ### Frame rate cap
@@ -233,8 +252,7 @@ in `build/hl2/ios/<target>/HalfLife2.app`), the app name and icon, and writes
 `P2Game` = `hl2` into the Info.plist. At launch
 `runtime/ios/game_ios.c` reads that key (nothing is guessed): saves in
 `Documents/hl2-userdata`, `SteamAppId` 220 for the Steam stub, `-game
-hl2_complete`, back taps off, the HL2 touch layout. An app built before the
-key existed is Portal 2.
+hl2_complete`, back taps off, the HL2 touch layout.
 
 ```sh
 ./setup.sh --game hl2 --ios                # Mac build, then the iPhone app (--ios alone: every game)
@@ -251,7 +269,9 @@ keeps `local.portal2recomp.<team>`), stored per game: Portal 2's
 `games.hl2.ios_bundle_id` (`tools/ios_bundle_id.py --game hl2` prints it;
 `P2_BUNDLE_ID` overrides both). It needs its own provisioning profile (first
 `setup.sh --ios` run, or the `xcodebuild` command above with the HL2
-identifier). The name on the home screen is "Half-Life 2".
+identifier). With a free account the two apps take 2 of the 3 sideloaded-app
+slots, and both need `./setup.sh --ios` again every 7 days. The name on the
+home screen is "Half-Life 2".
 
 Settings page: the same as Portal 2 without the Portals group.
 
@@ -285,18 +305,15 @@ alt-fire); the Settings page has no back-tap entries for HL2.
 
 ### Status
 
-Checked in the iOS Simulator (iPhone 18 Pro Max, iOS 27, OpenGL through gl4es,
-`-O1` build, 8 Nov. 2026): main menu with its background map, `+map
-d1_trainstation_02` and `d1_canals_01`, moving with the stick (virtual
-gamepad, `joy_response_move` set to linear through `VEngineCvar004`), aiming by
-dragging the fire button, weapon list with the chevrons then fire to pick,
-flashlight, quick save (`Documents/hl2-userdata/hl2/save/quick.sav`). The
-simulator renders in software: 2–6 fps, a sanity check only.
+Checked on an iPhone 15 Pro Max (8 Nov. 2026, short session): install and
+signing with the HL2 identifier, data copy (~10 GB, about 5 minutes over the
+cable), Metal, 60 fps, moving, firing, flashlight. Earlier, the iOS Simulator
+(software rendering, 2–6 fps) checked the menu, the stick, aiming, the weapon
+list and quick save.
 
-Not verified: anything on a real iPhone (install, data copy, Metal, frame
-rate, memory, thermal behaviour, signing with the HL2 identifier), real thumbs
-on the layout, sound, a long play session. The ammo readout at the bottom right
-sits partly under the crouch and use buttons.
+Not verified yet: memory and thermal behaviour, a long session, sound,
+`setup.sh --ios` end to end. The ammo readout at the bottom right sits partly
+under the crouch and use buttons.
 
 HL2-specific iOS pieces: the Steam stub answers HL2's SDK 1.60 start-up
 (`SteamInternal_SteamAPI_Init`) and the interfaces it calls by vtable slot
@@ -319,9 +336,9 @@ file read; harmless, not fixed).
 | `P2_BACKTAP=0` | disables back taps (enabled by default if the sensor exists; see "Back taps") |
 | `P2_BACKTAP_LOG=1` | logs every candidate (from half the thresholds) and the background noise every 5 s |
 | `P2_TOUCH_TEST_CLICK=s,x,y` | left click at (x, y) points, s seconds after the first menu |
-| + `_SECONDS`, `_DELAY`, `_ANGLE`, `P2_TOUCH_TEST_WASD` | forced deflections of the movement stick |
+| `P2_TOUCH_TEST_MOVE=f,s` + `_SECONDS`, `_DELAY`, `_ANGLE`, `P2_TOUCH_TEST_WASD` | forced deflections of the movement stick |
 | `P2_IOS_RENDER_SCALE=1/2/native` | render scale (points → pixels); `tools/ios_bench.py` compares antialiasing × scale (`--renderer opengl` by default, `--renderer d3d9` for Metal) |
-| `P2_IOS_NO_PRESENT=1` | frames rendered but never presented, so the display cap does not limit the measured rate (OpenGL only; under Metal the display caps at 60 fps) |
+| `P2_IOS_NO_PRESENT=1` | frames rendered but never presented, so the display cap does not limit the measured rate (OpenGL only; Metal holds presents to `P2_IOS_MAX_FPS`) |
 | `P2_IOS_AUTOEXEC="cmd; convar=value; pause 5; …"` | console commands, convar settings and pauses (seconds) run in order once the menu is gone, starting 5 s later |
 | `P2_GL_STREAM_UNSYNC=0`, `P2_IOS_BGRA=0`, `P2_IOS_SRGB=0` | disable the fast paths or the emulation |
 | `P2_IOS_SHADER_DUMP=<directory>`, `P2_IOS_DRAW_LOG=<frame>` | converted shaders, draws for one frame |
@@ -337,7 +354,8 @@ file read; harmless, not fixed).
 | `P2_FRAME_LOG=1`, `P2_GATE_TIMING=1`, `P2_TRACE_*`, `P2_NATIVE_<NAME>=0` | as on the Mac: see [usage.md](usage.md#diagnostics) |
 
 Game console: `-condebug` writes it to
-`Documents/portal2-userdata/portal2/console.log`.
+`Documents/portal2-userdata/portal2/console.log` (Half-Life 2: under
+`Documents/hl2-userdata/`).
 
 ## Back taps
 
@@ -346,163 +364,20 @@ index finger fires the blue portal, near the right edge the orange one
 (`runtime/ios/back_tap.c`, tested by `tests/checks_back_tap.c`; CoreMotion in
 `touch_controls.m`, on a dedicated queue, no permission required). Back taps
 replace the overlay's portal buttons, which only come back without a motion
-sensor (simulator) or with `P2_BACKTAP=0`. A candidate opens at half the
-thresholds: |user acceleration| and its sample-to-sample change (jerk), or a
-sudden change in rotation around x; it is judged 100 ms later against the full
-thresholds. Two paths: acceleration (0.10 g, 6 g/s) or gyroscope (0.06 g,
-6 g/s, 0.30 rad/s rotation, phone still just before); on the left, the index finger rotates the phone
-(0.4 to 0.7 rad/s) while barely accelerating it (0.07 to 0.10 g).
-Side: score = 0.5 × brief rotation around the device's x axis (vertical in
-landscape, relative to the screen orientation, or to gravity as a fallback) + rotation
-around z relative to the screen (the tapping hand pivots the phone within its
-own plane: to the left, z > 0, for a left tap, in both landscape
-orientations); 79/79 labeled taps, versus 72/79 with x alone (taps near a
-corner, phone flipped); a
-"lateral" fallback (tap on the edge of the phone) uses the sign of the y acceleration.
-Rejections: menu open or overlay hidden (up to 80 ms before the peak), a touch starting or ending within ±80 ms,
-agitation or a change in gravity before the peak (a 300 ms window, looking back as far as 600 ms, skipping the 250 ms following the two previous candidates; in the 50 ms just before, their vibration must have dropped below 25% of the peak, otherwise it counts as a jolt), phone lying flat screen-up (gravity z < -0.95). Click:
-press, release after 50 ms and at least two frames. Defaults
-calibrated on 2026-10-26 on an iPhone 15 Pro Max (`P2_BACKTAP_LOG=1`): 30 out of 30
-back taps on the correct side in both landscape orientations; the hand makes the
-phone vibrate 50 to 100 ms after the tap, hence the relaxed duration limit;
-CoreMotion delivers 100 Hz at most. Taps on the edge of the phone have not been
-tried. Hard taps peak 30 to 40 ms after they start and make the
-phone vibrate for more than 150 ms: rise-time criterion dropped, vibration excluded for
-250 ms (measured: 0.03 to 0.04 g RMS beyond that). Known limitation: the first jolt of a sudden movement from rest
-looks like a tap (filtering it out would delay every shot).
+sensor (simulator) or with `P2_BACKTAP=0`.
 
-The motion sensors run only while a tap can be accepted: device motion
-updates stop after 2 s in a menu or with the overlay hidden for a controller
-or keyboard, at once when the app becomes inactive, and restart as soon as the game is back
-(log: `[ios] tapes au dos : capteurs arrêtés` / `en marche`). The first 150 ms
-after a restart count as menu time, so the touch that closed the menu (handled
-by SDL, not the overlay) cannot fire a portal. Recordings and the dataset
-therefore have gaps in menus; dataset labels still pending when the sensors
-stop are written when they restart.
+Settings > Portal 2 has the back-tap entries (on/off, sensitivity, swap left
+and right, record taps). How the detector works, its variables, raw
+recordings and the tap dataset: [backtap.md](backtap.md).
 
-Raw recording for tuning the thresholds on the Mac:
-Settings > Portal 2 > Record taps (one dated file per launch in `Documents/backtap/`,
-visible in the Files app), or `P2_BACKTAP_RAW=Documents/backtap.raw` (samples and touches), then
-`cc -O2 -o build/backtap-replay tools/backtap_replay.c -lm` and
-`build/backtap-replay backtap.raw` (same `P2_BACKTAP_*` variables). `P2_TOUCH_CONTROLS=0` also disables back taps.
+## Performance
 
-### Tap dataset (guessed labels)
-
-While Settings > Portal 2 > Record taps is on (or with `P2_BACKTAP_DATASET`
-set), the game also keeps a dataset of back-tap candidates, labeled from what
-the player does next, as groundwork for a detector that learns from each player
-(`runtime/ios/backtap_dataset.c`, tested by `tests/checks_backtap_dataset.c`).
-A second detector with a wider gate (a quarter of the thresholds instead of
-half; `P2_BACKTAP_WIDE`) runs next to the game's, which is unchanged, so taps
-too soft to reach the game's detector are recorded too. Each candidate becomes
-one CSV line in `Documents/backtap/dataset.csv`, kept across sessions: the
-detector's features, the raw sensor window (0.35 s before the peak to the
-verdict, 100 ms after), and a label set 1.5 s later:
-
-| Label | Rule |
-|---|---|
-| `fired` | the game fired within 60 ms of it |
-| `wrong_side` | fired, then the other portal 0.2 to 1.2 s later with the camera still (under 60 mouse counts, ~4°): probably the wrong side, the label side is the other one |
-| `missed` | not fired, at least half the game's thresholds (acceleration or x rotation), and a shot follows 0.2 to 1.0 s later: probably a missed tap tried again; one per shot, the strongest |
-| `after_fire` | not fired, less than 1.5 s after a shot (hand rebound) |
-| `quiet` | none of the above: probably not a tap |
-
-The ✗ button (top right, left of pause; only while the dataset is on, so never
-with Record taps off) lets
-the player say "that was wrong". Its meaning comes from context, and it takes
-precedence over the guessed labels:
-
-| Label | Rule |
-|---|---|
-| `user_false` | a shot less than 2.5 s before the press, with no other shot in between, and the other portal does not follow within 2 s: false detection |
-| `user_wrong_side` | same, but the other portal follows within 2 s of the press: wrong side, the label side is the other one |
-| `user_missed` | no shot in the 2.5 s before the press: the strongest candidate of that window (not a rebound, not within 100 ms of a touch, since pressing the button shakes the phone) was a missed tap, on the side of the shot that follows within 2 s if any |
-
-Labels are therefore written 4.8 s after the candidate (2.5 s + 2 s, plus the
-game detector's verdict delay). With several presses, the first one that
-applies counts.
-
-These labels are hints, not ground truth: the columns `prev_dt`, `next_dt`,
-`next_side` and `next_look` keep the timing and camera motion to the
-neighbouring shots, so labels can be recomputed with other rules offline.
-Replaying the 2026-10-26 recordings (25 minutes, mostly calibration) gives
-about 2.5 candidates per second, 13 shots a minute, 0.6 `wrong_side` and 5
-`missed` a minute; the file grows by about 30 MB per hour of play.
-
-The FPS counter shows a third line, `DATA taps/corrections Xreported`:
-examples labeled as taps (`fired`, `missed`, `wrong_side`, `user_wrong_side`,
-`user_missed`), corrections (`missed`, `wrong_side` and every `user_*`), and
-those reported with the ✗ button, counted over the whole file. The line turns
-yellow for a second when ✗ is pressed; the X count goes up about 5 s later, and
-not at all if no candidate matched (a missed tap too soft even for the wide
-detector). Raw recordings (`P2_BACKTAP_RAW`) also log presses (`f` lines),
-which the replay tool reads.
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `P2_BACKTAP_DATASET` | on with Record taps (`P2_BACKTAP_RAW`), off otherwise | `1` turns it on in `Documents/backtap/dataset.csv`, a path (relative to HOME) turns it on there, `0` keeps it off even with Record taps |
-| `P2_BACKTAP_TAG` | empty | written on every line, to mark a session with known intent (e.g. `left-only`, `no-taps`) |
-| `P2_BACKTAP_WIDE` | 0.25 | fraction of the thresholds that opens a candidate of the wide detector |
-
-`tools/ios_device.sh backtap` copies the file to
-`build/ios/device/backtap/dataset.csv`; `P2_BACKTAP_DATASET=<file.csv>
-build/backtap-replay <recording>` builds the same file from a raw recording
-(without camera motion, the `wrong_side` rule ignores the camera).
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `P2_BACKTAP_ACCEL` | 0.10 g | minimum acceleration peak |
-| `P2_BACKTAP_JERK` | 6 g/s | minimum jerk |
-| `P2_BACKTAP_ROT` | 0.08 rad/s | minimum rotation score to decide the side |
-| `P2_BACKTAP_SIDE_X` | 0.5 | weight of rotation around x relative to rotation around z (`100`: x only, the old rule) |
-| `P2_BACKTAP_GYRO_ACCEL` | 0.06 g | gyroscope path: minimum acceleration peak |
-| `P2_BACKTAP_GYRO_ROT` | 0.30 rad/s | gyroscope path: minimum rotation around x (`99` disables it) |
-| `P2_BACKTAP_GYRO_JERK` | 15 rad/s² | gyroscope path: rotation change that opens a candidate |
-| `P2_BACKTAP_GYRO_CALM` | 0.03 g | gyroscope path: maximum agitation in the preceding 50 ms (phone still) |
-| `P2_BACKTAP_REFRACTORY` | 0.25 s | nothing after a candidate |
-| `P2_BACKTAP_TOUCH_GUARD` | 0.08 s | nothing around the start or end of a touch |
-| `P2_BACKTAP_FLAT` | -0.95 g | gravity z below this threshold: phone lying flat, ignored (`-2`: never) |
-| `P2_BACKTAP_WIDTH` | 0.12 s | maximum peak duration (above 35% of its maximum; measured over 100 ms, so inactive by default) |
-| `P2_BACKTAP_AGITATION` | 0.05 g | maximum RMS over the preceding 300 ms (excluding vibration from taps) |
-| `P2_BACKTAP_GRAVITY` | 0.12 g | maximum change in gravity over the preceding 200 ms |
-| `P2_BACKTAP_INVERT` | 0 | `1`: left and right swapped |
-| `P2_BACKTAP_LATERAL` | 1 | tap on the edge of the phone: `-1` reversed direction, `0` ignored |
-| `P2_BACKTAP_ZSIGN` | 0 | `±1`: requires this sign of a_z at the start of the peak (back vs. screen) |
-| `P2_BACKTAP_HOLD` | 0.05 s | press duration |
-| `P2_BACKTAP_HZ` | 200 | rate requested from CoreMotion (100 Hz obtained on iPhone 15 Pro Max) |
-
-Log: `[ios] tape <s> : pic, (x y z), secousse, rotation x y z, montée (délai du maximum),
-durée, avant (agitation), gravité (variation, puis vecteur), toucher (écart en
-ms), orientation -> côté ou raison du rejet` (the log is in French: tap, peak, (x y z), jerk,
-rotation x y z, rise (time to maximum), duration, before (agitation), gravity (change, then
-vector), touch (gap in ms), orientation -> side or rejection reason). Findings: a back tap has
-a_z < 0 at the peak, a tap on the screen a_z > 0.
-
-## Performance (sp_a2_laser_intro, iPhone 15 Pro Max, native 2796×1290)
-
-| Step | fps |
-|---|---|
-| -O1 with checks | ~5 |
-| gl4es | 7-15 |
-| `--release` + optimizations from the Mac work | ~11 |
-| unsynchronized `glBufferSubData` | ~19 |
-| BGRA colors in the buffer, swizzled by the shader | ~47 |
-
-Uncapped by the display (`tools/ios_bench.py`, `P2_IOS_NO_PRESENT=1`; these
-are OpenGL numbers, `ios_bench.py --renderer d3d9` measures Metal, where the
-display caps at 60 fps and `P2_IOS_NO_PRESENT` has no effect),
-sp_a2_laser_stairs at the spawn point: native 2796×1290 90 fps (4× MSAA) or
-94 (without); scale 2 (1864×860) 154; 1.5 178. The GPU is the bottleneck: scale 2 is the
-default on device. Heavy view of the same room (setpos -188.94 -396.92
--31.97): ~117 fps sustained at scale 2 with 4× MSAA (~150 before the
-phone heats up). For playing: 60 Hz by default, steady;
-`P2_IOS_MAX_FPS=120` requests 120 Hz (frame rate then between 60 and 120). The ProMotion display rounds the displayed frame rate (120, 60,
-40…): a frame taking more than 8.3 ms is shown at 60.
-
-Lessons: the translated game code costs little; the cost is in Apple's ES
-driver, which waits for the GPU on any write to an in-flight buffer and
-copies every vertex as soon as one attribute comes from client memory.
-Profile with `P2_PROFILE_RAW=1` before guessing.
+60 fps by default, steady on an iPhone 15 Pro Max; `P2_IOS_MAX_FPS=120`
+requests 120 Hz (the frame rate then lands between 60 and 120, since the
+ProMotion display shows a frame taking more than 8.3 ms at 60). The GPU is the
+bottleneck, so the render scale is ×2 by default. `tools/ios_bench.py`
+measures a scene (`--renderer d3d9` for Metal). The OpenGL optimisation history
+is in [STATUS.md](../STATUS.md#october-2026--iphone-performance-history-opengl).
 
 ## iOS-specific pitfalls
 
@@ -519,5 +394,4 @@ Profile with `P2_PROFILE_RAW=1` before guessing.
 - Touch controls: a UIKit view placed on top of the window, made of fixed
   layers (one `CAShapeLayer` per stick and button, a small bitmap for the FPS
   counter) moved without animation and flushed once per run-loop pass (SDL's
-  loop never commits UIKit transactions). It used to be a full-screen
-  `drawRect` at the native ×3 scale, redrawn on every finger move.
+  loop never commits UIKit transactions).
