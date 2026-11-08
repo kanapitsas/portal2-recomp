@@ -22,32 +22,26 @@ Half-Life 2's game data, and its Linux binaries (two separate downloads):
 2. Open the Steam console (`open steam://open/console`) and type
    `download_depot 220 224` (about 320 MB). Wait for "Depot download
    complete".
-3. Open the Natif Installer and tick Half-Life 2, or, in a checkout (the
-   same one as Portal 2 if you have it):
-
-   ```sh
-   ./setup.sh               # every game found, or:
-   ./setup.sh --game hl2
-   ```
-
+3. Tick Half-Life 2 in the Natif Installer, or run `./setup.sh --game hl2`
+   (`./setup.sh` alone builds every game found) in a checkout, the same one
+   as Portal 2 if you have it ([README](../README.md#install-on-mac)).
    Without paths, it finds the game in
    `~/Library/Application Support/Steam/steamapps/common/Half-Life 2` or
    `depot_221`, and the Linux binaries in `depot_224`, where `download_depot`
    put them; otherwise pass them:
    `./setup.sh --game hl2 "/path/to/Half-Life 2" "/path/to/depot_224"`.
 
-`setup.sh` downloads Valve's `libsteam_api.dylib` from Steamworks.NET
-2024.8.0 (SHA-256 checked; HL2 needs a newer SDK than Portal 2), builds the
-game with `--release` in `build/hl2` (10 to 20 minutes and about 4 GB the first
-time; Portal 2's build in `build/game` is left alone) and creates
+What differs from the Portal 2 install: `setup.sh` downloads Valve's
+`libsteam_api.dylib` from Steamworks.NET 2024.8.0 (HL2 needs a newer SDK than
+Portal 2), builds in `build/hl2` (10 to 20 minutes and about 4 GB the first
+time; Portal 2's `build/game` is left alone) and creates
 `~/Applications/Half-Life 2 Natif.app`. Open Steam with the account that
 owns Half-Life 2, then open the app.
 
 - Saves and settings: `~/Library/Application Support/Half-Life 2 Natif/userdata`.
 - Log: `~/Library/Logs/HalfLife2Natif.log`.
-- Renderer: **Metal** when `libd3d9metal` is there, as for Portal 2 (about
-  120 fps, the display's limit, against 91 with OpenGL, see Performance). To force OpenGL:
-  `open --env P2_RENDERER=opengl -a "Half-Life 2 Natif"`.
+- Renderer: **Metal** when `libd3d9metal` is there, as for Portal 2. To force
+  OpenGL: `open --env P2_RENDERER=opengl -a "Half-Life 2 Natif"`.
 - `./uninstall.sh` offers to remove the HL2 app and, if you confirm, its
   saves, with separate questions for Portal 2's.
 
@@ -81,47 +75,17 @@ owns Half-Life 2, then open the app.
 
 ## Manual setup
 
-What `setup.sh --game hl2` adds to `config/local.json` (beside Portal 2's
-keys, if any; [usage.md](usage.md#manual-build)):
-
-```json
-{
-  "d3d9metal_dylib": "/path/to/libd3d9metal.dylib",
-  "games": {
-    "hl2": {
-      "game_root": "~/Library/Application Support/Steam/steamapps/common/Half-Life 2",
-      "linux_root": "/path/to/depot_224",
-      "steam_api_dylib": "/path/to/steamworks-2024.8.0/libsteam_api.dylib",
-      "steam_appid": 220,
-      "depot_id": 224
-    }
-  }
-}
-```
-
-Then:
-
-```sh
-python3 tools/gameprep.py --game hl2
-python3 tools/build_game.py --game hl2 --release
-python3 tools/make_app.py --game hl2                         # the app, or:
-python3 tools/run_game.py --game hl2 --show --timeout 3600   # from the terminal
-```
-
-`run_game.py` uses Metal when `d3d9metal_dylib` is set (it passes
-`P2_D3D9METAL`; the app carries its own copy); `P2_RENDERER=opengl` forces
-OpenGL. `setup.sh` also writes `user_dir` and `host_prefix`, and with `--ios`
-the iPhone bundle id and `d3d9metal_ios`.
+The `config/local.json` sample and the `gameprep` → `build_game` →
+`make_app`/`run_game` sequence are in [usage.md](usage.md#manual-build): add
+`--game hl2` to each command. Half-Life 2's keys (`game_root`, `linux_root`,
+`steam_api_dylib`, `steam_appid` 220, `depot_id` 224) go under `games.hl2`.
 
 ## Performance
 
-Build to play with `python3 tools/build_game.py --game hl2 --release` (`-O2`,
-without memory checks), as `setup.sh` does; the default `--opt 1` checked
-build is 2.5 times slower. On an M3 Pro at 1280×720: 120 fps with Metal (the
-display's limit), about 91 with OpenGL. A PGO build saves about 5 % of the
-CPU per frame, not worth shipping a 155 MB profile per game. Measurements,
-the ceiling estimate and the rejected experiments are in
-[STATUS.md](../STATUS.md#78-november-2026--half-life-2-performance).
+On an M3 Pro at 1280×720 a `--release` build holds the display's 120 fps with
+Metal (about 91 with OpenGL); the measurements, the ceiling estimate and the
+rejected experiments are in
+[STATUS.md](../STATUS.md#half-life-2-78-november-2026).
 
 ## iPhone
 

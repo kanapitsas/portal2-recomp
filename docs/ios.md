@@ -9,9 +9,10 @@ first short test on the same phone, at 60 fps; see [Half-Life 2](#half-life-2).
 Instead of gl4es, the app can render through the native Direct3D 9 path
 described in [d3d9-bridge.md](d3d9-bridge.md): `shaderapivk.so` → bridge →
 libd3d9metal (mtld3d) → Metal. It is the default when the app is built with the
-library and the GPU supports BC textures; otherwise the app uses gl4es. On an
-iPhone 15 Pro Max it ran at 71–77 fps against 60 for OpenGL (same room, MSAA 4,
-scale 2, no vsync), and fixes the too-dark image of the gl4es path.
+library and the GPU supports BC textures; otherwise the app uses gl4es. It
+is about 20–25 % faster than OpenGL on an iPhone 15 Pro Max
+([measurements](../STATUS.md#measurements)) and fixes the too-dark image of
+the gl4es path.
 
 `./setup.sh --ios` builds and links the library when Rust from rustup is
 installed (Homebrew's `rust` has no iOS target; the app then uses OpenGL). By hand:
@@ -347,33 +348,39 @@ file read; harmless, not fixed).
 
 ## Diagnostics
 
+iOS-specific variables; `P2_FRAME_LOG`, `P2_GATE_TIMING`, `P2_TRACE_*`,
+`P2_NATIVE_<NAME>=0`, `P2_GL_STREAM_UNSYNC=0` and the other runtime variables
+work as on the Mac ([usage.md](usage.md#diagnostics)). The `P2_IOS_GL_TRACE`,
+`P2_IOS_DEBUG_UV`, `P2_IOS_SHADER_DUMP`, `P2_IOS_SRGB_TRACE` and
+`P2_IOS_SKIP_DRAWS` family needs a debug build (`P2_IOS_GL_DEBUG=1` when
+building with `tools/build_ios.py`). `P2_TOUCH_TEST_*` is for the simulator
+(no finger on the screen).
+
 | Variable | Effect |
 |---|---|
 | `P2_LOG_FILE=Documents/game.log` | log file (relative to the container) |
-| `P2_FRAME_LOG=1` | frame timing every 60 frames |
-| + `P2_PROFILE_DELAY=60`, `P2_PROFILE_RAW=1` | built-in profiler; with `RAW`, `tools/ios_symbolize.py` resolves driver functions using the device's symbols (Xcode, iOS DeviceSupport) |
-| `P2_TRACE_FILES=<text>` | fopen/open/unlink/rename calls whose path contains the text |
+| `P2_PROFILE_DELAY=60`, `P2_PROFILE_RAW=1` | built-in profiler (with `P2_FRAME_LOG=1`); with `RAW`, `tools/ios_symbolize.py` resolves driver functions using the device's symbols (Xcode, iOS DeviceSupport) |
 | `P2_TOUCH_CONTROLS=0/1` | touch controls disabled / always shown |
 | + `_LOW=300`, `_HIGH=1500`, `_SMOOTH=0.5`, `_LOG=1` | trackpad acceleration: gain of 1 below `_LOW` pt/s, ramping up to the `P2_TOUCH_ACCEL` multiplier at `_HIGH` pt/s; speed is smoothed (weight `_SMOOTH`); `=1` disables it, `_LOG` logs speed and gain |
 | `P2_BACKTAP=0` | disables back taps (enabled by default if the sensor exists; see "Back taps") |
 | `P2_BACKTAP_LOG=1` | logs every candidate (from half the thresholds) and the background noise every 5 s |
-| `P2_TOUCH_TEST_CLICK=s,x,y` | left click at (x, y) points, s seconds after the first menu |
-| `P2_TOUCH_TEST_MOVE=f,s` + `_SECONDS`, `_DELAY`, `_ANGLE`, `P2_TOUCH_TEST_WASD` | forced deflections of the movement stick |
+| `P2_TOUCH_TEST_CLICK=s,x,y` | simulator: left click at (x, y) points, s seconds after the first menu |
+| `P2_TOUCH_TEST_MOVE=f,s` + `_SECONDS`, `_DELAY`, `_ANGLE`, `P2_TOUCH_TEST_WASD` | simulator: forced deflections of the movement stick |
 | `P2_IOS_RENDER_SCALE=1/2/native` | render scale (points → pixels); `tools/ios_bench.py` compares antialiasing × scale (`--renderer opengl` by default, `--renderer d3d9` for Metal) |
 | `P2_IOS_NO_PRESENT=1` | frames rendered but never presented, so the display cap does not limit the measured rate (OpenGL only; Metal holds presents to `P2_IOS_MAX_FPS`) |
 | `P2_IOS_AUTOEXEC="cmd; convar=value; pause 5; …"` | console commands, convar settings and pauses (seconds) run in order once the menu is gone, starting 5 s later |
-| `P2_GL_STREAM_UNSYNC=0`, `P2_IOS_BGRA=0`, `P2_IOS_SRGB=0` | disable the fast paths or the emulation |
-| `P2_IOS_SHADER_DUMP=<directory>`, `P2_IOS_DRAW_LOG=<frame>` | converted shaders, draws for one frame |
-| `P2_IOS_GL_TRACE=1` | logs each distinct texture upload combination once (function, target, level, formats, GL error) and traces shader compilation and program linking |
+| `P2_IOS_BGRA=0`, `P2_IOS_SRGB=0` | OpenGL: disable the BGRA fast path or the sRGB emulation |
+| `P2_IOS_SHADER_DUMP=<directory>` | debug build: converted shaders |
+| `P2_IOS_DRAW_LOG=<frame>` | draws for one frame |
+| `P2_IOS_GL_TRACE=1` | debug build: logs each distinct texture upload combination once (function, target, level, formats, GL error) and traces shader compilation and program linking |
 | `P2_IOS_PROBE_FRAMES=1` | every 120 frames, reads a few pixels of the system framebuffer before presenting (all black = nothing drawn) |
-| `P2_IOS_DEBUG_UV=1` | every fragment shader that receives `oT0` shows `fract(oT0.xy)` instead (texture coordinate check) |
-| `P2_IOS_SKIP_DRAWS=<n>` or `<a>-<b>` | skips draw n (or a up to b, excluded) of every frame, counted as in `P2_IOS_DRAW_LOG` |
+| `P2_IOS_DEBUG_UV=1` | debug build: every fragment shader that receives `oT0` shows `fract(oT0.xy)` instead (texture coordinate check) |
+| `P2_IOS_SKIP_DRAWS=<n>` or `<a>-<b>` | debug build: skips draw n (or a up to b, excluded) of every frame, counted as in `P2_IOS_DRAW_LOG` |
 | `P2_IOS_SKIP_PROGRAMS=45,802` | skips every draw made with these GL program ids |
 | `P2_IOS_PROGRAM_DUMP=<directory>` | writes the shader sources of the programs described by `P2_IOS_DRAW_LOG` |
-| `P2_IOS_SRGB_TRACE=1` | sRGB and border-state statistics every 2 000 draws |
+| `P2_IOS_SRGB_TRACE=1` | debug build: sRGB and border-state statistics every 2 000 draws |
 | `P2_FONT_DIRS=<dir>:<dir>` | font directories indexed by the minimal fontconfig (default `/System/Library/Fonts`) |
 | `P2_FONT_LOG=1` | logs every font match (by default only the first request per family) |
-| `P2_FRAME_LOG=1`, `P2_GATE_TIMING=1`, `P2_TRACE_*`, `P2_NATIVE_<NAME>=0` | as on the Mac: see [usage.md](usage.md#diagnostics) |
 
 Game console: `-condebug` writes it to
 `Documents/portal2-userdata/portal2/console.log` (Half-Life 2: under
@@ -398,8 +405,8 @@ recordings and the tap dataset: [backtap.md](backtap.md).
 requests 120 Hz (the frame rate then lands between 60 and 120, since the
 ProMotion display shows a frame taking more than 8.3 ms at 60). The GPU is the
 bottleneck, so the render scale is ×2 by default. `tools/ios_bench.py`
-measures a scene (`--renderer d3d9` for Metal). The OpenGL optimisation history
-is in [STATUS.md](../STATUS.md#october-2026--iphone-performance-history-opengl).
+measures a scene (`--renderer d3d9` for Metal). Metal against OpenGL and the
+OpenGL optimisation history: [STATUS.md](../STATUS.md#measurements).
 
 ## iOS-specific pitfalls
 
