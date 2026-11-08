@@ -159,17 +159,19 @@ RT_CHECK(backtap_dataset_repairs_partial_last_line) {
     assert(fd >= 0);
     close(fd);
     FILE *f = fopen(path, "w");
+    assert(f);
     fputs("session,tag\n1,a,100,fired\n1,a,101,mis", f);
     fclose(f);
     assert(rt_btds_repair_tail(path) == 0);
     f = fopen(path, "r");
+    assert(f);
     char buf[128]; size_t n = fread(buf, 1, sizeof(buf) - 1, f); buf[n] = 0;
     fclose(f);
     assert(!strcmp(buf, "session,tag\n1,a,100,fired\n"));
     assert(rt_btds_repair_tail(path) == 0);   // déjà propre : inchangé
-    f = fopen(path, "w"); fputs("sans fin de ligne", f); fclose(f);
+    f = fopen(path, "w"); assert(f); fputs("sans fin de ligne", f); fclose(f);
     assert(rt_btds_repair_tail(path) == 0);
-    f = fopen(path, "r"); assert(fgetc(f) == EOF); fclose(f);
+    f = fopen(path, "r"); assert(f); assert(fgetc(f) == EOF); fclose(f);
     unlink(path);
     assert(rt_btds_repair_tail(path) == 0);   // absent : fichier neuf
 }

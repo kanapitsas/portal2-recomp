@@ -123,15 +123,13 @@ static void update_move_response(CPU *c) {
     response = now[0] ? (int)strtol(now, NULL, 10) : -1;
 }
 
-// ---- Commandes console exécutées au prochain relevé --------------------
+// ---- Commandes console (P2_IOS_AUTOEXEC, ci-dessous) ----------------------
 // Trouvées par ICvar (FindCommandBase, comme les variables), puis leur rappel
 // appelé directement avec un CCommand invité : ConCommand garde le rappel à
 // +24 et ses drapeaux à +32 (bit 1 : rappel à arguments, bit 2 : interface) ;
 // CCommand = argc, taille d'argv[0], deux tampons de 512 octets, 64 pointeurs.
 // Diagnostics seulement (getpos ; P2_IOS_AUTOEXEC pour le banc). Une commande
 // du serveur (setpos…) passe par « cmd », qui l'envoie comme un joueur.
-static char pending_command[256];
-void rt_ios_console_command(const char *line) { snprintf(pending_command, sizeof(pending_command), "%s", line); }
 static void run_console_command(CPU *c, const char *line) {
     enum { ARGV = 64, LENGTH = 512, SIZE = 8 + 2 * LENGTH + 4 * ARGV };
     char name[64] = {0};
@@ -226,7 +224,6 @@ void rt_ios_game_state_poll(void) {
     if (visible && !ui_visible) rt_input_nudge_mouse();
     ui_visible = visible;
     if (linear_wanted || saved_response[0]) update_move_response(c);
-    if (pending_command[0]) { char line[256]; snprintf(line, sizeof(line), "%s", pending_command); pending_command[0] = 0; run_console_command(c, line); }
     autoexec(c);
 }
 #endif

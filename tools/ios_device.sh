@@ -60,14 +60,14 @@ list_saves() {  # fichier JSON : liste horodatée de Documents/portal2-userdata/
 case "${1:-}" in
 probe)
   shift
-  dc device install app build/ios/device/probe.app >/dev/null
+  dc device install app "$IOS_DIR/probe.app" >/dev/null   # tools/build_ios_probe.sh --game ... device
   dc device process launch --terminate-existing --environment-variables "$(env_json P2_PROBE_LOG=1 "$@")" \
     "$PROBE_ID" >/dev/null
   sleep "${PROBE_SECONDS:-20}"
-  mkdir -p build/ios/device
+  mkdir -p "$IOS_DIR"
   dc device copy from --domain-type appDataContainer --domain-identifier "$PROBE_ID" \
-    --source Documents/probe.log --destination build/ios/device/probe.log >/dev/null
-  cat build/ios/device/probe.log
+    --source Documents/probe.log --destination "$IOS_DIR/probe.log" >/dev/null
+  cat "$IOS_DIR/probe.log"
   ;;
 install)
   dc device install app "$IOS_APP"
@@ -76,10 +76,10 @@ data)
   # Dossiers du profil (ios_data) : Portal 2 sans la bande son ni sdk_content
   # (~11,5 Go), Half-Life 2 avec les épisodes et Lost Coast (~10 Go).
   mark_data incomplete
-  copy_to $APP_ID "$PREP" Documents/prep
-  copy_to $APP_ID "$LINUX_ROOT" Documents/linux
+  copy_to "$APP_ID" "$PREP" Documents/prep
+  copy_to "$APP_ID" "$LINUX_ROOT" Documents/linux
   for d in $IOS_DATA; do
-    [ -e "$GAME_ROOT/$d" ] && copy_to $APP_ID "$GAME_ROOT/$d" "Documents/game/$d"
+    [ -e "$GAME_ROOT/$d" ] && copy_to "$APP_ID" "$GAME_ROOT/$d" "Documents/game/$d"
   done
   mark_data complete
   ;;
@@ -96,9 +96,9 @@ has-game)  # copies antérieures au marqueur : le dossier du jeu suffit
   has_file "Documents/game/$MOD"
   ;;
 prep)
-  # Fichier par fichier : chacun remplace son homologue (les adresses des
-  # modules suivent $PREP, celui avec lequel l'app a été construite).
-  for f in "$PREP"/*; do copy_to $APP_ID "$f" "Documents/prep/$(basename "$f")" >/dev/null; done
+  # Le dossier entier en un appel : chaque fichier remplace son homologue (les
+  # adresses des modules suivent $PREP, celui avec lequel l'app a été construite).
+  copy_to "$APP_ID" "$PREP" Documents/prep >/dev/null
   echo "Documents/prep : $(ls "$PREP" | wc -l | tr -d ' ') fichiers copiés"
   ;;
 run)
@@ -106,18 +106,18 @@ run)
   SECONDS_MAX=180
   case "${1:-}" in ''|*=*) ;; *) SECONDS_MAX=$1; shift ;; esac   # seconds are optional: `run P2_RENDERER=opengl`
   dc device process launch --terminate-existing \
-    --environment-variables "$(env_json P2_LOG_FILE=Documents/game.log P2_FRAME_LOG=1 "$@")" $APP_ID
+    --environment-variables "$(env_json P2_LOG_FILE=Documents/game.log P2_FRAME_LOG=1 "$@")" "$APP_ID"
   sleep "$SECONDS_MAX"
   mkdir -p "$IOS_DIR"
-  dc device copy from --domain-type appDataContainer --domain-identifier $APP_ID \
+  dc device copy from --domain-type appDataContainer --domain-identifier "$APP_ID" \
     --source Documents/game.log --destination "$IOS_DIR/game.log"
   echo "journal : $IOS_DIR/game.log ($(wc -l < "$IOS_DIR/game.log") lignes)"
   ;;
 backtap)
-  mkdir -p build/ios/device/backtap
-  dc device copy from --domain-type appDataContainer --domain-identifier $APP_ID \
-    --source Documents/backtap/dataset.csv --destination build/ios/device/backtap/dataset.csv
-  echo "dataset: build/ios/device/backtap/dataset.csv ($(($(wc -l < build/ios/device/backtap/dataset.csv) - 1)) examples)"
+  mkdir -p "$IOS_DIR/backtap"
+  dc device copy from --domain-type appDataContainer --domain-identifier "$APP_ID" \
+    --source Documents/backtap/dataset.csv --destination "$IOS_DIR/backtap/dataset.csv"
+  echo "dataset: $IOS_DIR/backtap/dataset.csv ($(($(wc -l < "$IOS_DIR/backtap/dataset.csv") - 1)) examples)"
   ;;
 saves)
   # tools/save_sync.py knows Portal 2's folders only (portal2-userdata/portal2).
@@ -127,8 +127,8 @@ saves)
   if [ "$action" = pull ] && pgrep -x portal2-native >/dev/null && [[ " $* " != *" --force "* ]]; then
     echo "the game is running on the Mac: quit it first (it rewrites its saves)"; exit 1
   fi
-  mkdir -p build/ios/device
-  listing=build/ios/device/saves-listing.json   # kept for debugging
+  mkdir -p "$IOS_DIR"
+  listing="$IOS_DIR/saves-listing.json"   # kept for debugging
   sync=(python3 tools/save_sync.py)
   list_saves "$listing"
   if [ "$action" = status ]; then "${sync[@]}" status --listing "$listing" --device "$DEVICE"; exit; fi

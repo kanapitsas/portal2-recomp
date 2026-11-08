@@ -19,6 +19,8 @@
 #include <string.h>
 
 #define EXPORT __attribute__((visibility("default"), used))
+// SteamErrMsg du SDK 1.59+ : char[k_cchMaxSteamErrMsg = 1024] (runtime/steam.c, STEAM_ERR_MSG).
+#define STEAM_ERR_MSG_SIZE 1024
 
 // ---- objets d'interface : une vtable de méthodes qui renvoient 0 ----
 // Le pont n'appelle la vtable hôte que pour quelques interfaces hors API
@@ -86,7 +88,7 @@ EXPORT bool SteamInternal_GameServer_Init(uint32_t ip, uint16_t a, uint16_t b, u
 EXPORT int32_t SteamInternal_GameServer_Init_V2(uint32_t ip, uint16_t a, uint16_t q, int32_t mode, const char *v,
                                                 const char *versions, char *message) {
     (void)ip; (void)a; (void)q; (void)mode; (void)v; (void)versions;
-    if (message) snprintf(message, 1024, "no Steam game server on iOS");
+    if (message) snprintf(message, STEAM_ERR_MSG_SIZE, "no Steam game server on iOS");
     return 1;
 }
 
@@ -102,7 +104,8 @@ EXPORT bool SteamAPI_ManualDispatch_GetAPICallResult(int32_t pipe, uint64_t call
 // ---- tickets d'authentification ----
 // En solo, le client se connecte quand même au serveur local et exige un
 // ticket non vide (« STEAM certificate length error 0/2048 »). Ticket
-// factice, reconnu par le côté serveur du stub ; jamais envoyé ailleurs.
+// factice : rien ne lit son contenu (le serveur local du stub accepte tout),
+// seule sa longueur compte ; jamais envoyé ailleurs.
 int32_t steam_stub_ticket(void *buffer, int32_t capacity) {
     static const unsigned char magic[16] = "P2-iOS-offline";
     if (!buffer || capacity < (int32_t)sizeof(magic) + 8) return 0;

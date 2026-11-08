@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include "env_ios.h"
 #include <sys/stat.h>
 
 typedef struct { char *object; FcValue value; } Element;
@@ -215,8 +216,7 @@ static void log_request(const char *what, const char *family, const char *answer
     for (int i = 0; i < count; ++i) known |= !strcmp(seen[i], key);
     if (!known && count < 64) strcpy(seen[count++], key);
     pthread_mutex_unlock(&lock);
-    const char *all = getenv("P2_FONT_LOG");
-    if (!known || (all && *all == '1'))
+    if (!known || RT_IOS_ENV_FLAG("P2_FONT_LOG", 0))
         fprintf(stderr, "[fontconfig-ios] %s(%s) -> %s\n", what, family ? family : "*", answer ? answer : "rien");
 }
 

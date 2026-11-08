@@ -12,10 +12,7 @@ enum { POWER_SAVE_FPS = 30 };
 static _Atomic int cap;   // 0 : pas encore calculé
 static int metal_renderer;
 
-static int requested(void) {
-    const char *e = getenv("P2_IOS_MAX_FPS");
-    return e && atoi(e) > 0 ? atoi(e) : 60;
-}
+static int requested(void) { return rt_ios_env_int("P2_IOS_MAX_FPS", 60, 1); }
 // Raison de brider la cadence, ou NULL.
 static const char *power_reason(void) {
     if (!rt_ios_env_flag("P2_IOS_POWER_SAVE", 1)) return NULL;

@@ -278,9 +278,9 @@ static void compressed_tex_image_2d(GLenum t, GLint l, GLenum i, GLsizei w, GLsi
     next_compressed_tex_image_2d(t, l, i, w, h, b, n, d);
 }
 
-// P2_IOS_SRGB_TRACE=1 : statistiques toutes les 2 000 tracés.
+// P2_IOS_SRGB_TRACE=1 : statistiques toutes les 2 000 tracés (build de débogage).
 static void trace(const GLint *value, const ProgramState *s) {
-    if (!RT_IOS_ENV_FLAG("P2_IOS_SRGB_TRACE", 0)) return;
+    if (!RT_IOS_DEBUG_BUILD || !RT_IOS_ENV_FLAG("P2_IOS_SRGB_TRACE", 0)) return;
     static unsigned long draws, srgb_on, fbo_srgb, writes, reads, no_loc, borders, border_loc;
     ++draws; srgb_on += framebuffer_srgb != 0; reads += (value[0] | value[1] | value[2]) != 0;
     fbo_srgb += srgb_outputs(draw_fbo) != 0;
@@ -320,9 +320,12 @@ static void sync_uniforms(void) {
 }
 // Diagnostic par bissection : P2_IOS_SKIP_DRAWS=a-b saute, à chaque image,
 // les tracés numérotés [a, b) ; P2_IOS_DRAW_LOG=n journalise ceux de l'image n.
+// Build de débogage seulement : ailleurs draw_skipped rend 0 et disparaît du
+// chemin de chaque tracé.
 static unsigned draw_index, frame_index;
 void rt_ios_draws_frame_end(void) { draw_index = 0; ++frame_index; }
 static int draw_skipped(const char *fn, GLenum mode, GLsizei count, GLuint start, GLuint end, GLint base) {
+    if (!RT_IOS_DEBUG_BUILD) return 0;
     static int init; static long skip_a = -1, skip_b = -1, log_frame = -1;
     if (!init) {
         init = 1;

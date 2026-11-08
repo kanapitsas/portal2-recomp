@@ -31,7 +31,6 @@ enum { RT_BTDS_PENDING = 64, RT_BTDS_FIRES = 16, RT_BTDS_FLAGS = 16, RT_BTDS_WIN
 typedef struct {
     rt_backtap_report r;
     double look;                       // caméra : comptes de souris cumulés à cet instant (NAN : inconnu)
-    int fired;                         // côté tiré par le jeu (0 : rien)
     int nwin;
     rt_backtap_sample win[RT_BTDS_WINDOW];   // capteurs de t - 0,35 s au jugement (t + 0,10 s)
 } rt_btds_candidate;

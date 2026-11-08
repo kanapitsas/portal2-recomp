@@ -57,6 +57,10 @@ def main():
     ap.add_argument('--fast-memory', action='store_true', help='-DRT_FAST_MEMORY (see docs/fast-path.md)')
     ap.add_argument('--release', action='store_true',
                     help='build to play: --opt 2 --fast-memory, like build_game.py --release')
+    ap.add_argument('--debug', action='store_true', default=os.environ.get('P2_IOS_GL_DEBUG') == '1',
+                    help='-DRT_IOS_GL_DEBUG: compiles in the GL diagnostics (P2_IOS_GL_TRACE, P2_IOS_SHADER_DUMP, '
+                         'P2_IOS_DEBUG_UV, P2_IOS_PROBE_FRAMES, P2_IOS_SKIP_DRAWS, P2_IOS_DRAW_LOG, P2_IOS_SRGB_TRACE; '
+                         'docs/ios.md); also P2_IOS_GL_DEBUG=1 in the environment')
     ap.add_argument('--deps', type=Path, help='dependency prefix (default ../work/ios-deps/<target>)')
     ap.add_argument('--d3d9metal', type=Path,
                     help='libd3d9metal.a for this target (default: "d3d9metal_ios" of config/local.json, '
@@ -85,7 +89,8 @@ def main():
                                       layout, build_game.roots(layout, game['roots']), build_dir / 'gen')
     base = ['-target', target['triple'], '-isysroot', sdk]
     memory = ['-DRT_FAST_MEMORY'] if args.fast_memory else []
-    runtime_flags = [*base, f'-O{args.opt}', '-g', *build_game.WARNINGS, *memory, '-Iruntime', '-Iruntime/ios',
+    debug = ['-DRT_IOS_GL_DEBUG'] if args.debug else []   # runtime/ios/env_ios.h RT_IOS_DEBUG_BUILD (runtime files only)
+    runtime_flags = [*base, f'-O{args.opt}', '-g', *build_game.WARNINGS, *memory, *debug, '-Iruntime', '-Iruntime/ios',
                      f'-I{deps}/include', f'-I{deps}/include/SDL2', f'-I{deps}/include/gl4es',
                      f'-I{deps}/include/freetype2', '-DGL_SILENCE_DEPRECATION', '-DGLES_SILENCE_DEPRECATION',
                      '-DOPENAL_DEPRECATED=', '-DAL_SILENCE_DEPRECATION']
@@ -133,7 +138,7 @@ def main():
     app_icon(app, config, game['icon'])
     (app / 'launch.args').write_text(''.join(f'{word}\n' for word in launch_args(game, config)))
     if args.target == 'sim':
-        subprocess.run(['codesign', '-s', '-', '-f', str(app)], check=True, capture_output=True)
+        subprocess.run(['codesign', '-s', '-', '-f', str(app)], check=True)
     else:
         subprocess.run([sys.executable, str(ROOT / 'ios/signing/sign.py'), str(app)], check=True)
     size = (app / game['ios_executable']).stat().st_size

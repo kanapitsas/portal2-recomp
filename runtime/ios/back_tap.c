@@ -44,6 +44,7 @@
 // L'orientation de l'écran (paysage gauche ou droit) dit vers quel bord pointe
 // y ; à défaut, le signe de la gravité selon x.
 #include "back_tap.h"
+#include "env_ios.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -81,15 +82,9 @@ void rt_backtap_defaults(rt_backtap_params *p) {
     p->onset_factor = 0.5f;   // un candidat précoce cerne mieux le pic ; les faibles sont jugés « sous les seuils »
 }
 
-float rt_backtap_env_float(const char *name, float def, float min) {
-    const char *e = getenv(name);
-    float value = e && *e ? (float)atof(e) : 0;   // comparée en float : « 0.1 » atteint la borne 0,1f
-    return e && *e && value >= min ? value : def;
-}
-int rt_backtap_env_sign(const char *name, int def) {
-    const char *e = getenv(name);
-    return !e || !*e ? def : atoi(e) > 0 ? 1 : atoi(e) < 0 ? -1 : 0;
-}
+// Anciens noms, gardés pour tools/backtap_replay.c : les lectures sont dans env_ios.h.
+float rt_backtap_env_float(const char *name, float def, float min) { return rt_ios_env_float(name, def, min); }
+int rt_backtap_env_sign(const char *name, int def) { return rt_ios_env_sign(name, def); }
 void rt_backtap_params_from_env(rt_backtap_params *p) {
     rt_backtap_defaults(p);
     // Sensibilité (Réglages : 0,75 / 1 / 1,33) : seuils de détection divisés

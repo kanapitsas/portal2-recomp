@@ -31,6 +31,15 @@
 # Saves go to ~/Library/Application Support/<app name>/userdata (config key
 # user_dir). ./uninstall.sh removes the apps and, if asked, the saves.
 set -euo pipefail
+# Interrupted (Ctrl-C, or the installer's cancel, which signals bash alone):
+# take the running python/clang down too. When bash leads its process group
+# (Process on macOS gives it one), the whole group; else its children.
+on_signal() {
+    trap - INT TERM
+    if [ "$(ps -o pgid= -p $$ | tr -d ' ')" = "$$" ]; then kill -TERM 0 2>/dev/null; else pkill -TERM -P $$ 2>/dev/null; fi
+    exit 130
+}
+trap on_signal INT TERM
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
 DEPS="${P2_DEPS:-$REPO/deps}"
@@ -91,8 +100,11 @@ HOST_DEPS_URL="${P2_HOST_DEPS_URL:-https://github.com/kanapitsas/source-recomp/r
 HOST_DEPS_SHA256="f5454da33fce938b70df1b7523df0a6884eba4249d5c9092898079964bb75b61"
 
 step() { printf '\n==> %s\n' "$*"; }
-die() { printf 'error: %s\n' "$*" >&2; exit 1; }
-warn() { printf 'warning: %s\n' "$*" >&2; }
+# One line each (the installer shows the last "error:" line and collects the
+# "warning:" lines): the line breaks of multi-line messages become spaces.
+oneline() { printf '%s' "$*" | tr -s '\n ' ' '; }
+die() { printf 'error: %s\n' "$(oneline "$*")" >&2; exit 1; }
+warn() { printf 'warning: %s\n' "$(oneline "$*")" >&2; }
 need() { command -v "$1" >/dev/null 2>&1 || die "$1 not found. $2"; }
 config_get() {  # [game id] key -> value from config/local.json for that game (tools/localconfig.py), empty if absent
     [ -f "$CONFIG" ] || return 0

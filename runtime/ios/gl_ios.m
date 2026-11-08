@@ -57,7 +57,8 @@ static const GLubyte *es_get_string(GLenum name) {
 // P2_IOS_GL_TRACE=1 : échecs de compilation et d'édition de liens des shaders
 // ES que gl4es produit à partir du GLSL de togl (journal + source, 20 premiers),
 // paramètres de texture notables et combinaisons d'envoi de texture (plus bas).
-static int trace_enabled(void) { return RT_IOS_ENV_FLAG("P2_IOS_GL_TRACE", 0); }
+// Build de débogage seulement (RT_IOS_DEBUG_BUILD, env_ios.h), comme les autres diagnostics de ce fichier.
+static int trace_enabled(void) { return RT_IOS_DEBUG_BUILD && RT_IOS_ENV_FLAG("P2_IOS_GL_TRACE", 0); }
 static void (*es_compile_shader)(GLuint);
 static void (*es_link_program)(GLuint);
 static void es_compile(GLuint shader) {
@@ -125,7 +126,7 @@ static void shader_source(GLuint shader, GLsizei count, const GLchar *const *str
     char *converted = rt_essl1_to_essl3(joined, type == GL_FRAGMENT_SHADER, rt_ios_srgb_enabled());
     // P2_IOS_DEBUG_UV=1 : chaque shader de fragments qui reçoit oT0 affiche
     // fract(oT0.xy) (diagnostic des coordonnées de texture).
-    if (converted && type == GL_FRAGMENT_SHADER && getenv("P2_IOS_DEBUG_UV") && strstr(converted, "in vec4 oT0;")) {
+    if (RT_IOS_DEBUG_BUILD && converted && type == GL_FRAGMENT_SHADER && getenv("P2_IOS_DEBUG_UV") && strstr(converted, "in vec4 oT0;")) {
         const char *output = strstr(converted, "out vec4 gl4es_FragColor;") ? "gl4es_FragColor" :
                              strstr(converted, "gl4es_FragData[4];") ? "gl4es_FragData[0]" : NULL;
         char *last = output ? strrchr(converted, '}') : NULL;
@@ -140,7 +141,7 @@ static void shader_source(GLuint shader, GLsizei count, const GLchar *const *str
         }
     }
     const GLchar *one = converted ? converted : joined;
-    const char *dump = getenv("P2_IOS_SHADER_DUMP");   // dossier : un fichier par source
+    const char *dump = RT_IOS_DEBUG_BUILD ? getenv("P2_IOS_SHADER_DUMP") : NULL;   // dossier : un fichier par source
     if (dump && *dump) {
         static int counter;
         char path[1024];
@@ -842,7 +843,7 @@ SDL_GLContext rt_ios_gl_create_context(SDL_Window *window) {
 // système juste avant la présentation (noir partout = rien n'y est dessiné).
 static void probe_frame(void) {
     static int frame;
-    if (!RT_IOS_ENV_FLAG("P2_IOS_PROBE_FRAMES", 0) || ++frame % 120) return;
+    if (!RT_IOS_DEBUG_BUILD || !RT_IOS_ENV_FLAG("P2_IOS_PROBE_FRAMES", 0) || ++frame % 120) return;
     void (*read)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *) = dlsym(gles, "glReadPixels");
     GLint bound = 0; real_get_integerv(GL_FRAMEBUFFER_BINDING, &bound);
     real_bind_framebuffer(GL_FRAMEBUFFER, system_framebuffer);

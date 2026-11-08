@@ -8,6 +8,7 @@ profil.
 
     python3 ios/signing/sign.py build/ios/device/Portal2.app
 """
+import argparse
 import hashlib
 import plistlib
 import subprocess
@@ -60,15 +61,20 @@ def identity(profile):
 
 
 def main():
-    app = Path(sys.argv[1])
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('app', type=Path, help='paquet .app iOS à signer')
+    app = ap.parse_args().app
+    if not (app / 'Info.plist').is_file():
+        sys.exit(f'{app} : pas de paquet .app (Info.plist absent)')
     bundle_id = plistlib.loads((app / 'Info.plist').read_bytes())['CFBundleIdentifier']
     path, data = find_profile(bundle_id)
     team = data['TeamIdentifier'][0]
     (app / 'embedded.mobileprovision').write_bytes(path.read_bytes())
-    with tempfile.NamedTemporaryFile(suffix='.plist', delete=False) as f:
-        plistlib.dump(data['Entitlements'], f)
-    subprocess.run(['codesign', '-f', '-s', identity(data), '--entitlements', f.name, '--generate-entitlement-der',
-                    str(app)], check=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        entitlements = Path(tmp) / 'entitlements.plist'
+        entitlements.write_bytes(plistlib.dumps(data['Entitlements']))
+        subprocess.run(['codesign', '-f', '-s', identity(data), '--entitlements', str(entitlements),
+                        '--generate-entitlement-der', str(app)], check=True)
     print(f'{app} signé ({bundle_id}, équipe {team}, profil expirant le {data["ExpirationDate"]:%Y-%m-%d})')
 
 

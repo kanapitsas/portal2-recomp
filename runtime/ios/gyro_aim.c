@@ -1,22 +1,18 @@
 // Visée au gyroscope : calcul pur, testé sur le Mac (tests/checks_gyro_aim.c) ;
 // les capteurs sont lus par touch_controls.m.
 #include "gyro_aim.h"
+#include "env_ios.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
 void rt_gyro_params_from_env(rt_gyro_params *p) {
-    const char *speed = getenv("P2_GYRO_SPEED"), *tighten = getenv("P2_GYRO_TIGHTEN");
-    double k = speed && atof(speed) > 0 ? atof(speed) : 1;
-    p->counts_per_rad = RT_GYRO_COUNTS_PER_RAD * k;
-    p->tighten = tighten && atof(tighten) >= 0 ? atof(tighten) : 0.05;
+    p->counts_per_rad = RT_GYRO_COUNTS_PER_RAD * rt_ios_env_double("P2_GYRO_SPEED", 1, 1e-9);   // > 0
+    p->tighten = rt_ios_env_double("P2_GYRO_TIGHTEN", 0.05, 0);
 }
 
-int rt_gyro_enabled(int on_by_default) {
-    const char *e = getenv("P2_GYRO");
-    if (e && *e) return *e != '0';
-    return on_by_default;
-}
+// P2_GYRO=1 ou 0 ; sinon le défaut du jeu.
+int rt_gyro_enabled(int on_by_default) { return rt_ios_env_flag("P2_GYRO", on_by_default); }
 
 // Petite rotation : atténuée en proportion (0 à l'arrêt, inchangée au seuil),
 // sans saut à la limite ; ce qu'on perd en visée très lente, on le gagne en

@@ -70,7 +70,9 @@ RT_CHECK(ios_settings_match_settings_bundle) {
     }
     int keys = 0;
     for (const char *p = plist; (p = strstr(p, "<key>Key</key>")); ++p) {
-        const char *v = strstr(p, "<string>") + 8, *e = strstr(v, "</string>");
+        const char *v = strstr(p, "<string>"), *e = v ? strstr(v, "</string>") : NULL;
+        assert(v && e);
+        v += strlen("<string>");
         char key[64];
         snprintf(key, sizeof(key), "%.*s", (int)(e - v), v);
         int known = !strcmp(key, "P2TouchTrackpad");

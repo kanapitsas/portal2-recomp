@@ -329,7 +329,13 @@ final class Installer: ObservableObject {
         if log.count > 4000 { log.removeFirst(log.count - 4000) }
     }
 
-    func cancel() { process?.interrupt() }
+    /// Stops setup.sh and its python/clang children: SIGINT to bash's process
+    /// group when it leads one (Process gives it one on macOS), else to bash,
+    /// whose trap (setup.sh) forwards the signal to its children.
+    func cancel() {
+        guard let p = process, p.isRunning else { return }
+        if killpg(p.processIdentifier, SIGINT) != 0 { p.interrupt() }
+    }
 
     func open(_ game: Game) { NSWorkspace.shared.open(game.installedApp) }
 }
@@ -356,8 +362,10 @@ final class LineBuffer: @unchecked Sendable {
 
 /// Replaces the source in Application Support by the bundled snapshot. build/,
 /// deps/ and config/local.json survive, so a new version rebuilds incrementally.
-/// The snapshot is unpacked beside the folder first (a failure leaves the old
-/// source), and a folder without the installer's marker is never touched.
+/// The snapshot is unpacked beside the folder, the old source is renamed
+/// (.old) and only removed once the new one is in place with the kept items;
+/// a failure puts the old source back. A folder without the installer's
+/// marker is never touched.
 let ownerMarker = ".portal2-installer"
 
 func installerError(_ message: String) -> NSError {
@@ -384,30 +392,38 @@ nonisolated func unpackSource() throws {
     }
     // tar copies the downloaded app's quarantine onto every file it extracts.
     run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", staging.path])
-    try fm.createDirectory(at: sourceDir, withIntermediateDirectories: true)
-    fm.createFile(atPath: marker.path, contents: nil)
-    // What survives: generated files and the local configuration.
-    let keep: Set<String> = ["build", "deps", "config", ownerMarker]
-    for name in try fm.contentsOfDirectory(atPath: sourceDir.path) where !keep.contains(name) {
-        try fm.removeItem(at: sourceDir.appendingPathComponent(name))
-    }
-    let config = sourceDir.appendingPathComponent("config")
-    if isDir(config) {
-        for name in try fm.contentsOfDirectory(atPath: config.path) where name != "local.json" {
-            try fm.removeItem(at: config.appendingPathComponent(name))
+    fm.createFile(atPath: staging.appendingPathComponent(ownerMarker).path, contents: nil)
+    // What survives: generated files and the local configuration (the
+    // snapshot has none of them).
+    let kept = ["build", "deps", "config/local.json"]
+    func carry(_ items: [String], from: URL, to: URL) throws {
+        for item in items where fm.fileExists(atPath: from.appendingPathComponent(item).path) {
+            let dest = to.appendingPathComponent(item)
+            try fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? fm.removeItem(at: dest)
+            try fm.moveItem(at: from.appendingPathComponent(item), to: dest)
         }
     }
-    for name in try fm.contentsOfDirectory(atPath: staging.path) {
-        let from = staging.appendingPathComponent(name), to = sourceDir.appendingPathComponent(name)
-        if name == "config", isDir(to) {
-            for item in try fm.contentsOfDirectory(atPath: from.path) {
-                try fm.moveItem(at: from.appendingPathComponent(item), to: to.appendingPathComponent(item))
+    let old = sourceDir.deletingLastPathComponent().appendingPathComponent(".\(sourceDir.lastPathComponent).old")
+    try? fm.removeItem(at: old)
+    let hadOld = fm.fileExists(atPath: sourceDir.path)
+    if hadOld { try fm.moveItem(at: sourceDir, to: old) }
+    do {
+        try fm.moveItem(at: staging, to: sourceDir)
+        if hadOld { try carry(kept, from: old, to: sourceDir) }
+    } catch {
+        // Put the old source back, with whatever had already been carried over.
+        if hadOld {
+            if fm.fileExists(atPath: sourceDir.path) {
+                try? carry(kept, from: sourceDir, to: old)
+                try? fm.removeItem(at: sourceDir)
             }
-        } else {
-            try fm.moveItem(at: from, to: to)
+            try? fm.moveItem(at: old, to: sourceDir)
         }
+        try? fm.removeItem(at: staging)
+        throw error
     }
-    try fm.removeItem(at: staging)
+    try? fm.removeItem(at: old)
 }
 
 // MARK: - Views
