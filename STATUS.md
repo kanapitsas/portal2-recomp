@@ -27,7 +27,7 @@ run and diagnostics instructions that used to live here are in
 
 ## 7–8 November 2026 — Half-Life 2 performance
 
-Build to play with `python3 tools/build_game.py --release` (`-O2`, without
+Build to play with `python3 tools/build_game.py --game hl2 --release` (`-O2`, without
 memory checks), as `setup.sh` does: the default `--opt 1` checked build is
 2.5 times slower.
 Measured on an M3 Pro (save `half-life-018`, 1280×720, hidden window,
