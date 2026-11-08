@@ -667,6 +667,11 @@ def link_direct(body, compiled, imports=frozenset()):
     return _DIRECT.sub(resolve, body), used
 
 
+def _rows(items, per_row, fmt, sep=', '):
+    """C initializer rows: `per_row` formatted items per line, each line ending with a comma."""
+    return [sep.join(fmt(x) for x in items[i:i + per_row]) + ',' for i in range(0, len(items), per_row)]
+
+
 def prototypes(targets, static=False):
     return [f'{"static " if static else ""}void fn_{t:x}(CPU *);' for t in sorted(targets)]
 
@@ -692,11 +697,16 @@ class JumpTables:
     def __init__(self, layout, insns):
         self.layout, self.insns = layout, insns
         self.images, self.previous, self.cache = {}, None, {}
+        # Every file-backed segment (code and data: tables live in .rodata),
+        # sorted for bisection; segments of prepared modules never overlap.
+        self.segments = sorted(((s['vaddr'], s['vaddr'] + s['filesz'], mod) for mod in layout['modules']
+                                for s in mod['loads']), key=lambda r: r[:2])
+        self.segment_starts = [start for start, _, _ in self.segments]
 
     def module(self, address):
-        for mod in self.layout['modules']:
-            if any(s['vaddr'] <= address < s['vaddr'] + s['filesz'] for s in mod['loads']):
-                return mod
+        i = bisect.bisect_right(self.segment_starts, address) - 1
+        if i >= 0 and self.segments[i][0] <= address < self.segments[i][1]:
+            return self.segments[i][2]
         return None
 
     def read32(self, address):
@@ -958,17 +968,23 @@ def declared_shims(runtime_dir=Path(__file__).resolve().parent.parent / 'runtime
 
 SHIMS = _CORE_SHIMS | frozenset(declared_shims())
 
+
+def _module_named(layout, name):
+    """The module of a layout called `name`, or None."""
+    return next((m for m in layout['modules'] if m['name'] == name), None)
+
+
 def resolve_export(layout, spec):
     if ':symbol:' in spec:
         name, symbol = spec.split(':symbol:')
-        mod = next((m for m in layout['modules'] if m['name'] == name), None)
+        mod = _module_named(layout, name)
         matches = [int(address, 16) for address, value in mod['names'].items() if value == symbol] if mod else []
         if len(matches) != 1:
             raise Unsupported(f'expected one function symbol for {spec!r}, found {len(matches)}')
         return matches[0]
     if ':code:' in spec:
         name, offset = spec.split(':code:')
-        mod = next((m for m in layout['modules'] if m['name'] == name), None)
+        mod = _module_named(layout, name)
         try:
             address = mod['base'] + int(offset, 0) if mod else -1
         except ValueError:
@@ -979,7 +995,7 @@ def resolve_export(layout, spec):
         return address
     if ':init:' in spec:
         name, index = spec.split(':init:')
-        mod = next((m for m in layout['modules'] if m['name'] == name), None)
+        mod = _module_named(layout, name)
         if mod is None:
             raise Unsupported(f'unknown module {name!r}')
         if index == 'dt':
@@ -994,29 +1010,52 @@ def resolve_export(layout, spec):
     return matches[0]['exports'][spec]
 
 
-def module_instructions(mod, objdump, disasm_cache=None):
-    """Disassemble one prepared module, through the optional content-addressed cache."""
-    cache_path = None
+# Disassembly cache keys: sha256 of the parser version, module base, objdump
+# identity and the whole image, computed once per process and per image
+# (path, size, mtime): generate_sharded fills it in the parent before forking,
+# so no worker re-reads the images.
+_IMAGE_DIGESTS = {}
+
+
+def _objdump_tool(objdump):
     found = shutil.which(objdump)
     if found is None:
         raise Unsupported(f'{objdump!r} not found: install the Xcode command line tools (xcode-select --install) '
                           'or pass the path of an LLVM objdump')
+    return Path(found).resolve()
+
+
+def disasm_cache_key(mod, objdump):
+    """Name (without extension) of a module's entry in the disassembly cache."""
+    tool = _objdump_tool(objdump)
+    identity = (f'parser-v2:{mod["base"]}:{tool}:'
+                f'{tool.stat().st_mtime_ns}:{tool.stat().st_size}').encode()
+    image = Path(mod['image'])
+    info = image.stat()
+    key = (str(image), info.st_size, info.st_mtime_ns, identity)
+    digest = _IMAGE_DIGESTS.get(key)
+    if digest is None:
+        digest = _IMAGE_DIGESTS[key] = hashlib.sha256(identity + image.read_bytes()).hexdigest()
+    return digest
+
+
+def module_instructions(mod, objdump, disasm_cache=None):
+    """Disassemble one prepared module, through the optional content-addressed cache."""
+    fast_path = None
+    _objdump_tool(objdump)
     if disasm_cache is not None:
-        tool = Path(found).resolve()
-        identity = (f'parser-v2:{mod["base"]}:{tool}:'
-                    f'{tool.stat().st_mtime_ns}:{tool.stat().st_size}').encode()
-        digest = hashlib.sha256(identity + Path(mod['image']).read_bytes()).hexdigest()
-        cache_path = Path(disasm_cache) / (digest + '.json')
-        fast_path = cache_path.with_suffix('.marshal')   # même contenu, chargé ~5x plus vite
+        legacy_path = Path(disasm_cache) / (disasm_cache_key(mod, objdump) + '.json')
+        fast_path = legacy_path.with_suffix('.marshal')   # même contenu, chargé ~5x plus vite
         if fast_path.exists():
             return marshal.loads(fast_path.read_bytes())
-        if cache_path.exists():
-            decoded = {int(pc): tuple(value) for pc, value in json.loads(cache_path.read_text()).items()}
+        if legacy_path.exists():
+            decoded = {int(pc): tuple(value) for pc, value in json.loads(legacy_path.read_text()).items()}
             _write_atomic(fast_path, marshal.dumps(decoded))
+            legacy_path.unlink(missing_ok=True)   # converted: the JSON copy only took space
             return decoded
     decoded = disassemble(mod['image'], mod['base'], objdump)
-    if cache_path is not None:
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
+    if fast_path is not None:
+        fast_path.parent.mkdir(parents=True, exist_ok=True)
         _write_atomic(fast_path, marshal.dumps(decoded))
     return decoded
 
@@ -1083,6 +1122,22 @@ def generate(layout, exports, objdump, allow_unimplemented=False, disasm_cache=N
     code.append('default: return NULL; } }')
     code += runtime_tables(layout, selected, imports)
     return '\n'.join(code)
+
+
+def load_layout(path):
+    """layout.json of a prepared game (tools/elfprep.py). Image paths are
+    absolute since November 2025; an older layout holds paths relative to the
+    checkout: they are resolved to the image next to the layout file (where
+    elfprep writes them), else relative to the checkout."""
+    path = Path(path)
+    layout = json.loads(path.read_text())
+    root = Path(__file__).resolve().parent.parent
+    for module in layout['modules']:
+        image = Path(module['image'])
+        if not image.is_absolute():
+            beside = path.resolve().parent / image.name
+            module['image'] = str(beside if beside.exists() else root / image)
+    return layout
 
 
 def import_map(layout):
@@ -1170,7 +1225,7 @@ def code_pointer_roots(module, insns):
 
 
 def _code_pointer_job(name):
-    module = next(m for m in _JOB['layout']['modules'] if m['name'] == name)
+    module = _module_named(_JOB['layout'], name)
     insns = _JOB['insns']
     try:
         insns.load(module, transient=True)
@@ -1359,8 +1414,15 @@ def _generate_job(job):
     finally:
         insns.drop_transient()
         tables.cache.clear()
-    part = Path(_JOB['parts']) / f'{number:05d}.part'
-    _write_atomic(part, marshal.dumps(functions))
+    # One part per shard touched: the parent merges one shard at a time and
+    # never holds the whole game's C in memory.
+    by_shard = {}
+    for entry, (body, _) in functions.items():
+        by_shard.setdefault(shard_name(owner(_JOB['layout'], entry), entry), {})[entry] = body
+    for shard, bodies in by_shard.items():
+        directory = Path(_JOB['parts']) / shard
+        directory.mkdir(exist_ok=True)
+        _write_atomic(directory / f'{number:05d}.part', marshal.dumps(bodies))
     return number, {entry: count for entry, (_, count) in functions.items()}, sorted(used_imports), skipped, failed
 
 
@@ -1395,6 +1457,9 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
             roots.update(module_roots(module))
     context = multiprocessing.get_context('fork')
     insns = LazyInsns(layout, objdump, disasm_cache)
+    if disasm_cache is not None:
+        for module in layout['modules']:   # image digests once here, inherited by the workers
+            disasm_cache_key(module, objdump)
     for module in layout['modules']:
         # Gros modules : désassemblés une fois dans le parent, partagés par fork
         # (gc.freeze : le ramasse-miettes ne recopie pas leurs pages).
@@ -1443,7 +1508,7 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
     parts = Path(out_dir) / 'parts'
     shutil.rmtree(parts, ignore_errors=True)
     parts.mkdir(parents=True)
-    _JOB.update(insns=insns, imports=imports, entries=frozenset(entries), low=low, span=span,
+    _JOB.update(layout=layout, insns=insns, imports=imports, entries=frozenset(entries), low=low, span=span,
                 optional=frozenset(roots - named), named=frozenset(named),
                 claims=context.RawArray('B', (span + 7) // 8), lock=context.Lock(), parts=str(parts),
                 tables=JumpTables(layout, insns))
@@ -1465,12 +1530,9 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
     gc.collect()
     lift_time = time.time() - started - load_time
     # Regroupement stable par adresse : le contenu d'un fichier ne dépend que
-    # des fonctions de sa plage.
-    shards = {}
-    for part in sorted(parts.glob('*.part')):
-        for entry, (body, _) in marshal.loads(part.read_bytes()).items():
-            module = owner(layout, entry)
-            shards.setdefault(shard_name(module, entry), {})[entry] = body
+    # des fonctions de sa plage (parts/<shard>/<job>.part, fusionnés un shard
+    # à la fois).
+    shard_dirs = sorted(d for d in parts.iterdir() if d.is_dir())
     out_dir = Path(out_dir)
     sources = out_dir / 'src'
     sources.mkdir(parents=True, exist_ok=True)
@@ -1479,7 +1541,10 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
                     non_code_roots=[f'{a:#x}' for a in sorted(not_code)],
                     not_compiled={f'{a:#x}': why for a, why in sorted(failures.items()) if a not in counts})
     compiled = frozenset(counts)
-    for name, bodies in sorted(shards.items()):
+    for shard_dir in shard_dirs:
+        name, bodies = shard_dir.name, {}
+        for part in sorted(shard_dir.glob('*.part')):
+            bodies.update(marshal.loads(part.read_bytes()))
         linked, referenced = [], set()
         for entry in sorted(bodies):
             body, used = link_direct(bodies[entry].replace('static void fn_', 'void fn_', 1), compiled, imports)
@@ -1494,6 +1559,7 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
             _write_atomic(path, data)
         manifest['shards'][name] = sorted(bodies)
         manifest['c_bytes'] += len(data)
+        del bodies, linked
     for stale in sources.glob('*.c'):
         if stale.name not in manifest['shards'] and stale.name != 'dispatch.c':
             stale.unlink()
@@ -1508,7 +1574,7 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
                               write=round(time.time() - started - load_time - lift_time, 1))
     log(f'{len(selected)} named roots, {len(roots)} roots ({taken} from code pointers), {len(counts)} native functions, '
         f'{manifest["instructions"]} instructions, {len(used_imports)} direct imports, '
-        f'{len(shards)} files, {manifest["c_bytes"] / 1e6:.0f} MB of C, {len(not_code)} non-code roots ignored '
+        f'{len(shard_dirs)} files, {manifest["c_bytes"] / 1e6:.0f} MB of C, {len(not_code)} non-code roots ignored '
         f'(load {load_time:.0f} s, lift {lift_time:.0f} s)')
     if manifest['not_compiled']:
         log(f'{len(manifest["not_compiled"])} functions NOT compiled (runtime trap if reached), e.g. '
@@ -1535,7 +1601,7 @@ def dispatch_source(layout, selected, imports, functions):
                 index += 1
             starts.append(index)
         code.append(f'static const uint32_t page_start[{len(starts)}] = {{')
-        code += [', '.join(f'{v}u' for v in starts[i:i + 16]) + ',' for i in range(0, len(starts), 16)]
+        code += _rows(starts, 16, lambda v: f'{v}u')
         code.append('};')
         code += ['gfn rt_lookup(uint32_t target) {',
                  f'    uint32_t page = target >> 12;',
@@ -1606,7 +1672,6 @@ class PeInstructions(dict):
         self._add(disassemble(image.path, 0, objdump))
 
     def _add(self, decoded):
-        import bisect
         for pc, insn in decoded.items():
             if pc in self.raw or not self.image.executable(pc):
                 continue
@@ -1688,7 +1753,6 @@ def pe_pointer_roots(image, insns):
     stored outside the code, immediates of an instruction, or table entries in
     the code (switch targets). A value that only appears as a memory
     displacement (`[4*eax + T]`, table base) is not one."""
-    import bisect
     starts = sorted(insns.raw)
     roots = set()
     for location, value in image.code_pointers():
@@ -1767,7 +1831,7 @@ def generate_pe(image, tag, objdump='objdump', log=print):
     for i, section in enumerate(code_sections):
         data = image.mapped[section['rva']:section['rva'] + section['size']]
         lines.append(f'static const uint8_t section_{i}[{len(data)}] = {{')
-        lines += [','.join(str(b) for b in data[j:j + 32]) + ',' for j in range(0, len(data), 32)]
+        lines += _rows(data, 32, str, sep=',')
         lines.append('};')
     lines.append('static const RtPeSection sections[] = {')
     lines += [f'{{{s["rva"]:#x}u, {s["size"]:#x}u, section_{i}}},' for i, s in enumerate(code_sections)]
@@ -1776,14 +1840,14 @@ def generate_pe(image, tag, objdump='objdump', log=print):
     lines.append(f'static const uint32_t relocations[{max(1, len(code_relocs))}] = {{')
     # Bit 31 : la valeur désigne .text (relocalisée vers la vue exécutable).
     flagged = [r | (0x80000000 if image.code_target(image.u32(r)) else 0) for r in code_relocs]
-    lines += [', '.join(f'{r:#x}u' for r in flagged[j:j + 12]) + ',' for j in range(0, len(flagged), 12)]
+    lines += _rows(flagged, 12, lambda r: f'{r:#x}u')
     lines += ['};' if code_relocs else '0};']
     ordered = sorted(compiled)
     lines.append(f'static const uint32_t function_rvas[{max(1, len(ordered))}] = {{')
-    lines += [', '.join(f'{a - base:#x}u' for a in ordered[j:j + 12]) + ',' for j in range(0, len(ordered), 12)]
+    lines += _rows(ordered, 12, lambda a: f'{a - base:#x}u')
     lines += ['};' if ordered else '0};']
     lines.append(f'static const gfn functions[{max(1, len(ordered))}] = {{')
-    lines += [', '.join(name(a) for a in ordered[j:j + 6]) + ',' for j in range(0, len(ordered), 6)]
+    lines += _rows(ordered, 6, name)
     lines += ['};' if ordered else '0};']
     from peprep import fnv1a64
     lines += [f'static const RtPeImage image = {{{json.dumps(image.name)}, {base:#x}u, {image.image_size:#x}u, '
@@ -1811,7 +1875,7 @@ def main():
     ap.add_argument('exports', nargs='+')
     args = ap.parse_args()
     try:
-        code = generate(json.loads(args.layout.read_text()), args.exports, args.objdump, args.allow_unimplemented_imports)
+        code = generate(load_layout(args.layout), args.exports, args.objdump, args.allow_unimplemented_imports)
     except Unsupported as exc:
         ap.exit(1, f'lift: {exc}\n')
     args.out.parent.mkdir(parents=True, exist_ok=True)

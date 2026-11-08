@@ -16,9 +16,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import json
-import lift
-from build_game import HOST_CFLAGS, HOST_LIBS   # single source of the host flags (with the Makefile)
+import lift  # noqa: E402
+import localconfig  # noqa: E402
+from build_game import HOST_CFLAGS, HOST_LIBS   # noqa: E402  single source of the host flags (with the Makefile)
 
 ROOT = Path(__file__).resolve().parent.parent
 EXPORTS = ['EncodeBinaryToString', 'DecodeBinaryFromString', 'V_UTF8ToUnicode', 'V_UnicodeToUTF8', 'KeyValuesSystem']
@@ -26,8 +26,12 @@ EXPORTS = ['EncodeBinaryToString', 'DecodeBinaryFromString', 'V_UTF8ToUnicode', 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('--input-dir', default='../work/portal2-linux/bin')
+    linux_root = localconfig.for_game('portal2').get('linux_root')
+    ap.add_argument('--input-dir', type=Path, help='libtier0.so and libvstdlib.so (default: <linux_root>/bin/linux32 '
+                    'of config/local.json, else ../work/portal2-linux/bin)',
+                    default=Path(linux_root) / 'bin/linux32' if linux_root else ROOT.parent / 'work/portal2-linux/bin')
     ap.add_argument('--opt', default='1')
+    ap.add_argument('--objdump', default='objdump')
     ap.add_argument('--config', action='append', help='name=space-separated clang options')
     ap.add_argument('--runs', type=int, default=5)
     ap.add_argument('--rounds', type=int, default=40)
@@ -39,7 +43,7 @@ def main():
         d = Path(args.input_dir)
         subprocess.run([sys.executable, str(ROOT / 'tools/elfprep.py'), '--out', str(prep),
                         f'{d / "libtier0.so"}@0x10000000', f'{d / "libvstdlib.so"}@0x11000000'], check=True)
-    layout = json.loads((prep / 'layout.json').read_text())
+    layout = lift.load_layout(prep / 'layout.json')
     # Même chemin que le jeu : génération répartie de tous les points d'entrée
     # connus des deux modules (méthodes virtuelles comprises).
     specs = list(EXPORTS)
@@ -47,7 +51,7 @@ def main():
         if module['init']:
             specs.append(f'{module["name"]}:init:dt')
         specs += [f'{module["name"]}:init:{i}' for i in range(len(module['init_array']))]
-    manifest = lift.generate_sharded(layout, specs, True, 'objdump', str(out / 'disasm'), str(out / 'gen'),
+    manifest = lift.generate_sharded(layout, specs, True, args.objdump, str(out / 'disasm'), str(out / 'gen'),
                                      8, log=lambda *_: None)
     sources = [str(out / 'gen/src' / name) for name in sorted(manifest['shards'])] + [str(out / 'gen/src/dispatch.c')]
     configs = [c.split('=', 1) for c in (args.config or ['base='])]

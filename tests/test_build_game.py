@@ -111,6 +111,24 @@ class LazyInstructionTests(unittest.TestCase):
 
 
 
+class LayoutLoadingTests(unittest.TestCase):
+    def test_old_relative_image_paths_resolve_next_to_the_layout(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            prep = Path(tmp).resolve() / 'prep'
+            prep.mkdir()
+            (prep / 'libfake.so').write_bytes(b'\x7fELF')
+            modules = [dict(name='libfake.so', image='build/game/prep/libfake.so'),       # pre-November 2025 layout
+                       dict(name='libgone.so', image='build/game/prep/libgone.so'),       # not beside the layout
+                       dict(name='libabs.so', image=str(prep / 'libabs.so'))]
+            (prep / 'layout.json').write_text(json.dumps(dict(modules=modules, imports=[])))
+            layout = lift.load_layout(prep / 'layout.json')
+        images = [m['image'] for m in layout['modules']]
+        self.assertEqual(images[0], str(prep / 'libfake.so'))
+        self.assertEqual(images[1], str(ROOT / 'build/game/prep/libgone.so'))
+        self.assertEqual(images[2], str(prep / 'libabs.so'))
+
+
 class SymbolScopeTests(unittest.TestCase):
     def test_dlopened_modules_prefer_own_copy_over_sibling(self):
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))

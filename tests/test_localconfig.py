@@ -99,5 +99,20 @@ class LocalConfigTests(unittest.TestCase):
         self.assertEqual(localconfig.migrate({'game': 'portal2', 'game_root': '/p2'}), {'game': 'portal2', 'game_root': '/p2'})
 
 
+class MakeWordsTests(unittest.TestCase):
+    """`localconfig.py --make`: what the Makefile reads in one $(shell)."""
+    def test_words_encode_spaces_and_skip_unset_keys(self):
+        import contextlib
+        import io
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'local.json'
+            path.write_text(json.dumps({'linux_root': '/Volumes/My Disk/depot', 'host_prefix': '/opt/bundle'}))
+            out = io.StringIO()
+            with mock.patch.object(localconfig, 'DEFAULT_PATH', path), \
+                    mock.patch.dict(os.environ, {'P2_HOST_PREFIX': ''}), contextlib.redirect_stdout(out):
+                localconfig.main(['--make', 'host_prefix', 'linux_root', 'steam_appid', '--game', 'portal2'])
+        self.assertEqual(out.getvalue().split(), ['host_prefix=/opt/bundle', 'linux_root=/Volumes/My%20Disk/depot'])
+
+
 if __name__ == '__main__':
     unittest.main()

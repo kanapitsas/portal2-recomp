@@ -226,11 +226,9 @@ def main():
                     m.put32(off, A + tls_symbol['value'])
                 continue
             symbolic = 16 in m.dyn or (m.dyn.get(30, 0) & 2)
+            local = sym is None or sym['bind'] == 0 or (sym['shndx'] != 0 and (symbolic or sym.get('visibility', 0) in (1, 2, 3)))
             if sym is None:   # relocation sans symbole (STN_UNDEF) : S = 0
                 S = 0
-            local = sym is None or sym['bind'] == 0 or (sym['shndx'] != 0 and (symbolic or sym.get('visibility', 0) in (1, 2, 3)))
-            if sym is None:
-                pass
             elif local:
                 S = sym['value'] if sym['shndx'] == 0xfff1 else m.base + sym['value']
             else:
@@ -243,7 +241,8 @@ def main():
                 m.put32(off, S)
             else:
                 raise SystemExit(f'{m.name}: relocation {typ} non gérée à {off:#x}')
-        img = os.path.join(a.out, m.name)
+        # Absolute: the tools read layout.json from any working directory.
+        img = os.path.abspath(os.path.join(a.out, m.name))
         with open(img, 'wb') as f:
             f.write(m.data)
 

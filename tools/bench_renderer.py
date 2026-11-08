@@ -41,9 +41,13 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import games  # noqa: E402
+import language  # noqa: E402
+import launch  # noqa: E402
 import localconfig  # noqa: E402
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = games.ROOT
+GAME = games.profile({'game': 'portal2'})   # Portal 2 only: its maps, load marker and folders
 DEFAULT_DYLIB = ROOT.parent / 'mtld3d/native/target/release/libd3d9metal.dylib'
 LOAD_MARKER = 'Redownloading all lightmaps'
 ERROR_PATTERN = re.compile(r'guest trap|host SIG|Failed to create D3D9')
@@ -234,9 +238,10 @@ def build_plan(args, config):
     for round_index in range(1, args.rounds + 1):
         for renderer in renderers:
             copy = user_dir.with_name(f'portal2-userdata-bench-{renderer}')
-            env = {'SteamAppId': str(config.get('steam_appid', 620)), 'P2_FAKE_FOCUS': '1',
-                   'SDL_AUDIODRIVER': 'dummy', 'P2_FRAME_TIMES': '<run>/frames.txt'}
-            if args.hidden: env['P2_HIDDEN_WINDOWS'] = '1'
+            # Only what this run sets (printed by --dry-run, kept in meta.json); the
+            # renderer is chosen below, never the config's Metal library.
+            env = launch.environment(config, GAME, base={}, hidden=args.hidden, metal=False)
+            env.update({'P2_FAKE_FOCUS': '1', 'SDL_AUDIODRIVER': 'dummy', 'P2_FRAME_TIMES': '<run>/frames.txt'})
             if renderer == 'd3d9':
                 env.update(P2_RENDERER='d3d9', P2_D3D9METAL=str(args.d3d9_dylib),
                            P2_D3D9_CACHE=str(copy / 'd3d9metal-cache'))
@@ -245,12 +250,11 @@ def build_plan(args, config):
             else:
                 env['P2_RENDERER'] = 'opengl'   # Direct3D 9 is the default when the library is found
                 if args.gpu_timing: env['P2_GPU_TIMING'] = '1'
-            game_args = ['-game', 'portal2', '-novid', '-windowed', '-w', str(width), '-h', str(height),
+            game_args = ['-game', GAME['mod'], '-novid', '-windowed', '-w', str(width), '-h', str(height),
                          '-condebug', *shlex.split(args.extra), '+map', args.map]
-            command = [str(Path(args.binary).resolve()), '--images', str(ROOT / 'build/game/prep'),
-                       '--game-dir', config.get('game_root', '<game_root>'),
-                       '--linux-root', config.get('linux_root', '<linux_root>'),
-                       '--user-dir', str(copy), '--', *game_args]
+            command = launch.command(args.binary, ROOT / GAME['build_dir'] / 'prep',
+                                     config.get('game_root', '<game_root>'), config.get('linux_root', '<linux_root>'),
+                                     copy, game_args)
             cold = args.cold and round_index == 1
             cache = copy / ('d3d9metal-cache' if renderer == 'd3d9' else 'update/glshaders.cfg')
             runs.append({'renderer': renderer, 'round': round_index, 'cold': cold, 'copy': str(copy),
@@ -501,7 +505,7 @@ def parse_args(argv=None):
                    'measurements; presentation differs, D3D9 not tried hidden)')
     p.add_argument('--gpu-timing', action='store_true', help='P2_GPU_TIMING=1 on GL, RUST_LOG=mtld3d::perf=info '
                    'on D3D9 (needs an MTLD3D_PERF=1 build); both slow the run')
-    p.add_argument('--binary', default=str(ROOT / 'build/portal2-native'))
+    p.add_argument('--binary', default=str(ROOT / GAME['binary']))
     p.add_argument('--d3d9-dylib', default=os.environ.get('P2_D3D9METAL') or str(DEFAULT_DYLIB))
     p.add_argument('--mtld3d-config', default='', help='appended to MTLD3D_CONFIG (e.g. shader.asyncCompile=false)')
     p.add_argument('--extra', default='', help='more game arguments, e.g. "+mat_forceaniso 1"')
@@ -531,12 +535,11 @@ def main(argv=None):
         report(out, settings, results)
         return 0
     config_path = Path(args.config)
-    config = localconfig.load(config_path)
+    config = localconfig.game_config(localconfig.load(config_path), GAME['name'])
     date = time.strftime('%Y%m%d-%H%M%S')
     out = Path(args.out) if args.out else ROOT / 'build/bench' / date
     runs = build_plan(args, config)
-    language_args = subprocess.run([sys.executable, str(ROOT / 'tools/language.py'), '--config', str(config_path),
-                                    '--', '-game', 'portal2'], capture_output=True, text=True, cwd=ROOT).stdout.split()
+    language_args = language.language_args(config, ['-game', GAME['mod']])
     if args.dry_run:
         describe(runs, args, out, language_args)
         return 0
