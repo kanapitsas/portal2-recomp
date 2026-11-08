@@ -772,6 +772,7 @@ RT_CHECK(d3d9_event_query_reached_after_present) {
 static void *gamma_vtbl[119], *gamma_chain_vtbl[10];
 static struct { unsigned library_calls, window_calls; void *window; uint16_t last[768]; } gamma_seen;
 static uint32_t gamma_windowed = 1;
+static void *gamma_window_ptr = &fake_window;
 static void gamma_set(Fake *self, uint32_t chain, uint32_t flags, const uint16_t *ramp) {
     (void)self; (void)chain; (void)flags; assert(ramp); ++gamma_seen.library_calls;
 }
@@ -780,11 +781,18 @@ static int32_t gamma_get_chain(Fake *self, uint32_t index, Fake **out) {
     (void)self; assert(index == 0); ++gamma_chain.refs; *out = &gamma_chain; return 0;
 }
 static int32_t gamma_params(Fake *self, D3d9HostParams *p) {
-    (void)self; memset(p, 0, sizeof(*p)); p->hDeviceWindow = &fake_window; p->Windowed = gamma_windowed; return 0;
+    (void)self; memset(p, 0, sizeof(*p)); p->hDeviceWindow = gamma_window_ptr; p->Windowed = gamma_windowed; return 0;
 }
 static int gamma_window(void *window, const uint16_t *ramp) {
     ++gamma_seen.window_calls; gamma_seen.window = window; memcpy(gamma_seen.last, ramp, sizeof(gamma_seen.last)); return 0;
 }
+static int gamma_reads;
+static int gamma_window_get(void *window, uint16_t *ramp) {   // écran étalonné : rampe d'origine non neutre
+    (void)window; ++gamma_reads;
+    for (unsigned i = 0; i < 768; ++i) ramp[i] = (uint16_t)((i & 255) * 250);
+    return 0;
+}
+static int other_window;
 RT_CHECK(d3d9_gamma_ramp_reaches_the_window_when_windowed) {
     fill(gamma_vtbl, 119); fill(gamma_chain_vtbl, 10);
     gamma_vtbl[1] = (void *)f_addref; gamma_vtbl[2] = (void *)f_release;
@@ -795,7 +803,8 @@ RT_CHECK(d3d9_gamma_ramp_reaches_the_window_when_windowed) {
     gamma_chain = (Fake){gamma_chain_vtbl, 1, 0, NULL, NULL};
     static Fake dev_object = {gamma_vtbl, 1, 0, NULL, NULL};
     int (*saved)(void *, const uint16_t *) = rt_d3d9_window_gamma;
-    rt_d3d9_window_gamma = gamma_window;
+    int (*saved_get)(void *, uint16_t *) = rt_d3d9_window_gamma_get;
+    rt_d3d9_window_gamma = gamma_window; rt_d3d9_window_gamma_get = gamma_window_get;
     CPU c; rt_cpu_reset(&c); c.esp = STACK;
     uint32_t dev = d3d9_proxy(&c, &dev_object, D3D9_IDirect3DDevice9), ramp = SCRATCH + 0x200;
     // Rampe neutre (mat_monitorgamma 2.2 par défaut) : l'écran n'est pas touché.
@@ -807,19 +816,30 @@ RT_CHECK(d3d9_gamma_ramp_reaches_the_window_when_windowed) {
     CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);
     assert(gamma_seen.library_calls == 2 && gamma_seen.window_calls == 1 && gamma_seen.window == &fake_window);
     assert(gamma_seen.last[300] == 0x8000 && gamma_seen.last[0] == 0x7fff);
-    // Retour à la rampe neutre : reporté aussi, pour rendre l'écran.
+    assert(gamma_reads == 1);   // rampe de l'écran lue avant de la remplacer
+    CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);
+    assert(gamma_seen.window_calls == 2 && gamma_reads == 1);   // lue une seule fois
+    // Retour à la rampe neutre : l'écran retrouve sa rampe d'origine (étalonnage).
     for (unsigned i = 0; i < 768; ++i) W16(ramp + 2 * i, (uint16_t)((i & 255) * 257));
     CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);
-    assert(gamma_seen.window_calls == 2 && gamma_seen.last[255] == 0xffff);
+    assert(gamma_seen.window_calls == 3 && gamma_seen.last[255] == 255 * 250);
     CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);   // déjà neutre : plus rien
-    assert(gamma_seen.window_calls == 2);
+    assert(gamma_seen.window_calls == 3);
     // Plein écran : la bibliothèque l'applique elle-même, pas de double rampe.
     gamma_windowed = 0;
     for (unsigned i = 0; i < 768; ++i) W16(ramp + 2 * i, (uint16_t)((i & 255) * 200));
     CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);
-    assert(gamma_seen.library_calls == 5 && gamma_seen.window_calls == 2);
+    assert(gamma_seen.library_calls == 6 && gamma_seen.window_calls == 3);
+    // Nouvelle fenêtre (appareil recréé) : son état part de zéro, sa rampe
+    // d'origine est relue, et la rampe neutre la lui rend.
+    gamma_windowed = 1; gamma_window_ptr = &other_window;
+    CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);
+    assert(gamma_seen.window_calls == 4 && gamma_seen.window == &other_window && gamma_reads == 2);
+    for (unsigned i = 0; i < 768; ++i) W16(ramp + 2 * i, (uint16_t)((i & 255) * 257));
+    CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);
+    assert(gamma_seen.window_calls == 5 && gamma_seen.last[255] == 255 * 250);
     assert(gamma_chain.refs == 1);   // chaîne d'échange rendue à chaque fois
-    gamma_windowed = 1; rt_d3d9_window_gamma = saved;
+    gamma_window_ptr = &fake_window; rt_d3d9_window_gamma = saved; rt_d3d9_window_gamma_get = saved_get;
     CALL0(dev, IUnknown, Release);
 }
 

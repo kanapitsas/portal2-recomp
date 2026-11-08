@@ -88,6 +88,7 @@ void d3d9_lock_ptr_out(CPU *c, uint32_t guest, void *bits, int ok);
 // Rampe gamma d'un appareil fenêtré, reportée sur sa fenêtre SDL (Mac :
 // SDL_SetWindowGammaRamp). Remplaçable par les tests.
 extern int (*rt_d3d9_window_gamma)(void *window, const uint16_t *ramp);
+extern int (*rt_d3d9_window_gamma_get)(void *window, uint16_t *ramp);
 void *d3d9_locked_in(CPU *c, uint32_t guest, D3d9HostLocked *host, uint32_t guest_size);
 void d3d9_lockrect_out(CPU *c, uint32_t guest, const D3d9HostLocked *host, int ok);
 void d3d9_lockbox_out(CPU *c, uint32_t guest, const D3d9HostLocked *host, int ok);

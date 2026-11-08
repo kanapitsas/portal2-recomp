@@ -1015,11 +1015,15 @@ void d3d9_manual_IDirect3DQuery9_GetData(CPU *c, void *self, uint32_t a) {
 // faisait rien dans Half-Life 2. Pour un appareil fenêtré, la rampe est
 // reportée sur sa fenêtre SDL, comme le fait déjà Portal 2 par
 // SDL_SetWindowGammaRamp (SDL la retire quand la fenêtre perd le focus et la
-// remet ensuite). La rampe neutre (réglage par défaut) ne touche pas l'écran,
-// sauf pour défaire une rampe reportée auparavant.
+// remet ensuite). La rampe neutre (réglage par défaut) ne touche pas l'écran ;
+// revenir à la rampe neutre après un réglage remet la rampe que l'écran avait
+// avant (étalonnage), lue une fois avant le premier réglage.
 int (*rt_d3d9_window_gamma)(void *window, const uint16_t *ramp) = rt_sdl_window_gamma;
+int (*rt_d3d9_window_gamma_get)(void *window, uint16_t *ramp) = rt_sdl_window_gamma_get;
 enum { D3D9_SLOT_DEVICE_GET_SWAP_CHAIN = 14, D3D9_SLOT_SWAP_CHAIN_GET_PARAMS = 9, GAMMA_ENTRIES = 768 };
-static int gamma_on_window;   // une rampe non neutre est en place sur une fenêtre
+static struct {                       // fenêtre portant une rampe reportée (Source n'en a qu'une)
+    void *window; int applied, has_original; uint16_t original[GAMMA_ENTRIES];
+} gamma_state;
 static int gamma_identity(const uint16_t *ramp) {
     for (unsigned i = 0; i < GAMMA_ENTRIES; ++i) if (ramp[i] >> 8 != (i & 255)) return 0;
     return 1;
@@ -1040,9 +1044,22 @@ void d3d9_manual_IDirect3DDevice9_SetGammaRamp(CPU *c, void *self, uint32_t a) {
         self, chain, flags, ramp);
     if (!ramp || chain || !rt_d3d9_window_gamma) return;
     int identity = gamma_identity(ramp);
-    if (identity && !gamma_on_window) return;
+    if (identity && !gamma_state.applied) return;
     void *window = windowed_device_window(self);
-    if (window && rt_d3d9_window_gamma(window, ramp) == 0) gamma_on_window = !identity;
+    if (!window) return;
+    if (gamma_state.window != window) {   // autre fenêtre : la précédente a disparu avec son appareil
+        memset(&gamma_state, 0, sizeof(gamma_state));
+        gamma_state.window = window;
+        if (identity) return;
+    }
+    if (identity) {
+        if (rt_d3d9_window_gamma(window, gamma_state.has_original ? gamma_state.original : ramp) == 0)
+            gamma_state.applied = 0;
+        return;
+    }
+    if (!gamma_state.has_original && rt_d3d9_window_gamma_get)
+        gamma_state.has_original = rt_d3d9_window_gamma_get(window, gamma_state.original) == 0;
+    if (rt_d3d9_window_gamma(window, ramp) == 0) gamma_state.applied = 1;
 }
 
 // Une requête libérée puis réallouée à la même adresse peut retrouver une
