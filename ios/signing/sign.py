@@ -8,6 +8,7 @@ profil.
 
     python3 ios/signing/sign.py build/ios/device/Portal2.app
 """
+import hashlib
 import plistlib
 import subprocess
 import sys
@@ -38,13 +39,24 @@ def find_profile(bundle_id):
     return best
 
 
-def identity(team):
+def pick_identity(find_identity_output, profile_certificates):
+    """Empreinte de la première identité de signature dont le certificat est
+    dans le profil. Avec plusieurs comptes Apple dans Xcode (équipe gratuite
+    et équipe payante), la première identité « Apple Development » venue
+    pouvait être celle d'une autre équipe : l'iPhone refusait alors l'app."""
+    allowed = {hashlib.sha1(der).hexdigest().upper() for der in profile_certificates}
+    for line in find_identity_output.splitlines():
+        fields = line.split()
+        if len(fields) > 1 and fields[1].upper() in allowed:
+            return fields[1]   # empreinte : sans ambiguïté s'il y a plusieurs certificats
+    sys.exit('aucune identité du trousseau ne correspond aux certificats du profil '
+             '(Xcode > Settings > Accounts > Manage Certificates)')
+
+
+def identity(profile):
     found = subprocess.run(['security', 'find-identity', '-v', '-p', 'codesigning'],
                            capture_output=True, text=True, check=True).stdout
-    for line in found.splitlines():
-        if '"Apple Development' in line:
-            return line.split()[1]   # empreinte : sans ambiguïté s'il y a plusieurs certificats
-    sys.exit(f'aucune identité Apple Development pour l\'équipe {team}')
+    return pick_identity(found, profile.get('DeveloperCertificates', []))
 
 
 def main():
@@ -55,7 +67,7 @@ def main():
     (app / 'embedded.mobileprovision').write_bytes(path.read_bytes())
     with tempfile.NamedTemporaryFile(suffix='.plist', delete=False) as f:
         plistlib.dump(data['Entitlements'], f)
-    subprocess.run(['codesign', '-f', '-s', identity(team), '--entitlements', f.name, '--generate-entitlement-der',
+    subprocess.run(['codesign', '-f', '-s', identity(data), '--entitlements', f.name, '--generate-entitlement-der',
                     str(app)], check=True)
     print(f'{app} signé ({bundle_id}, équipe {team}, profil expirant le {data["ExpirationDate"]:%Y-%m-%d})')
 
