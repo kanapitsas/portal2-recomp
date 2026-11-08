@@ -155,6 +155,25 @@ for id in "${GAME_IDS[@]}"; do
     o="$(config_get "$id" user_dir)"
     [ -n "$o" ] && BUILD_OTHERS+=("${o/#\~/$H}")
 done
+# Run from another checkout, this config is not the installer's: its own
+# config can point at a game, a depot or saves inside its build folder.
+if [ -f "$BUILD_DIR/config/local.json" ] && [ "$REPO" != "$BUILD_DIR" ]; then
+    while IFS= read -r o; do
+        [ -n "$o" ] && BUILD_OTHERS+=("${o/#\~/$H}")
+    done < <(python3 - "$BUILD_DIR/config/local.json" <<'PY'
+import json, sys
+try:
+    config = json.load(open(sys.argv[1]))
+except (OSError, ValueError):
+    sys.exit(0)
+for section in [config, *(config.get('games') or {}).values()]:
+    if isinstance(section, dict):
+        for key in ('game_root', 'linux_root', 'user_dir'):
+            if isinstance(section.get(key), str):
+                print(section[key])
+PY
+)
+fi
 if [ -e "$BUILD_DIR" ] && [ "$REPO" != "$BUILD_DIR" ] &&
    ! safe_user_dir "$BUILD_DIR" "${PROTECTED[@]}" ${BUILD_OTHERS[@]+"${BUILD_OTHERS[@]}"}; then
     echo "Not offering to trash $BUILD_DIR: it overlaps a game, a depot or saves." >&2

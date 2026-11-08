@@ -183,6 +183,16 @@ class UninstallTests(unittest.TestCase):
         self.assertTrue(depot.is_dir())
         self.assertFalse(self.app.exists())
 
+    def test_installer_folder_holding_its_own_configs_data_is_never_offered(self):
+        # Run from a dev checkout: the installer's own config puts HL2's saves in its build folder.
+        build = self.home / 'Library/Application Support/Portal 2 Natif Build'
+        saves = build / 'my-saves'
+        saves.mkdir(parents=True)
+        (build / 'config').mkdir()
+        (build / 'config/local.json').write_text(json.dumps({'games': {'hl2': {'user_dir': str(saves)}}}))
+        self.run_script('n\nn\ny\n')
+        self.assertTrue(saves.is_dir())
+
     def test_nothing_installed(self):
         self.run_script('y\ny\n')
         out = self.run_script('y\ny\n')
