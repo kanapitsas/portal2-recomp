@@ -55,7 +55,6 @@ void rt_ldmxcsr(RT_NOESCAPE CPU *c, uint32_t value);
 void rt_cpuid(RT_NOESCAPE CPU *c);
 unsigned rt_guest_cpu_count(void);   // processeurs logiques annoncés (cpu.c)
 uint64_t rt_rdtsc(void);
-uint32_t rt_rand32(void);
 
 #define GPTR(a) ((void *)(M + (uint32_t)(a)))
 
@@ -394,6 +393,57 @@ CPU *rt_shim_cpu(void);   // CPU du shim en cours sur ce thread, NULL hors shim
 void *rt_span(CPU *c, uint32_t address, uint64_t length);
 void *rt_write_span(CPU *c, uint32_t address, uint64_t length);
 uint32_t rt_string_length(CPU *c, uint32_t address);
+
+// ---- Helpers partagés par les shims et les ponts (shims.c, bridge.c) ----
+// Arguments cdecl : i-ème mot 32 bits au-dessus de l'adresse de retour ;
+// les variantes flottantes prennent un décalage en octets (listes mixtes
+// float/double, math.c).
+static inline uint32_t rt_arg32(const CPU *c, unsigned index) { return R32(c->esp + 4 + 4 * index); }
+static inline uint64_t rt_arg64(const CPU *c, unsigned index) {
+    return (uint64_t)R32(c->esp + 4 + 4 * index) | (uint64_t)R32(c->esp + 8 + 4 * index) << 32;
+}
+static inline float  rt_arg_f32(const CPU *c, unsigned byte_offset) { return RF(c->esp + 4 + byte_offset); }
+static inline double rt_arg_f64(const CPU *c, unsigned byte_offset) { return RD(c->esp + 4 + byte_offset); }
+// Chaîne C invitée validée (NUL compris) : piège sur 0 ou page illisible ;
+// la variante _or_null rend NULL pour l'adresse 0.
+const char *rt_guest_cstr(CPU *c, uint32_t address);
+const char *rt_guest_cstr_or_null(CPU *c, uint32_t address);
+// Copie d'une chaîne hôte sur le tas invité (rt_alloc) : 0 si text est NULL
+// ou si le tas est plein ; la variante _or_trap piège si le tas est plein.
+uint32_t rt_guest_strdup(const char *text);
+uint32_t rt_guest_strdup_or_trap(CPU *c, const char *text);
+// Chaîne constante internée : une copie invitée stable par contenu distinct,
+// jamais libérée (SDL_GetError, noms GL, chaînes Steam...). Piège si le tas
+// est plein. rt_is_interned : l'adresse vient de cette table (SDL_free la
+// laisse en place).
+uint32_t rt_intern_string(CPU *c, const char *text);
+int rt_is_interned(uint32_t address);
+// Handle typé obligatoire : 0 rend NULL, un handle inconnu ou d'un autre type
+// piège avec `what` dans le message.
+void *rt_handle_require(CPU *c, uint32_t handle, uint32_t kind, const char *what);
+// Adresse invitée d'un pointeur hôte qui doit tomber dans la mémoire invitée
+// (pointeurs rendus par GL/D3D9 vers des tampons de l'invité) ; 0 reste 0.
+uint32_t rt_guest_address(CPU *c, const void *host, const char *why);
+// Retour de structure i386 : eax = pointeur caché, que l'appelé dépile
+// (`ret 4`) ; rt_return ne dépile que l'adresse de retour, remontée d'un mot.
+static inline void rt_return_sret(CPU *c, uint32_t sret) {
+    uint32_t return_address = R32(c->esp);
+    W32(c->esp + 4, return_address);
+    c->esp += 4;
+    c->eax = sret;
+}
+// rt_trap avec message formaté (tampon par thread).
+__attribute__((noreturn, format(printf, 2, 3))) void rt_trapf(CPU *c, const char *format, ...);
+// Dossier de l'exécutable hôte (realpath, sans barre finale), mémorisé ; NULL en cas d'échec.
+const char *rt_executable_dir(void);
+// Variable d'environnement booléenne : définie et différente de "0".
+int rt_env_flag(const char *name);
+// Même chose, mémorisée par site d'appel (chemins chauds).
+#define RT_ENV_FLAG(name) ({ static int rt_env_cached_ = -1; \
+    if (__builtin_expect(rt_env_cached_ < 0, 0)) rt_env_cached_ = rt_env_flag(name); rt_env_cached_; })
+// Appel hôte bloquant : verrou invité relâché, errno conservé.
+#define RT_BLOCKING(call) ({ unsigned rt_saved_ = rt_guest_suspend(); __typeof__(call) rt_result_ = (call); \
+    int rt_errno_ = errno; rt_guest_resume(rt_saved_); errno = rt_errno_; rt_result_; })
 // strnlen invité : longueur sans le NUL, au plus `limit` ; faute à la première
 // page illisible rencontrée avant le NUL (vérification page par page).
 uint32_t rt_bounded_strnlen(CPU *c, uint32_t address, uint32_t limit);
@@ -454,7 +504,6 @@ void rt_guest_enter(void);
 void rt_guest_leave(void);
 unsigned rt_guest_suspend(void);
 void rt_guest_resume(unsigned saved);
-void rt_guest_poll(void);
 int rt_thread_shim(CPU *c, const char *name);
 void rt_thread_destructors(CPU *c);
 void rt_threads_destroy(void);

@@ -1,6 +1,7 @@
 #include "rt.h"
-#include <stdlib.h>
+#include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 typedef struct { uint32_t function, arg, dso; } ExitHandler;
@@ -70,6 +71,32 @@ uint32_t rt_string_length(CPU *c, uint32_t address) {
         pos += chunk;
     }
     rt_trap(c, c->eip, "unterminated guest string");
+}
+const char *rt_guest_cstr(CPU *c, uint32_t address) { rt_string_length(c, address); return GPTR(address); }
+const char *rt_guest_cstr_or_null(CPU *c, uint32_t address) { return address ? rt_guest_cstr(c, address) : NULL; }
+uint32_t rt_guest_strdup(const char *text) {
+    if (!text) return 0;
+    size_t length = strlen(text) + 1;
+    uint32_t address = length <= UINT32_MAX ? rt_alloc((uint32_t)length) : 0;
+    if (address) memcpy(GPTR(address), text, length);
+    return address;
+}
+uint32_t rt_guest_strdup_or_trap(CPU *c, const char *text) {
+    uint32_t address = rt_guest_strdup(text);
+    if (text && !address) rt_trap(c, c->eip, "guest string allocation failed");
+    return address;
+}
+__attribute__((noreturn, format(printf, 2, 3))) void rt_trapf(CPU *c, const char *format, ...) {
+    static _Thread_local char message[512];
+    va_list list;
+    va_start(list, format);
+    vsnprintf(message, sizeof(message), format, list);
+    va_end(list);
+    rt_trap(c, c->eip, message);
+}
+int rt_env_flag(const char *name) {
+    const char *value = getenv(name);
+    return value != NULL && strcmp(value, "0") != 0;
 }
 // strcmp sans lire les deux chaînes en entier : morceaux bornés par la fin de
 // page de chacune, comparés jusqu'au premier écart ou NUL. Résultat de
