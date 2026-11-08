@@ -42,14 +42,24 @@ struct Game: Identifiable, Equatable {
     func isGameFolder(_ url: URL) -> Bool {
         FileManager.default.fileExists(atPath: url.appendingPathComponent(markerFile).path)
     }
+    func dataIssue(_ url: URL) -> String? {
+        guard id == "portal2" else { return nil }
+        let relative = "portal2_dlc2/scripts/editoritems.txt"
+        let file = url.appendingPathComponent(relative)
+        let info = try? file.resolvingSymlinksInPath().resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+        guard info?.isRegularFile == true, (info?.fileSize ?? 0) > 0,
+              FileManager.default.isReadableFile(atPath: file.path), isDir(url.appendingPathComponent("platform")) else {
+            return "Incomplete game data: check \(relative) (missing, unreadable or empty) and the platform folder. Restore the files with Steam, choose a complete game folder, or download the game data below:"
+        }
+        return nil
+    }
     func isLinuxDepot(_ url: URL) -> Bool {
         linuxFiles.allSatisfy { FileManager.default.fileExists(atPath: url.appendingPathComponent($0).path) }
     }
     func findGame() -> URL? {
         let installed = steamSupport.appendingPathComponent("steamapps/common/\(installFolder)")
-        if isGameFolder(installed) { return installed }
-        if let depot = findDepot(appID, dataDepot), isGameFolder(depot) { return depot }
-        return nil
+        let candidates = [installed, findDepot(appID, dataDepot)].compactMap { $0 }.filter(isGameFolder)
+        return candidates.first(where: { dataIssue($0) == nil }) ?? candidates.first
     }
     func findLinux() -> URL? {
         if let depot = findDepot(appID, linuxDepot), isLinuxDepot(depot) { return depot }
@@ -117,7 +127,8 @@ struct GameState: Equatable {
     var selected = false
     var userChose = false      // the user ticked or unticked it: detection no longer changes it
     var built = false
-    var ready: Bool { game != nil && linux != nil }
+    var dataIssue: String?
+    var ready: Bool { game != nil && linux != nil && dataIssue == nil }
 }
 
 @MainActor
@@ -151,6 +162,7 @@ final class Installer: ObservableObject {
     /// A game becomes ticked when it is found, unless the user unticked it.
     private func tickIfReady(_ game: Game) {
         guard var s = states[game.id] else { return }
+        s.dataIssue = s.game.flatMap { game.dataIssue($0) }
         if s.ready && !s.userChose { s.selected = true }
         if !s.ready { s.selected = false }
         states[game.id] = s
@@ -164,7 +176,7 @@ final class Installer: ObservableObject {
                 self.tools = t
                 for (game, g, l) in found {
                     let s = self.state(game)
-                    if s.game == nil || !game.isGameFolder(s.game!) { self.states[game.id]?.game = g }
+                    if s.game == nil || !game.isGameFolder(s.game!) || game.dataIssue(s.game!) != nil { self.states[game.id]?.game = g }
                     if s.linux == nil || !game.isLinuxDepot(s.linux!) { self.states[game.id]?.linux = l }
                     self.tickIfReady(game)
                 }
@@ -463,6 +475,10 @@ struct GameRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 if let url = s.game {
                     PathLine(url: url, missing: "")
+                    if let issue = s.dataIssue {
+                        Text(issue).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                        Command(text: "download_depot \(game.appID) \(game.dataDepot)", copy: model.copy)
+                    }
                 } else {
                     Text("Game data not found: install \(game.title) with Steam (the current version), choose its folder, or paste this in the Steam console and wait for “Depot download complete”:")
                         .fixedSize(horizontal: false, vertical: true)
@@ -477,7 +493,7 @@ struct GameRow: View {
                 }
                 HStack {
                     if !s.ready { Button("Open Steam console") { model.openSteamConsole() } }
-                    if s.game == nil {
+                    if s.game == nil || s.dataIssue != nil {
                         Button("Choose game folder…") {
                             model.choose("Choose the \(game.title) folder (it contains \(game.marker))", expected: "the \(game.marker) folder",
                                          valid: game.isGameFolder) { model.setGame(game, $0) }
@@ -618,6 +634,9 @@ func snapshot(to path: String, state: String) {
                                         linux: state == "missing" ? nil : URL(fileURLWithPath: "/depot_224"), selected: state != "missing")
     }
     switch state {
+    case "incomplete":
+        model.states["portal2"]?.dataIssue = "Incomplete game data: portal2_dlc2/scripts/editoritems.txt is missing, unreadable or empty. Restore the files with Steam, choose a complete game folder, or download the game data below:"
+        model.states["portal2"]?.selected = false
     case "building": model.phase = .installing
         model.step = "Recompiling Portal 2 (about 10 minutes the first time, seconds afterwards)"; model.progress = 0.25
         model.showLog = true; model.log = ["==> Preparing the Linux modules of Portal 2", "[lift] engine.so: 41 233 functions", "[cc] 312/1024"]
@@ -660,7 +679,9 @@ enum Main {
             print("command line tools:", hasCommandLineTools())
             for game in allGames {
                 let g = game.findGame(), l = game.findLinux()
-                print("\(game.id): game \(g?.path ?? "-"), linux \(l?.path ?? "-")\(g != nil && l != nil ? " (ticked)" : "")")
+                let issue = g.flatMap { game.dataIssue($0) }
+                print("\(game.id): game \(g?.path ?? "-"), linux \(l?.path ?? "-")\(g != nil && l != nil && issue == nil ? " (ticked)" : "")")
+                if let issue { print(issue) }
             }
             return
         }

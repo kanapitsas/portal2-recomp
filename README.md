@@ -245,6 +245,15 @@ Details, manual setup and measurements: [docs/hl2.md](docs/hl2.md).
 
 ## Troubleshooting
 
+- **"Portal 2 game data is incomplete"**: the game needs
+  `portal2_dlc2/scripts/editoritems.txt` even when you only play the campaign.
+  The installer checks for a readable, nonempty file before building, and the
+  app checks again before launching. Restore it in the game folder named by
+  the error, or fetch the complete data with `download_depot 620 621` and
+  select `depot_621` in the installer. Automatic detection prefers a complete
+  copy over an incomplete Steam folder. An empty user override can also mask
+  the original; the launch error names the effective file. This check detects
+  missing or empty data, not every possible malformed or modded file.
 - **"Steam is not running"**: the engine exits without a logged-in Steam
   client. Open Steam first (the app tries to start it).
 - **"Failed to create D3D9!"**: `-vulkan` was passed but `libd3d9metal` is

@@ -42,10 +42,22 @@ LAUNCHER = '''#!/bin/bash
 # Lanceur généré par tools/make_app.py : le modifier là-bas.
 LOG="$HOME/Library/Logs/{log_name}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-alert() {{ /usr/bin/osascript -e "display alert \\"{name}\\" message \\"$1\\" as critical" >/dev/null 2>&1; }}
+alert() {{
+    /usr/bin/osascript - "$1" >/dev/null 2>&1 <<'APPLESCRIPT'
+on run argv
+    display alert "{name}" message (item 1 of argv) as critical
+end run
+APPLESCRIPT
+}}
 GAME_DIR={game_dir}   # quoted by shlex: never re-parsed by the shell
 if [ ! -x "$HERE/{executable}" ]; then alert "Exécutable introuvable dans l'app. Relancer tools/make_app.py."; exit 1; fi
 if [ ! -d "$GAME_DIR" ]; then alert "Données du jeu introuvables (disque externe débranché ?) : $GAME_DIR"; exit 1; fi
+mkdir -p "$(dirname "$LOG")" {user_dir}
+# Check the effective game data (including user overrides) before starting Steam.
+if ! "$HERE/{executable}" --check-game-data --game-dir {game_dir} --linux-root {linux_root} --user-dir {user_dir} >"$LOG" 2>&1; then
+    alert "$(cat "$LOG")"
+    exit 1
+fi
 # L'API Steam a besoin du client Steam ouvert et connecté.
 if ! /usr/bin/pgrep -qx steam_osx; then
     /usr/bin/open -ga Steam
@@ -58,7 +70,6 @@ export SteamAppId={appid} SteamGameId={appid}
 export P2_STEAM_API_DYLIB="$HERE/../Frameworks/libsteam_api.dylib"
 # Configuration Fontconfig embarquée (sinon cherchée dans le préfixe de compilation).
 [ -d "$HERE/../Resources/fonts" ] && export FONTCONFIG_PATH="$HERE/../Resources/fonts"
-mkdir -p "$(dirname "$LOG")" {user_dir}
 # Langue : P2_LANGUAGE, "language" de config/local.json, Steam, système (tools/language.py).
 # Un -language passé au lanceur l'emporte ; en cas d'échec, le jeu reste en anglais.
 LANGUAGE_ARGS=$(/usr/bin/python3 "$HERE/../Resources/language.py" --config "$HERE/../Resources/local.json" -- {game_args} "$@" 2>/dev/null)

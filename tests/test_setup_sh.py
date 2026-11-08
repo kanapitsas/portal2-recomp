@@ -70,6 +70,9 @@ class GameDetectionTests(unittest.TestCase):
     def install_portal2(self, depot=True):
         game = self.steam / 'steamapps/common/Portal 2'
         self.touch(game / 'portal2/pak01_dir.vpk', game / 'platform/x')
+        item = game / 'portal2_dlc2/scripts/editoritems.txt'
+        self.touch(item)
+        item.write_text('"ItemData" {}')
         if depot:
             linux = self.steam / 'steamapps/content/app_620/depot_661'
             self.touch(linux / 'bin/linux32/engine.so', linux / 'portal2/bin/linux32/server.so')
@@ -99,6 +102,40 @@ class GameDetectionTests(unittest.TestCase):
     def test_portal2_alone_stays_the_default(self):
         self.install_portal2()
         self.assert_builds(self.detect(), 'portal2')
+
+    def test_incomplete_portal2_data_is_reported_before_building(self):
+        game = self.install_portal2()
+        item = game / 'portal2_dlc2/scripts/editoritems.txt'
+        for contents in (None, ''):
+            if contents is None:
+                item.unlink()
+            else:
+                item.write_text(contents)
+            result = self.detect('--game', 'portal2')
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(str(item), result.stderr)
+            self.assertIn('download_depot 620 621', result.stderr)
+
+    def test_complete_depot_wins_over_incomplete_config_and_steam_folder(self):
+        game = self.install_portal2()
+        depot = self.steam / 'steamapps/content/app_620/depot_621'
+        shutil.copytree(game, depot)
+        (game / 'portal2_dlc2/scripts/editoritems.txt').unlink()
+        result = self.detect(config={'game_root': str(game)})
+        self.assert_builds(result, 'portal2')
+        self.assertIn(f'game data:      {depot}', result.stdout)
+        # An explicit user selection is diagnosed, not silently replaced.
+        result = self.detect('--game', 'portal2', str(game))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('incomplete', result.stderr)
+
+    def test_incomplete_portal2_does_not_block_hl2(self):
+        game = self.install_portal2()
+        (game / 'portal2_dlc2/scripts/editoritems.txt').unlink()
+        self.install_hl2()
+        result = self.detect()
+        self.assert_builds(result, 'hl2')
+        self.assertIn('Portal 2 skipped: incomplete game data', result.stderr)
 
     def test_every_installed_game_is_built(self):
         self.install_portal2()

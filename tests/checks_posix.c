@@ -3,6 +3,7 @@
 #include "checks.h"
 #include <ctype.h>
 #include "posix.h"
+#include "game_data.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <pwd.h>
@@ -110,6 +111,32 @@ RT_CHECK(posix_errno_table_is_linux) {
     assert(rt_linux_errno(EADDRINUSE) == 98 && rt_linux_errno(ECONNRESET) == 104);
     assert(rt_linux_errno(ENOENT) == 2 && rt_linux_errno(EXDEV) == 18);
     assert(rt_darwin_errno(115) == EINPROGRESS && rt_darwin_errno(11) == EAGAIN && rt_darwin_errno(4095) == 0);
+}
+
+RT_CHECK(portal2_data_preflight_uses_effective_file) {
+    setup();
+    FILE *errors = tmpfile(); assert(errors);
+    assert(rt_validate_game_data("portal2_linux", game, errors) == -1);
+    assert(rt_validate_game_data("hl2_linux", game, errors) == 0);
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s/portal2_dlc2", game); assert(!mkdir(path, 0755));
+    snprintf(path, sizeof(path), "%s/portal2_dlc2/scripts", game); assert(!mkdir(path, 0755));
+    put(game, "portal2_dlc2/scripts/editoritems.txt", "ItemData {}");
+    assert(!rt_paths_init(game, depot, user));  // invalidate the previous missing-path cache
+    assert(rt_validate_game_data("portal2_linux", game, errors) == 0);
+    // An empty user override masks the good original and must also be caught.
+    snprintf(path, sizeof(path), "%s/portal2_dlc2", user); assert(!mkdir(path, 0755));
+    snprintf(path, sizeof(path), "%s/portal2_dlc2/scripts", user); assert(!mkdir(path, 0755));
+    put(user, "portal2_dlc2/scripts/editoritems.txt", "");
+    assert(!rt_paths_init(game, depot, user));
+    assert(rt_validate_game_data("portal2_linux", game, errors) == -1);
+    put(user, "portal2_dlc2/scripts/editoritems.txt", "ItemData {}");
+    assert(rt_validate_game_data("portal2_linux", game, errors) == 0);
+    rewind(errors);
+    char message[2048]; size_t n = fread(message, 1, sizeof(message)-1, errors); message[n] = 0;
+    assert(strstr(message, "portal2_dlc2/scripts/editoritems.txt") && strstr(message, "download_depot 620 621"));
+    fclose(errors);
+    cleanup();
 }
 
 // getcwd comme glibc : tampon de taille 0 → EINVAL, trop petit → ERANGE,

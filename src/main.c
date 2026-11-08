@@ -1,4 +1,5 @@
 #include "modules.h"
+#include "game_data.h"
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,21 +46,24 @@ int main(int argc, char **argv) {
     pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
     setvbuf(stdout, NULL, _IOLBF, 0);   // journal lisible même si le processus meurt
     const char *images = NULL, *game = NULL, *linux = NULL, *user = NULL;
-    int first = 1;
+    int first = 1, check_data = 0;
     while (first < argc) {
-        if (!strcmp(argv[first], "--images") && first + 1 < argc) { images = argv[first + 1]; first += 2; }
+        if (!strcmp(argv[first], "--check-game-data")) { check_data = 1; ++first; }
+        else if (!strcmp(argv[first], "--images") && first + 1 < argc) { images = argv[first + 1]; first += 2; }
         else if (!strcmp(argv[first], "--game-dir") && first + 1 < argc) { game = argv[first + 1]; first += 2; }
         else if (!strcmp(argv[first], "--linux-root") && first + 1 < argc) { linux = argv[first + 1]; first += 2; }
         else if (!strcmp(argv[first], "--user-dir") && first + 1 < argc) { user = argv[first + 1]; first += 2; }
         else if (!strcmp(argv[first], "--")) { ++first; break; }
         else break;
     }
-    if (!images || !game) { fprintf(stderr, "usage: %s --images /absolute/prep --game-dir /path/to/Portal2 -- [game arguments]\n", argv[0]); return 2; }
+    if ((!images && !check_data) || !game) { fprintf(stderr, "usage: %s [--check-game-data | --images /absolute/prep] --game-dir /path/to/game -- [game arguments]\n", argv[0]); return 2; }
+    rt_paths_set_program(RT_GAME_PROGRAM);
+    if (linux && user && rt_paths_init(game, linux, user)) { perror("game paths"); return 2; }
+    if (rt_validate_game_data(RT_GAME_PROGRAM, game, stderr)) return 2;
+    if (check_data) return 0;
     if (rt_init() || rt_load_images(images) || rt_map(0x70000000, 0x800000)) {
         fputs("native runtime initialization failed\n", stderr); return 2;
     }
-    rt_paths_set_program(RT_GAME_PROGRAM);
-    if (linux && user && rt_paths_init(game, linux, user)) { perror("game paths"); rt_destroy(); return 2; }
     if (chdir(game)) { perror(game); rt_destroy(); return 2; }
     CPU cpu; rt_cpu_reset(&cpu); cpu.esp = 0x70800000;
     int renderer = wants_d3d9(first, argc, argv);

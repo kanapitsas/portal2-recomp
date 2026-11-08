@@ -156,15 +156,23 @@ if [ -z "$GAME_OPT" ] && [ -n "$GIVEN_GAME" ]; then
     if [ -d "$GIVEN_GAME/hl2_complete" ]; then GAME_OPT=hl2; else GAME_OPT=portal2; fi
 fi
 
+portal2_data_ready() {
+    local item="$1/portal2_dlc2/scripts/editoritems.txt"
+    [ -f "$1/portal2/pak01_dir.vpk" ] && [ -d "$1/platform" ] && [ -f "$item" ] && [ -r "$item" ] && [ -s "$item" ]
+}
+
 locate() {  # game id [game folder [Linux folder]] -> FOUND_GAME FOUND_LINUX (empty when not found)
-    local c
+    local c incomplete=""
     FOUND_GAME="${2:-}"; FOUND_LINUX="${3:-}"
     if [ "$1" = portal2 ]; then
         if [ -z "$FOUND_GAME" ]; then
             for c in "$(config_get portal2 game_root)" "$STEAM_SUPPORT/steamapps/common/Portal 2" "$(find_depot 620 621)"; do
                 # pak01_dir.vpk, not just portal2/: Steam can leave a nearly empty Portal 2 folder.
-                [ -n "$c" ] && [ -f "$c/portal2/pak01_dir.vpk" ] && { FOUND_GAME="$c"; break; }
+                [ -n "$c" ] || continue
+                if portal2_data_ready "$c"; then FOUND_GAME="$c"; break; fi
+                [ -n "$incomplete" ] || { [ ! -f "$c/portal2/pak01_dir.vpk" ] || incomplete="$c"; }
             done
+            [ -n "$FOUND_GAME" ] || FOUND_GAME="$incomplete"  # keep the path for an actionable error
         fi
         if [ -z "$FOUND_LINUX" ]; then
             for c in "$(config_get portal2 linux_root)" "$(find_depot 620 661)"; do
@@ -196,6 +204,10 @@ check_game() {  # game id -> dies unless FOUND_GAME and FOUND_LINUX are that gam
   open steam://open/console, type: download_depot 620 621   (12.6 GB), then re-run."
         [ -f "$FOUND_GAME/portal2/pak01_dir.vpk" ] && [ -d "$FOUND_GAME/platform" ] \
             || die "$FOUND_GAME does not look like Portal 2 (no portal2/pak01_dir.vpk or platform/)"
+        portal2_data_ready "$FOUND_GAME" || die "Portal 2 game data is incomplete: $FOUND_GAME/portal2_dlc2/scripts/editoritems.txt is missing, unreadable or empty.
+  Restore it from your Steam copy, or download the complete game data:
+  open steam://open/console, type: download_depot 620 621, wait for
+  'Depot download complete', then choose depot_621 as the game folder."
         for f in mssmp3.asi mssvoice.asi binkawin.asi; do
             [ -f "$FOUND_GAME/bin/linux32/$f" ] || warn "$FOUND_GAME/bin/linux32/$f is missing: some audio (music, voice) may be silent"
         done
@@ -242,7 +254,7 @@ if [ ${#WANTED[@]} -gt 0 ]; then
 else
     for id in portal2 hl2; do
         locate "$id"
-        if [ -n "$FOUND_GAME" ] && [ -n "$FOUND_LINUX" ]; then
+        if [ -n "$FOUND_GAME" ] && [ -n "$FOUND_LINUX" ] && { [ "$id" != portal2 ] || portal2_data_ready "$FOUND_GAME"; }; then
             check_game "$id"
             SELECTED+=("$id"); GAME_DIRS+=("$FOUND_GAME"); LINUX_DIRS+=("$FOUND_LINUX")
         elif [ -n "$FOUND_GAME" ]; then
@@ -266,8 +278,14 @@ done
 SKIPPED_NOTE=""
 for id in ${SKIPPED[@]+"${SKIPPED[@]}"}; do
     game_info "$id"
-    SKIPPED_NOTE="$TITLE is installed but its Linux binaries were not found: to add it, type
+    locate "$id"
+    if [ "$id" = portal2 ] && ! portal2_data_ready "$FOUND_GAME"; then
+        SKIPPED_NOTE="Portal 2 skipped: incomplete game data in $FOUND_GAME (check portal2_dlc2/scripts/editoritems.txt).
+  Restore the Steam game data or download_depot 620 621, then re-run."
+    else
+        SKIPPED_NOTE="$TITLE is installed but its Linux binaries were not found: to add it, type
   download_depot $APPID $LINUX_DEPOT in the Steam console (open steam://open/console), then re-run."
+    fi
     warn "$SKIPPED_NOTE"
 done
 if [ $DETECT = 1 ]; then
