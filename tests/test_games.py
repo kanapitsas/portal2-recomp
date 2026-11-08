@@ -72,6 +72,7 @@ class GameProfiles(unittest.TestCase):
         import json
         import tempfile
         layout = {'program': 'hl2_linux', 'modules': []}
+        (build_game.ROOT / 'build').mkdir(exist_ok=True)   # absent on a fresh clone (CI python-3-9 job)
         with tempfile.TemporaryDirectory(dir=build_game.ROOT / 'build') as tmp:
             path = Path(tmp) / 'roots.json'
             path.write_text(json.dumps(['engine.so:code:0x10']))
