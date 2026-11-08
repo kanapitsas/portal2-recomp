@@ -174,7 +174,7 @@ hide themselves when a controller connects.
 
 **Co-op** works over the local network: a Mac hosts, and an iPhone or a
 second copy on the same Mac joins by IP address
-([how](docs/usage.md#lan-co-op)). Two separate Macs, Steam invites and play
+([how](docs/usage.md#lan-co-op-portal-2)). Two separate Macs, Steam invites and play
 over the internet are not tested.
 
 ## Renderer: Metal or OpenGL
@@ -284,7 +284,7 @@ profiles.
 | Co-op | Co-op through Steam invites, over the internet and with Windows or Linux players | 📅 |
 | iPhone | Record raw back taps from the Settings page | 🚧 |
 | iPhone | Learn each player's back taps automatically from those recordings, instead of fixed thresholds | 📅 |
-| Saves | Copy saves between Mac and iPhone over the cable ([how](docs/usage.md#saves-between-mac-and-iphone)); an iCloud version would need a paid Apple developer account | 🚧 |
+| Saves | Copy saves between Mac and iPhone over the cable ([how](docs/usage.md#saves-between-mac-and-iphone-portal-2)); an iCloud version would need a paid Apple developer account | 🚧 |
 | Controllers | Physical controller on Mac (needs Steam Input off for Portal 2, [why](docs/usage.md#controllers)) and iPhone, tested with an 8BitDo in Switch mode | ✅ |
 | Controllers | A full playthrough with a controller, and other controllers (Xbox, DualSense) | 📅 |
 | Controllers | Button prompts and default bindings that match the controller | 💡 |

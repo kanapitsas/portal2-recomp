@@ -12,7 +12,7 @@
   fired by back taps, Settings page; Metal 71–77 vs 60 fps for OpenGL
   ([docs/ios.md](docs/ios.md)).
 - **Co-op** over the LAN: Mac ↔ Mac and Mac ↔ iPhone, connection and map load
-  checked ([docs/usage.md](docs/usage.md#lan-co-op)).
+  checked ([docs/usage.md](docs/usage.md#lan-co-op-portal-2)).
 - **Half-Life 2** (experimental): built from the same checkout into
   `build/hl2`, Metal by default, 120 fps on Mac, 60 fps on an iPhone 15 Pro Max
   in a short test; measurements below ([docs/hl2.md](docs/hl2.md) for the rest).

@@ -135,7 +135,7 @@ of the first Apple Development certificate in the keychain: with several Apple
 accounts in Xcode, set `P2_TEAM_ID` to the one you want.
 
 Saves: `tools/ios_device.sh saves status|pull|push` copies them between the Mac
-and the iPhone over the cable ([details](usage.md#saves-between-mac-and-iphone));
+and the iPhone over the cable ([details](usage.md#saves-between-mac-and-iphone-portal-2));
 Portal 2 only for now.
 
 `Documents/launch.args` in the app's container adds arguments
