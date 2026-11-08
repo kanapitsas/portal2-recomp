@@ -137,10 +137,10 @@ Saves live in the app's `Documents/hl2-userdata`; `tools/ios_device.sh saves`
 is Portal 2 only for now. Details, the touch layout and what has been checked:
 [ios.md](ios.md#half-life-2).
 
-Touch controls in short: move stick (left), camera stick or trackpad (right),
-fire (bottom right, drag it to aim), alt-fire, reload, jump, use, crouch and
-sprint as toggles, weapon chevrons, flashlight, quick save and pause in the top
-bar. Back taps are off (`P2_BACKTAP=1` maps them to fire and alt-fire). A
+Touch controls in short: move stick (left), camera stick or trackpad (right)
+plus gyro aiming, fire (bottom right, drag it to aim), alt-fire, reload, jump,
+use, crouch and sprint as toggles, weapon chevrons, flashlight, quick save
+(hold it to quick load) and pause in the top bar. Back taps are off (`P2_BACKTAP=1` maps them to fire and alt-fire). A
 controller hides the overlay, as for Portal 2.
 
 ## Known limits

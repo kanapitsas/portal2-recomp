@@ -127,6 +127,8 @@ RT_CHECK(ios_settings_choices_match_code) {
     assert_choices("P2MaxFPS", "60", (const char *const[]){"30", "40", "60", "120", NULL});
     assert_choices("P2ResolutionScale", "2", (const char *const[]){"native", "2", "1.5", "1", NULL});
     assert_choices("P2Upscale", "1", (const char *const[]){"1", "0.75", "0.5", NULL});
+    // P2_GYRO_SPEED : multiplicateur, 1 par défaut (gyro_aim.c).
+    assert_choices("P2GyroSpeed", "1", (const char *const[]){"0.5", "0.75", "1", "1.5", "2", NULL});
 }
 
 // Agrandissement MetalFX : render.scale seulement pour une fraction de ]0, 1[.

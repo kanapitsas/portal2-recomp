@@ -18,7 +18,7 @@
 "Renderer" = "Moteur de rendu";
 "Metal (recommended)" = "Metal (recommandé)";
 "Touch controls" = "Commandes tactiles";
-"Trackpad mode turns the camera as you slide a finger on the right half of the screen; the button at the bottom left also toggles this in game." = "Le mode trackpad fait tourner la caméra en glissant le doigt sur la moitié droite de l'écran ; le bouton en bas à gauche bascule aussi ce réglage en jeu.";
+"Trackpad mode turns the camera as you slide a finger on the right half of the screen; the camera mode button also toggles this in game. Gyro aiming turns the camera as you turn the phone, on top of the touch camera (on by default in Half-Life 2)." = "Le mode trackpad fait tourner la caméra en glissant le doigt sur la moitié droite de l'écran ; le bouton du mode de caméra bascule aussi ce réglage en jeu. La visée au gyroscope fait tourner la caméra quand vous tournez le téléphone, en plus de la caméra tactile (active par défaut dans Half-Life 2).";
 "On-screen controls" = "Commandes à l’écran";
 "Automatic" = "Automatique";
 "Always" = "Toujours";
@@ -32,6 +32,8 @@
 "Very fast (×2)" = "Très rapide (×2)";
 "Extreme (×3)" = "Extrême (×3)";
 "Trackpad acceleration" = "Accélération du trackpad";
+"Gyro aiming" = "Visée au gyroscope";
+"Gyro speed" = "Vitesse du gyroscope";
 "None" = "Aucune";
 "Light" = "Légère";
 "Strong" = "Forte";

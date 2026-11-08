@@ -183,6 +183,8 @@ The page is in English, and in French on a device set to French
 | Trackpad camera | key `P2TouchTrackpad` | also toggled by the button at the bottom left (top left in Half-Life 2) |
 | Camera speed | `P2_TOUCH_LOOK` | ×0.5 to ×3 |
 | Trackpad acceleration | `P2_TOUCH_ACCEL` | none (1) to strong (4), normal 2.5 |
+| Gyro aiming | `P2_GYRO` | on by default in Half-Life 2, off in Portal 2; see "Gyro aiming" |
+| Gyro speed | `P2_GYRO_SPEED` | ×0.5 to ×2, normal 1 |
 | Back taps | `P2_BACKTAP` | enabled by default |
 | Vibrate when firing | `P2_HAPTICS` | on by default: a light Taptic Engine tap for each portal fired from the overlay (button or back tap) |
 | Tap sensitivity | `P2_BACKTAP_SENSITIVITY` | 0.75 / 1 / 1.33: thresholds are divided by this value |
@@ -214,6 +216,23 @@ the cap follows thermal and power changes during play.
 Simulator: `xcrun simctl spawn <device> defaults write <bundle id>
 P2ResolutionScale -string 1.5`. `tests/checks_ios_settings.c` checks the
 translation and that the keys match between the code and the settings page.
+
+## Gyro aiming
+
+Turning the phone turns the camera, added to the touch camera: the thumb for
+large turns, the wrists for aiming (`runtime/ios/gyro_aim.c`, tested by
+`tests/checks_gyro_aim.c`; CoreMotion in `touch_controls.m`). Yaw follows the
+real vertical, so turning on the spot turns the view however the phone is
+tilted; pitch follows the screen's horizontal axis (top of the screen toward
+you: look up). Rotations slower than `P2_GYRO_TIGHTEN` (0.05 rad/s) are damped
+in proportion, so a phone held still does not drift. At Normal speed the camera
+turns 1.5 times the phone's rotation at the game's default mouse sensitivity
+(3); the game's `sensitivity` scales it like the mouse. The sensors stop after
+2 s in a menu or with the overlay hidden for a controller, and at once when
+the app is left.
+
+On by default in Half-Life 2. Off in Portal 2, where each back tap would shake
+the camera; `P2_GYRO=1` or the setting turns it on there too.
 
 ## Leaving the app
 
@@ -291,8 +310,11 @@ HL2's commands (`runtime/ios/touch_layout.c`):
 | bottom, left of crouch | use | E | |
 | left, above the stick | sprint | Shift | toggle; stops when the thumb leaves the move stick |
 | top centre, small | previous / next weapon | mouse wheel | the game's weapon list opens; fire picks the weapon (lines `+hud_fastswitch` and `1` in `Documents/launch.args` switch at once) |
-| top right, small | flashlight, quick save, pause | F, F6, Escape | |
+| top right, small | flashlight, quick save, pause | F, F6, Escape | hold quick save for half a second to quick load (F9), with a vibration |
 | top left, after the FPS counter, small | camera mode | | stick or trackpad, as in Portal 2 (moved off the HUD's health) |
+
+Gyro aiming is on: turning the phone turns the camera, on top of the stick or
+trackpad (see [Gyro aiming](#gyro-aiming)).
 
 Why toggles: on a phone each thumb is already busy (one on the move stick, one
 on the camera or fire), so a held Shift or Ctrl would stop you from steering or
