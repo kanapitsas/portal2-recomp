@@ -57,6 +57,7 @@
 #include "backtap_dataset.h"
 #include "env_ios.h"
 #include "game_ios.h"
+#include "gyro_aim.h"
 #include "touch_layout.h"
 #include "lifecycle_ios.h"
 
@@ -421,6 +422,66 @@ static void haptic_fire(void) {
     [haptic prepare];
 }
 
+// ---- Visée au gyroscope (gyro_aim.c) ------------------------------------
+// Rotation du téléphone ajoutée à la caméra tactile : le pouce pour les grands
+// mouvements, le poignet pour viser. Par défaut dans Half-Life 2 seulement :
+// dans Portal 2, chaque tape au dos secouerait la caméra (P2_GYRO=1 l'active).
+// Échantillons intégrés sur leur file, vidés à chaque image par step ; capteurs
+// arrêtés hors partie comme ceux des tapes au dos. Gestionnaire CoreMotion à
+// part : celui des tapes au dos peut ne pas exister (HL2) et a sa propre file.
+static CMMotionManager *gyro_motion;
+static NSOperationQueue *gyro_queue;
+static os_unfair_lock gyro_lock = OS_UNFAIR_LOCK_INIT;
+static double gyro_pending[2];            // comptes de souris pas encore envoyés (sous gyro_lock)
+static _Atomic int gyro_generation;       // marche en cours : un échantillon d'une marche précédente est jeté
+static _Atomic int gyro_orient;           // comme backtap_orient
+static rt_gyro_params gyro_params;
+static int gyro_running;
+static void gyro_start(void) {
+    if (gyro_motion || !rt_gyro_enabled(rt_ios_current_game()->layout == RT_IOS_LAYOUT_HL2)) return;
+    CMMotionManager *motion = [CMMotionManager new];
+    if (!motion.deviceMotionAvailable) { fprintf(stderr, "[ios] gyroscope : pas de capteur (simulateur ?)\n"); return; }
+    rt_gyro_params_from_env(&gyro_params);
+    gyro_queue = [NSOperationQueue new];
+    gyro_queue.name = @"p2.gyro";
+    gyro_queue.maxConcurrentOperationCount = 1;
+    gyro_queue.qualityOfService = NSQualityOfServiceUserInteractive;
+    motion.deviceMotionUpdateInterval = 1.0 / 100;
+    gyro_motion = motion;
+    fprintf(stderr, "[ios] gyroscope : visée active, %.0f comptes/rad, atténuation sous %.3g rad/s\n",
+            gyro_params.counts_per_rad, gyro_params.tighten);
+}
+static void gyro_run(int on) {
+    if (!gyro_motion || on == gyro_running) return;
+    gyro_running = on;
+    // Chaque marche a son numéro et son propre horodatage précédent (capturé par
+    // le bloc, lu et écrit sur la file des capteurs seulement) : un échantillon
+    // encore en file après un arrêt n'ajoute rien à la marche suivante.
+    int generation = atomic_fetch_add(&gyro_generation, 1) + 1;
+    if (on) {
+        __block double last = 0;
+        [gyro_motion startDeviceMotionUpdatesToQueue:gyro_queue withHandler:^(CMDeviceMotion *m, NSError *error) {
+            (void)error;
+            if (!m || atomic_load(&gyro_generation) != generation) return;
+            double w[3] = {m.rotationRate.x, m.rotationRate.y, m.rotationRate.z};
+            double g[3] = {m.gravity.x, m.gravity.y, m.gravity.z};
+            double dt = last ? m.timestamp - last : 0, d[2];
+            last = m.timestamp;
+            if (!rt_gyro_delta(&gyro_params, w, g, atomic_load(&gyro_orient), dt, d)) return;
+            os_unfair_lock_lock(&gyro_lock);
+            if (atomic_load(&gyro_generation) == generation) { gyro_pending[0] += d[0]; gyro_pending[1] += d[1]; }
+            os_unfair_lock_unlock(&gyro_lock);
+        }];
+    } else [gyro_motion stopDeviceMotionUpdates];
+}
+// Mouvement accumulé depuis la dernière image (remis à zéro).
+static void gyro_take(double out[2]) {
+    os_unfair_lock_lock(&gyro_lock);
+    out[0] = gyro_pending[0]; out[1] = gyro_pending[1];
+    gyro_pending[0] = gyro_pending[1] = 0;
+    os_unfair_lock_unlock(&gyro_lock);
+}
+
 // Doigt suivi : rôle, action (bouton), point de départ, dernier point.
 @interface P2Finger : NSObject
 @property Role role; @property Action action; @property CGPoint start, at;
@@ -472,6 +533,13 @@ static void haptic_fire(void) {
     CALayer *iconLayer[MAX_BUTTONS];
     CGFloat buttonSize[MAX_BUTTONS], iconSize[MAX_BUTTONS];
     NSString *iconSymbol[MAX_BUTTONS];
+    CFTimeInterval gyroIdleSince; // visée au gyroscope impossible depuis cet instant (0 : en partie)
+    CFTimeInterval quickSaveAt;   // appui sur la sauvegarde rapide en cours (0 : aucun)
+    BOOL quickLoaded;             // appui long : chargement rapide déjà envoyé
+    SDL_Scancode keyUp;           // touche brève à relâcher (0 : aucune)
+    CFTimeInterval keyUpAt;       // appui de cette touche
+    unsigned long keyUpFrames;    // images présentées à l'appui
+    BOOL cancelling;              // touchesCancelled : relâchement sans effet (pas de sauvegarde)
     CALayer *fpsLayer;        // compteur d'images (bitmap de la taille de son cadre)
     NSString *fpsKey;         // ce qu'il montre : redessiné seulement quand cela change
 }
@@ -492,6 +560,7 @@ static void haptic_fire(void) {
         const char *show = getenv("P2_SHOW_FPS");   // posée par les Réglages (runtime/ios/settings.c)
         fpsHidden = show && !strcmp(show, "0");
         backtap_start();
+        gyro_start();
         [self setupLayers];
         __weak P2TouchControls *weakSelf = self;
         // Fin de chaque passage de la boucle (SDL la fait tourner à chaque
@@ -535,6 +604,8 @@ static void haptic_fire(void) {
     if (pad && rt_ios_move_response() != padResponse) { padResponse = rt_ios_move_response(); [self updateMove]; }
     [self testStep];
     [self backTapStep];
+    [self gyroStep];
+    [self quickSaveStep];
     if (!menu && !concealed && CACurrentMediaTime() - hapticPreparedAt > 1) {
         hapticPreparedAt = CACurrentMediaTime();
         haptic_prepare();
@@ -588,6 +659,51 @@ static void haptic_fire(void) {
     }
     [self backTapRelease:NO];
 }
+// Visée au gyroscope : capteurs en marche en partie (arrêtés après 2 s de menu
+// ou de surcouche cachée, aussitôt si l'app est quittée), mouvement envoyé comme
+// celui du stick ; hors partie, ce qui reste est jeté.
+- (void)gyroStep {
+    if (!gyro_motion) return;
+    UIInterfaceOrientation o = self.window.windowScene.interfaceOrientation;
+    atomic_store(&gyro_orient, o == UIInterfaceOrientationLandscapeLeft ? 1 : o == UIInterfaceOrientationLandscapeRight ? -1 : 0);
+    BOOL playing = !menu && !concealed;
+    CFTimeInterval now = CACurrentMediaTime();
+    if (playing) gyroIdleSince = 0;
+    else if (!gyroIdleSince) gyroIdleSince = now;
+    gyro_run(playing || (now - gyroIdleSince < 2 && !rt_ios_app_state()));
+    double d[2];
+    gyro_take(d);
+    if (playing) [self lookBy:(float)d[0] y:(float)d[1]];
+}
+// Sauvegarde rapide : un appui court sauvegarde (F6), un appui d'une demi-seconde
+// charge la dernière sauvegarde rapide (F9, « load quick » dans les touches par
+// défaut de HL2), avec une vibration. La touche est donc envoyée au relâchement,
+// ou au bout du délai, puis tenue 50 ms et au moins deux images, comme une
+// tape au dos (un appui et un relâchement dans la même image peuvent se perdre).
+// Un toucher annulé par iOS (appel, geste système) ou un menu qui s'ouvre ne
+// sauvegarde pas.
+static const CFTimeInterval kQuickLoadHold = 0.5;
+- (void)tapKey:(SDL_Scancode)code {
+    if (keyUp) [self key:keyUp down:NO];
+    [self key:code down:YES];
+    keyUp = code; keyUpAt = CACurrentMediaTime(); keyUpFrames = rt_ios_frames;
+}
+- (void)quickSaveStep {
+    if (keyUp && CACurrentMediaTime() - keyUpAt >= 0.05 && rt_ios_frames >= keyUpFrames + 2) {
+        [self key:keyUp down:NO];
+        keyUp = 0;
+    }
+    if (quickSaveAt && !quickLoaded && CACurrentMediaTime() - quickSaveAt >= kQuickLoadHold) {
+        quickLoaded = YES;
+        [self tapKey:SDL_SCANCODE_F9];
+        haptic_fire();
+    }
+}
+- (void)quickSave:(BOOL)down {
+    if (down) { quickSaveAt = CACurrentMediaTime(); quickLoaded = NO; return; }
+    if (quickSaveAt && !quickLoaded && !cancelling) [self tapKey:SDL_SCANCODE_F6];
+    quickSaveAt = 0;
+}
 - (void)backTapRelease:(BOOL)now {
     if (backtapHeld < 0) return;
     if (!now && (CACurrentMediaTime() - backtapAt < backtap_hold || rt_ios_frames < backtapFrames + 2)) return;
@@ -606,6 +722,7 @@ static void haptic_fire(void) {
     return menu ? nil : [super hitTest:point withEvent:event];
 }
 - (void)releaseAll {
+    quickSaveAt = 0;   // un menu qui s'ouvre n'est pas un appui court : pas de sauvegarde
     for (P2Finger *f in fingers.objectEnumerator) if (f.role == ROLE_BUTTON && !f.toggle) [self action:f.action down:NO];
     for (int a = 0; a < ACTION_COUNT; ++a) [self untoggle:(Action)a];
     [self backTapRelease:YES];
@@ -647,7 +764,7 @@ static void haptic_fire(void) {
     case RT_TOUCH_RELOAD: [self key:SDL_SCANCODE_R down:down]; break;
     case RT_TOUCH_SPRINT: [self key:SDL_SCANCODE_LSHIFT down:down]; break;
     case RT_TOUCH_FLASHLIGHT: [self key:SDL_SCANCODE_F down:down]; break;
-    case RT_TOUCH_QUICKSAVE: [self key:SDL_SCANCODE_F6 down:down]; break;
+    case RT_TOUCH_QUICKSAVE: [self quickSave:down]; break;
     case RT_TOUCH_WEAPON_PREV: if (down) [self wheel:1]; break;
     case RT_TOUCH_WEAPON_NEXT: if (down) [self wheel:-1]; break;
     default: break;
@@ -967,7 +1084,11 @@ static Sint16 axis_value(CGFloat speed, int response) {
     }
     [self updateMove]; [self setNeedsRender];
 }
-- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event { [self touchesEnded:touches withEvent:event]; }
+- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    cancelling = YES;
+    [self touchesEnded:touches withEvent:event];
+    cancelling = NO;
+}
 - (void)safeAreaInsetsDidChange { [super safeAreaInsetsDidChange]; [self setNeedsRender]; }
 
 // ---- dessin ----
