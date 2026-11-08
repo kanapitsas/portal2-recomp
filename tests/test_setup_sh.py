@@ -147,6 +147,32 @@ class GameDetectionTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn('no game found', result.stderr)
 
+    def test_hl2_data_depot_is_found_without_a_steam_install(self):
+        installed = self.install_hl2()
+        depot = self.steam / 'steamapps/content/app_220/depot_221'
+        shutil.move(str(installed), str(depot))
+        # A leftover Steam folder and stale config must not hide the data depot.
+        self.touch(installed / 'hl2_complete/.keep')
+        config = {'games': {'hl2': {'game_root': str(self.tmp / 'missing')}}}
+        for args in ((), ('--game', 'hl2')):
+            result = self.detect(*args, config=config)
+            self.assert_builds(result, 'hl2')
+            self.assertIn(f'game data:      {depot}', result.stdout)
+
+    def test_hl2_steam_install_still_takes_priority_over_data_depot(self):
+        installed = self.install_hl2()
+        depot = self.steam / 'steamapps/content/app_220/depot_221'
+        shutil.copytree(installed, depot)
+        result = self.detect('--game', 'hl2')
+        self.assert_builds(result, 'hl2')
+        self.assertIn(f'game data:      {installed}', result.stdout)
+
+    def test_missing_hl2_data_explains_the_data_download(self):
+        result = self.detect('--game', 'hl2')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('download_depot 220 221', result.stderr)
+        self.assertIn('Depot download complete', result.stderr)
+
     def test_adding_a_game_to_a_configured_checkout(self):
         # No refusal any more: a Portal 2 checkout takes Half-Life 2 beside it.
         portal2 = self.install_portal2(depot=False)

@@ -173,9 +173,9 @@ locate() {  # game id [game folder [Linux folder]] -> FOUND_GAME FOUND_LINUX (em
                     && { FOUND_LINUX="$c"; break; }
             done
         fi
-    else   # hl2: the Mac game from Steam, the Linux binaries from depot 224
+    else   # hl2: Steam install or data depot 221, Linux binaries from depot 224
         if [ -z "$FOUND_GAME" ]; then
-            for c in "$(config_get hl2 game_root)" "$STEAM_SUPPORT/steamapps/common/Half-Life 2"; do
+            for c in "$(config_get hl2 game_root)" "$STEAM_SUPPORT/steamapps/common/Half-Life 2" "$(find_depot 220 221)"; do
                 [ -n "$c" ] && [ -f "$c/hl2_complete/gameinfo.txt" ] && { FOUND_GAME="$c"; break; }
             done
         fi
@@ -205,8 +205,10 @@ check_game() {  # game id -> dies unless FOUND_GAME and FOUND_LINUX are that gam
         [ -f "$FOUND_LINUX/bin/linux32/engine.so" ] && [ -f "$FOUND_LINUX/portal2/bin/linux32/server.so" ] \
             || die "$FOUND_LINUX does not look like depot 661 (no bin/linux32/engine.so or portal2/bin/linux32/server.so)"
     else
-        [ -n "$FOUND_GAME" ] || die "Half-Life 2 not found. Install it with Steam (the current version, with hl2_complete/),
-  or pass the game folder (the one with hl2/, hl2_complete/ and platform/)."
+        [ -n "$FOUND_GAME" ] || die "Half-Life 2 data not found. Install it with Steam (the current version, with hl2_complete/),
+  pass the game folder (the one with hl2/, hl2_complete/ and platform/), or fetch it:
+  open steam://open/console, type: download_depot 220 221, wait for
+  'Depot download complete', then re-run."
         [ -f "$FOUND_GAME/hl2/hl2_pak_dir.vpk" ] && [ -f "$FOUND_GAME/hl2_complete/gameinfo.txt" ] && [ -d "$FOUND_GAME/platform" ] \
             || die "$FOUND_GAME does not look like Half-Life 2 (no hl2/hl2_pak_dir.vpk, hl2_complete/gameinfo.txt or platform/).
   Only the current Steam version (20th anniversary update, with hl2_complete/) is supported."

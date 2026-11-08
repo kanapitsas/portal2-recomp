@@ -26,7 +26,7 @@ struct Game: Identifiable, Equatable {
     let id: String              // setup.sh --game
     let title: String
     let appID: Int
-    let dataDepot: Int?         // depot with the game data, for download_depot (Portal 2 only)
+    let dataDepot: Int          // depot with the game data, separate from the Linux binaries
     let linuxDepot: Int
     let linuxSize: String
     let marker: String          // folder inside the game folder
@@ -48,7 +48,7 @@ struct Game: Identifiable, Equatable {
     func findGame() -> URL? {
         let installed = steamSupport.appendingPathComponent("steamapps/common/\(installFolder)")
         if isGameFolder(installed) { return installed }
-        if let id = dataDepot, let depot = findDepot(appID, id), isGameFolder(depot) { return depot }
+        if let depot = findDepot(appID, dataDepot), isGameFolder(depot) { return depot }
         return nil
     }
     func findLinux() -> URL? {
@@ -61,7 +61,7 @@ let allGames = [
     Game(id: "portal2", title: "Portal 2", appID: 620, dataDepot: 621, linuxDepot: 661, linuxSize: "about 90 MB",
          marker: "portal2", markerFile: "portal2/pak01_dir.vpk", installFolder: "Portal 2",
          linuxFiles: ["bin/linux32/engine.so", "portal2/bin/linux32/server.so"], minutes: 10),
-    Game(id: "hl2", title: "Half-Life 2", appID: 220, dataDepot: nil, linuxDepot: 224, linuxSize: "about 320 MB",
+    Game(id: "hl2", title: "Half-Life 2", appID: 220, dataDepot: 221, linuxDepot: 224, linuxSize: "about 320 MB",
          marker: "hl2_complete", markerFile: "hl2_complete/gameinfo.txt", installFolder: "Half-Life 2",
          linuxFiles: ["hl2_linux", "bin/engine.so", "hl2_complete/bin/server.so"], minutes: 20),
 ]
@@ -464,13 +464,9 @@ struct GameRow: View {
                 if let url = s.game {
                     PathLine(url: url, missing: "")
                 } else {
-                    Text(game.dataDepot == nil
-                         ? "Not found: install \(game.title) with Steam (the current version), or choose its folder."
-                         : "Not found: install \(game.title) with Steam, or download the Linux game data in the Steam console (12.6 GB):")
+                    Text("Game data not found: install \(game.title) with Steam (the current version), choose its folder, or paste this in the Steam console and wait for “Depot download complete”:")
                         .fixedSize(horizontal: false, vertical: true)
-                    if let depot = game.dataDepot {
-                        Command(text: "download_depot \(game.appID) \(depot)", copy: model.copy)
-                    }
+                    Command(text: "download_depot \(game.appID) \(game.dataDepot)", copy: model.copy)
                 }
                 if let url = s.linux {
                     PathLine(url: url, missing: "")

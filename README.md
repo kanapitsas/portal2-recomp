@@ -81,9 +81,11 @@ share them.
     Windows version works;
   - the Linux binaries: open the Steam console (`open steam://open/console`)
     and type `download_depot 620 661` (about 90 MB).
-- And/or Half-Life 2 on Steam: the game installed by Steam on the Mac (the
-  current version, with `hl2_complete/`), and its Linux binaries:
-  `download_depot 220 224` in the Steam console (about 320 MB).
+- And/or Half-Life 2 on Steam:
+  - the game data (the current version, with `hl2_complete/`): install it
+    with Steam, or use `download_depot 220 221` in the Steam console;
+  - the Linux binaries: `download_depot 220 224` (about 320 MB).
+  Wait for “Depot download complete” for each download.
 - Optional: Rust 1.99 or newer from [rustup](https://rustup.rs) builds the
   Metal renderer from source instead of using the prebuilt one; the iPhone
   app needs it for Metal (Homebrew's `rust` has no iOS target).
@@ -217,8 +219,10 @@ current Steam build, 20th anniversary update) into a native Mac app. **You
 must own Half-Life 2**; as for Portal 2, nothing from Valve is in this
 repository.
 
-Install Half-Life 2 with Steam and fetch its Linux binaries from the Steam
-console with `download_depot 220 224` (about 320 MB). Then tick it in the
+Install Half-Life 2 with Steam, or fetch its game data from the Steam console
+with `download_depot 220 221`. Also fetch its Linux binaries with
+`download_depot 220 224` (about 320 MB). Wait for “Depot download complete”
+for each download. Then tick it in the
 installer, or run `./setup.sh` (or `./setup.sh --game hl2`) in the same
 checkout as Portal 2: each game has its own build folder. It creates
 `~/Applications/Half-Life 2 Natif.app`, with its own saves folder.

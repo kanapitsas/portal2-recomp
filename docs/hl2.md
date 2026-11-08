@@ -13,10 +13,12 @@ generated code contain Valve's game: keep them for yourself.
 ## Install
 
 You need what Portal 2 needs (see the [README](../README.md#what-you-need)),
-Half-Life 2 installed by Steam on your Mac, and its Linux binaries:
+Half-Life 2's game data, and its Linux binaries (two separate downloads):
 
 1. Install Half-Life 2 with Steam (the current version, which has
-   `hl2_complete/`).
+   `hl2_complete/`), or open the Steam console (`open steam://open/console`)
+   and type `download_depot 220 221` to download its game data. Wait for
+   "Depot download complete".
 2. Open the Steam console (`open steam://open/console`) and type
    `download_depot 220 224` (about 320 MB). Wait for "Depot download
    complete".
@@ -29,8 +31,9 @@ Half-Life 2 installed by Steam on your Mac, and its Linux binaries:
    ```
 
    Without paths, it finds the game in
-   `~/Library/Application Support/Steam/steamapps/common/Half-Life 2` and the
-   depot where `download_depot` put it; otherwise pass them:
+   `~/Library/Application Support/Steam/steamapps/common/Half-Life 2` or
+   `depot_221`, and the Linux binaries in `depot_224`, where `download_depot`
+   put them; otherwise pass them:
    `./setup.sh --game hl2 "/path/to/Half-Life 2" "/path/to/depot_224"`.
 
 `setup.sh` downloads Valve's `libsteam_api.dylib` from Steamworks.NET
