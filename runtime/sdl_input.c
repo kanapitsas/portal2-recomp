@@ -44,8 +44,6 @@ _Static_assert(offsetof(SDL_TouchFingerEvent, fingerId) == 16 && offsetof(SDL_To
 _Static_assert(offsetof(SDL_DollarGestureEvent, gestureId) == 16 && offsetof(SDL_DollarGestureEvent, y) == 36, "geste");
 _Static_assert(offsetof(SDL_MouseWheelEvent, mouseY) == 40, "molette");
 
-static uint32_t argument(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
-
 static int plain_event(uint32_t type) {
     switch (type) {
     case SDL_QUIT: case SDL_APP_TERMINATING: case SDL_APP_LOWMEMORY:
@@ -76,7 +74,6 @@ static int string_event(uint32_t type) {
 // passer vers les observateurs certains événements SDL3 sans équivalent SDL2
 // (ex. 0x205, SDL_EVENT_WINDOW_MOVED) : un jeu SDL2 ne les verrait jamais,
 // ils ne lui sont donc pas transmis (ni par observateur ni par PollEvent).
-int rt_sdl_event_is_sdl2(uint32_t type);
 void fps_overlay_toggle(void);
 int rt_sdl_event_is_sdl2(uint32_t type) {
     return plain_event(type) || string_event(type) || (type >= SDL_USEREVENT && type <= SDL_LASTEVENT) ||
@@ -84,25 +81,15 @@ int rt_sdl_event_is_sdl2(uint32_t type) {
            type == SDL_SYSWMEVENT;
 }
 
-// Copie d'une chaîne hôte en mémoire invitée (rt_alloc) ; 0 pour NULL.
-static uint32_t guest_string(CPU *c, const char *text) {
-    if (!text) return 0;
-    size_t size = strlen(text) + 1;
-    uint32_t address = size <= UINT32_MAX ? rt_alloc((uint32_t)size) : 0;
-    if (!address) rt_trap(c, c->eip, "SDL event string: guest allocation failed");
-    memcpy(GPTR(address), text, size);
-    return address;
-}
-
 static void put32(uint8_t *out, unsigned offset, uint32_t value) { memcpy(out + offset, &value, 4); }
 static uint32_t get32(const uint8_t *in, unsigned offset) { uint32_t v; memcpy(&v, in + offset, 4); return v; }
 
 // Hôte → invité. Les chaînes (SDL_DROP*, SDL_TEXTEDITING_EXT) sont recopiées
-// avec rt_alloc : l'invité les libère par SDL_free, qui doit donc appeler
-// rt_free pour une adresse du tas invité. Si `release_host`, la chaîne hôte
-// (propriété de l'application après SDL_PollEvent) est libérée ici.
+// sur le tas invité (rt_guest_strdup_or_trap) : l'invité les libère par
+// SDL_free, qui doit donc appeler rt_free pour une adresse du tas invité. Si
+// `release_host`, la chaîne hôte (propriété de l'application après
+// SDL_PollEvent) est libérée ici.
 void rt_sdl_event_to_guest(CPU *c, const SDL_Event *host, uint32_t guest, int release_host);
-#define event_to_guest rt_sdl_event_to_guest
 // Retina (sdl_video.c) : positions de souris dans la fenêtre et tailles de
 // fenêtre converties de points en pixels du jeu, position de la fenêtre en
 // pixels de l'écran. Les déplacements relatifs (visée) restent en points pour
@@ -139,13 +126,13 @@ void rt_sdl_event_to_guest(CPU *c, const SDL_Event *host, uint32_t guest, int re
         put32(out, I386_USER_DATA1, (uint32_t)d1); put32(out, I386_USER_DATA2, (uint32_t)d2);
     } else if (string_event(type)) {
         put32(out, 0, type); put32(out, 4, host->drop.timestamp);
-        put32(out, I386_DROP_FILE, guest_string(c, host->drop.file));
+        put32(out, I386_DROP_FILE, rt_guest_strdup_or_trap(c, host->drop.file));
         put32(out, I386_DROP_WINDOW, host->drop.windowID);
         if (release_host) SDL_free(host->drop.file);
     } else if (type == SDL_TEXTEDITING_EXT) {
         put32(out, 0, type); put32(out, 4, host->editExt.timestamp);
         put32(out, I386_EDITEXT_WINDOW, host->editExt.windowID);
-        put32(out, I386_EDITEXT_TEXT, guest_string(c, host->editExt.text));
+        put32(out, I386_EDITEXT_TEXT, rt_guest_strdup_or_trap(c, host->editExt.text));
         put32(out, I386_EDITEXT_START, (uint32_t)host->editExt.start);
         put32(out, I386_EDITEXT_LENGTH, (uint32_t)host->editExt.length);
         if (release_host) SDL_free(host->editExt.text);
@@ -164,9 +151,7 @@ void rt_sdl_event_to_guest(CPU *c, const SDL_Event *host, uint32_t guest, int re
         // Le message natif est Cocoa, pas le SDL_SysWMmsg X11 attendu par l'invité.
         rt_trap(c, c->eip, "SDL_SYSWMEVENT cannot be translated to the Linux/X11 guest ABI");
     } else {
-        char why[96];
-        snprintf(why, sizeof(why), "unknown SDL event type %#x cannot be translated", type);
-        rt_trap(c, c->eip, why);
+        rt_trapf(c, "unknown SDL event type %#x cannot be translated", type);
     }
     memcpy(rt_write_span(c, guest, GUEST_EVENT_SIZE), out, GUEST_EVENT_SIZE);
 }
@@ -174,7 +159,6 @@ void rt_sdl_event_to_guest(CPU *c, const SDL_Event *host, uint32_t guest, int re
 // Invité → hôte (SDL_PushEvent). Les adresses invitées de SDL_USEREVENT sont
 // conservées telles quelles dans data1/data2 et retrouvées à la relecture.
 void rt_sdl_event_to_host(CPU *c, uint32_t guest, SDL_Event *host);
-#define event_to_host rt_sdl_event_to_host
 void rt_sdl_event_to_host(CPU *c, uint32_t guest, SDL_Event *host) {
     const uint8_t *in = rt_span(c, guest, GUEST_EVENT_SIZE);
     uint32_t type = get32(in, 0);
@@ -199,9 +183,7 @@ void rt_sdl_event_to_host(CPU *c, uint32_t guest, SDL_Event *host) {
     } else {
         // DROP*/TEXTEDITING_EXT/SYSWM poussés par l'invité porteraient un
         // pointeur invité que SDL rendrait ensuite comme chaîne hôte à libérer.
-        char why[96];
-        snprintf(why, sizeof(why), "guest SDL_PushEvent of type %#x is not supported", type);
-        rt_trap(c, c->eip, why);
+        rt_trapf(c, "guest SDL_PushEvent of type %#x is not supported", type);
     }
 }
 
@@ -209,10 +191,13 @@ void rt_sdl_event_to_host(CPU *c, uint32_t guest, SDL_Event *host) {
 // SDL appelle les rappels de façon synchrone dans le thread qui pousse ou
 // pompe l'événement, donc pendant un shim SDL invité : on réutilise le CPU de
 // ce shim (rt_shim_cpu). Un rappel sur un thread hôte sans shim en cours
-// (thread interne SDL) n'a ni pile ni TLS invitée : il est piégé.
+// (thread interne SDL) n'a ni pile ni TLS invitée : l'observateur n'est pas
+// appelé (il n'est que consultatif, l'événement arrive quand même par
+// SDL_PollEvent) et la main est rendue à SDL, signalé une fois sous P2_INPUT_LOG.
 typedef struct Watch { uint32_t function, userdata; struct Watch *next; } Watch;
 static Watch *watches;
 static void log_input_event(const SDL_Event *e);
+int rt_input_logging(void);   // P2_INPUT_LOG, défini plus bas
 
 static int watch_trampoline(void *opaque, SDL_Event *event) {
     Watch *w = opaque;
@@ -220,13 +205,15 @@ static int watch_trampoline(void *opaque, SDL_Event *event) {
     log_input_event(event);   // le jeu peut consommer les entrées par observateur plutôt que par PollEvent
     CPU *c = rt_shim_cpu();
     if (!c) {
-        fprintf(stderr, "SDL event watch %#x called on a host thread outside any guest SDL call\n", w->function);
-        abort();
+        static _Atomic int reported;
+        if (rt_input_logging() && !reported++)
+            fprintf(stderr, "[input] event watch %#x called on a host thread outside any guest SDL call: skipped\n", w->function);
+        return 1;
     }
     uint32_t saved_esp = c->esp;
     uint32_t buffer = (c->esp - 128) & ~15u;   // copie i386 sur la pile invitée
     c->esp = buffer;
-    event_to_guest(c, event, buffer, 0);
+    rt_sdl_event_to_guest(c, event, buffer, 0);
     uint32_t strings[2] = {0, 0};
     if (string_event(event->type)) strings[0] = R32(buffer + I386_DROP_FILE);
     if (event->type == SDL_TEXTEDITING_EXT) strings[1] = R32(buffer + I386_EDITEXT_TEXT);
@@ -262,12 +249,7 @@ static uint32_t ref_acquire(CPU *c, void *host, uint32_t kind, int counted) {
     return handle;
 }
 // 0 → NULL (SDL signale l'erreur) ; handle inconnu → piège.
-static void *ref_host(CPU *c, uint32_t handle, uint32_t kind) {
-    if (!handle) return NULL;
-    void *host = rt_handle_get(handle, kind);
-    if (!host) rt_trap(c, c->eip, "invalid SDL input handle");
-    return host;
-}
+static void *ref_host(CPU *c, uint32_t handle, uint32_t kind) { return rt_handle_require(c, handle, kind, "SDL input handle"); }
 static void ref_drop(Ref *r) {
     Ref **link = &refs;
     while (*link != r) link = &(*link)->next;
@@ -280,33 +262,15 @@ static void ref_release(uint32_t handle, uint32_t kind) {
     if (r && r->refs && !--r->refs) ref_drop(r);
 }
 
-// Noms de périphériques : copies invitées internées, jamais libérées (SDL
-// garantit seulement la validité jusqu'au prochain appel ; une copie stable
-// est plus sûre et bornée par le nombre de noms distincts).
-typedef struct Name { char *text; uint32_t guest; struct Name *next; } Name;
-static Name *names;
-static uint32_t intern_name(CPU *c, const char *text) {
-    if (!text) return 0;
-    for (Name *n = names; n; n = n->next) if (!strcmp(n->text, text)) return n->guest;
-    Name *n = calloc(1, sizeof(*n));
-    char *copy = strdup(text);
-    if (!n || !copy) { free(n); free(copy); rt_trap(c, c->eip, "SDL name table allocation failed"); }
-    *n = (Name){copy, guest_string(c, text), names};
-    names = n;
-    return n->guest;
-}
+// Noms de périphériques : copies invitées internées (rt_intern_string), jamais
+// libérées (SDL garantit seulement la validité jusqu'au prochain appel ; une
+// copie stable est plus sûre et bornée par le nombre de noms distincts).
 
 // Diagnostic (P2_INPUT_LOG=1) : boutons de souris, touchers, manettes et mode
 // relatif tels que le jeu les reçoit, horodatés ; rien quand il est éteint.
-static int input_log = -1;
-int rt_input_logging(void);
-#define input_logging rt_input_logging
-int rt_input_logging(void) {
-    if (input_log < 0) input_log = getenv("P2_INPUT_LOG") != NULL;
-    return input_log;
-}
+int rt_input_logging(void) { return RT_ENV_FLAG("P2_INPUT_LOG"); }
 static void log_input_event(const SDL_Event *e) {
-    if (!input_logging()) return;
+    if (!rt_input_logging()) return;
     unsigned t = SDL_GetTicks();
     switch (e->type) {
     case SDL_MOUSEBUTTONDOWN: case SDL_MOUSEBUTTONUP:
@@ -429,11 +393,8 @@ static void poll_into(CPU *c, uint32_t guest, int *got) {
     // Diagnostic (fenêtre cachée seulement) : P2_FAKE_FOCUS=1 annonce une fois au
     // jeu que sa fenêtre a le focus, pour mesurer sans le sommeil de 50 ms que
     // le moteur s'impose sans focus. Sans effet en fenêtre visible.
-    static int fake_focus = -1;
-    if (fake_focus < 0) {
-        const char *hidden = getenv("P2_HIDDEN_WINDOWS"), *wanted = getenv("P2_FAKE_FOCUS");
-        fake_focus = hidden && *hidden && strcmp(hidden, "0") && wanted && *wanted && strcmp(wanted, "0");
-    }
+    static int fake_focus = -1;   // -1 inconnu, 0 inactif, 1 à annoncer, 2 annoncé
+    if (fake_focus < 0) fake_focus = RT_ENV_FLAG("P2_HIDDEN_WINDOWS") && RT_ENV_FLAG("P2_FAKE_FOCUS");
     // Fenêtre du rendu : contexte GL courant, ou vue Metal (Direct3D 9, sans contexte GL).
     SDL_Window *window = fake_focus != 1 ? NULL : SDL_GL_GetCurrentWindow();
     if (fake_focus == 1 && !window) window = rt_sdl_metal_window();
@@ -444,7 +405,7 @@ static void poll_into(CPU *c, uint32_t guest, int *got) {
         event.window.timestamp = SDL_GetTicks();
         event.window.windowID = SDL_GetWindowID(window);
         event.window.event = SDL_WINDOWEVENT_FOCUS_GAINED;
-        event_to_guest(c, &event, guest, 0);
+        rt_sdl_event_to_guest(c, &event, guest, 0);
         *got = 1;
         return;
     }
@@ -457,14 +418,14 @@ static void poll_into(CPU *c, uint32_t guest, int *got) {
     // jeu, qui ne l'associe à rien par défaut.
     if (*got && event.type == SDL_KEYDOWN && !event.key.repeat && event.key.keysym.scancode == SDL_SCANCODE_F3)
         fps_overlay_toggle();
-    if (*got) { log_input_event(&event); event_to_guest(c, &event, guest, 1); }
+    if (*got) { log_input_event(&event); rt_sdl_event_to_guest(c, &event, guest, 1); }
 }
 
 static int sdl_input_shim(CPU *c, const char *name) {
     if (strncmp(name, "SDL_", 4)) return 0;
     const char *n = name + 4;
     if (!strcmp(n, "PollEvent")) {
-        uint32_t guest = argument(c, 0);
+        uint32_t guest = rt_arg32(c, 0);
         if (guest) rt_write_span(c, guest, GUEST_EVENT_SIZE);
         int got; poll_into(c, guest, &got);
         c->eax = (uint32_t)got;
@@ -472,11 +433,9 @@ static int sdl_input_shim(CPU *c, const char *name) {
         // Sondage + SDL_Delay(1) verrou invité relâché : les appels SDL restent
         // sérialisés par le verrou d'exécution, ce qui évite qu'un observateur
         // attende ce verrou pendant qu'un autre thread invité attend SDL.
-        uint32_t guest = argument(c, 0);
-        int32_t timeout = (int32_t)argument(c, 1);
-        static int trace_wait = -1;
-        if (trace_wait < 0) trace_wait = getenv("P2_TRACE_WAIT") != NULL;
-        if (timeout && trace_wait)
+        uint32_t guest = rt_arg32(c, 0);
+        int32_t timeout = (int32_t)rt_arg32(c, 1);
+        if (timeout && RT_ENV_FLAG("P2_TRACE_WAIT"))
             fprintf(stderr, "[wait] SDL_WaitEventTimeout(%#x, %d) from %#x\n", guest, timeout, R32(c->esp));
         if (guest) rt_write_span(c, guest, GUEST_EVENT_SIZE);
         uint64_t deadline = SDL_GetTicks64() + (uint64_t)(timeout > 0 ? timeout : 0);
@@ -493,9 +452,9 @@ static int sdl_input_shim(CPU *c, const char *name) {
         // SDL2 écrase l'horodatage de l'événement de l'appelant par
         // SDL_GetTicks() ; sdl2-compat conserve un horodatage non nul et ne
         // touche pas l'appelant (vérifié sur l'hôte) : 0 lui fait poser l'heure.
-        uint32_t guest = argument(c, 0);
+        uint32_t guest = rt_arg32(c, 0);
         SDL_Event event;
-        event_to_host(c, guest, &event);
+        rt_sdl_event_to_host(c, guest, &event);
         uint32_t ticks = SDL_GetTicks();
         memcpy(rt_write_span(c, guest + 4, 4), &ticks, 4);
         event.common.timestamp = 0;
@@ -503,11 +462,11 @@ static int sdl_input_shim(CPU *c, const char *name) {
     } else if (!strcmp(n, "AddEventWatch")) {
         Watch *w = calloc(1, sizeof(*w));
         if (!w) rt_trap(c, c->eip, "SDL_AddEventWatch allocation failed");
-        *w = (Watch){argument(c, 0), argument(c, 1), watches};
+        *w = (Watch){rt_arg32(c, 0), rt_arg32(c, 1), watches};
         watches = w;
         SDL_AddEventWatch(watch_trampoline, w);
     } else if (!strcmp(n, "DelEventWatch")) {
-        uint32_t function = argument(c, 0), userdata = argument(c, 1);
+        uint32_t function = rt_arg32(c, 0), userdata = rt_arg32(c, 1);
         for (Watch **link = &watches; *link; link = &(*link)->next)
             if ((*link)->function == function && (*link)->userdata == userdata) {
                 Watch *w = *link; *link = w->next;
@@ -516,10 +475,10 @@ static int sdl_input_shim(CPU *c, const char *name) {
                 break;
             }
     } else if (!strcmp(n, "GetMouseState")) {
-        uint32_t px = argument(c, 0), py = argument(c, 1);
+        uint32_t px = rt_arg32(c, 0), py = rt_arg32(c, 1);
         int x, y;
         c->eax = SDL_GetMouseState(&x, &y);
-        if (input_logging()) {
+        if (rt_input_logging()) {
             static int lx = -1, ly = -1; static uint32_t lb;
             if (x != lx || y != ly || c->eax != lb)
                 fprintf(stderr, "[input] %u GetMouseState %d,%d buttons %u\n", SDL_GetTicks(), x, y, c->eax);
@@ -528,38 +487,38 @@ static int sdl_input_shim(CPU *c, const char *name) {
         if (px) W32(px, (uint32_t)(x * rt_sdl_window_scale()));
         if (py) W32(py, (uint32_t)(y * rt_sdl_window_scale()));
     } else if (!strcmp(n, "SetRelativeMouseMode")) {
-        c->eax = (uint32_t)SDL_SetRelativeMouseMode(argument(c, 0) ? SDL_TRUE : SDL_FALSE);
+        c->eax = (uint32_t)SDL_SetRelativeMouseMode(rt_arg32(c, 0) ? SDL_TRUE : SDL_FALSE);
         static int last_relative = -1;
-        if (input_logging() && (int)argument(c, 0) != last_relative)
-            fprintf(stderr, "[input] %u relative mouse mode %u\n", SDL_GetTicks(), argument(c, 0));
-        last_relative = (int)argument(c, 0);
+        if (rt_input_logging() && (int)rt_arg32(c, 0) != last_relative)
+            fprintf(stderr, "[input] %u relative mouse mode %u\n", SDL_GetTicks(), rt_arg32(c, 0));
+        last_relative = (int)rt_arg32(c, 0);
     } else if (!strcmp(n, "SetModState")) {
-        SDL_SetModState((SDL_Keymod)argument(c, 0));
+        SDL_SetModState((SDL_Keymod)rt_arg32(c, 0));
     } else if (!strcmp(n, "NumJoysticks")) {
         c->eax = (uint32_t)SDL_NumJoysticks();
     } else if (!strcmp(n, "IsGameController")) {
-        c->eax = SDL_IsGameController((int)argument(c, 0)) ? 1 : 0;
-        if (input_logging()) fprintf(stderr, "[input] device %u is game controller: %u\n", argument(c, 0), c->eax);
+        c->eax = SDL_IsGameController((int)rt_arg32(c, 0)) ? 1 : 0;
+        if (rt_input_logging()) fprintf(stderr, "[input] device %u is game controller: %u\n", rt_arg32(c, 0), c->eax);
     } else if (!strcmp(n, "JoystickNameForIndex")) {
-        c->eax = intern_name(c, SDL_JoystickNameForIndex((int)argument(c, 0)));
+        c->eax = rt_intern_string(c, SDL_JoystickNameForIndex((int)rt_arg32(c, 0)));
     } else if (!strcmp(n, "JoystickOpen")) {
-        c->eax = ref_acquire(c, SDL_JoystickOpen((int)argument(c, 0)), KIND_JOYSTICK, 1);
-        if (input_logging()) fprintf(stderr, "[input] joystick open %u: %s\n", argument(c, 0), c->eax ? "ok" : SDL_GetError());
+        c->eax = ref_acquire(c, SDL_JoystickOpen((int)rt_arg32(c, 0)), KIND_JOYSTICK, 1);
+        if (rt_input_logging()) fprintf(stderr, "[input] joystick open %u: %s\n", rt_arg32(c, 0), c->eax ? "ok" : SDL_GetError());
     } else if (!strcmp(n, "JoystickClose")) {
-        uint32_t handle = argument(c, 0);
+        uint32_t handle = rt_arg32(c, 0);
         SDL_JoystickClose(ref_host(c, handle, KIND_JOYSTICK));
         ref_release(handle, KIND_JOYSTICK);
     } else if (!strcmp(n, "JoystickInstanceID")) {
-        c->eax = (uint32_t)SDL_JoystickInstanceID(ref_host(c, argument(c, 0), KIND_JOYSTICK));
+        c->eax = (uint32_t)SDL_JoystickInstanceID(ref_host(c, rt_arg32(c, 0), KIND_JOYSTICK));
     } else if (!strcmp(n, "GameControllerOpen")) {
-        c->eax = ref_acquire(c, SDL_GameControllerOpen((int)argument(c, 0)), KIND_CONTROLLER, 1);
-        if (c->eax && input_logging()) diagnostic_controller = ref_host(c, c->eax, KIND_CONTROLLER);
-        if (input_logging()) fprintf(stderr, "[input] controller open %u: %s; name=%s joystick-events=%d controller-events=%d background=%s\n",
-                                     argument(c, 0), c->eax ? "ok" : SDL_GetError(),
-                                     SDL_JoystickNameForIndex((int)argument(c, 0)), SDL_JoystickEventState(SDL_QUERY),
+        c->eax = ref_acquire(c, SDL_GameControllerOpen((int)rt_arg32(c, 0)), KIND_CONTROLLER, 1);
+        if (c->eax && rt_input_logging()) diagnostic_controller = ref_host(c, c->eax, KIND_CONTROLLER);
+        if (rt_input_logging()) fprintf(stderr, "[input] controller open %u: %s; name=%s joystick-events=%d controller-events=%d background=%s\n",
+                                     rt_arg32(c, 0), c->eax ? "ok" : SDL_GetError(),
+                                     SDL_JoystickNameForIndex((int)rt_arg32(c, 0)), SDL_JoystickEventState(SDL_QUERY),
                                      SDL_GameControllerEventState(SDL_QUERY), SDL_GetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS) ?: "unset");
     } else if (!strcmp(n, "GameControllerClose")) {
-        uint32_t handle = argument(c, 0);
+        uint32_t handle = rt_arg32(c, 0);
         SDL_GameController *controller = ref_host(c, handle, KIND_CONTROLLER);
         if (controller == diagnostic_controller) diagnostic_controller = NULL;
         Ref *r = ref_find(handle, KIND_CONTROLLER);
@@ -571,25 +530,20 @@ static int sdl_input_shim(CPU *c, const char *name) {
         if (joystick) for (Ref *j = refs; j; j = j->next)
             if (j->kind == KIND_JOYSTICK && j->host == joystick && !j->refs) { ref_drop(j); break; }
     } else if (!strcmp(n, "GameControllerGetJoystick")) {
-        SDL_Joystick *joystick = SDL_GameControllerGetJoystick(ref_host(c, argument(c, 0), KIND_CONTROLLER));
+        SDL_Joystick *joystick = SDL_GameControllerGetJoystick(ref_host(c, rt_arg32(c, 0), KIND_CONTROLLER));
         c->eax = ref_acquire(c, joystick, KIND_JOYSTICK, 0);
     } else if (!strcmp(n, "JoystickGetDeviceGUID")) {
-        // Retour de structure i386 : pointeur caché en premier argument, rendu
-        // dans eax, et l'appelé dépile ce pointeur (`ret 4`). rt_return ne
-        // dépilera que l'adresse de retour : on la remonte d'un mot.
-        uint32_t result = argument(c, 0);
-        SDL_JoystickGUID guid = SDL_JoystickGetDeviceGUID((int)argument(c, 1));
+        // Retour de structure i386 : pointeur caché en premier argument (rt_return_sret).
+        uint32_t result = rt_arg32(c, 0);
+        SDL_JoystickGUID guid = SDL_JoystickGetDeviceGUID((int)rt_arg32(c, 1));
         memcpy(rt_write_span(c, result, sizeof(guid)), guid.data, sizeof(guid));
-        uint32_t return_address = R32(c->esp);
-        W32(c->esp + 4, return_address);
-        c->esp += 4;
-        c->eax = result;
+        rt_return_sret(c, result);
     } else if (!strcmp(n, "JoystickGetGUIDString")) {
         // (SDL_JoystickGUID par valeur sur 16 octets, char *psz, int cbGUID)
         SDL_JoystickGUID guid;
         memcpy(guid.data, rt_span(c, c->esp + 4, 16), 16);
-        uint32_t out = argument(c, 4);
-        int32_t size = (int32_t)argument(c, 5);
+        uint32_t out = rt_arg32(c, 4);
+        int32_t size = (int32_t)rt_arg32(c, 5);
         if (out && size > 0) {
             char text[64];
             SDL_JoystickGetGUIDString(guid, text, size < (int32_t)sizeof(text) ? size : (int)sizeof(text));
@@ -597,18 +551,18 @@ static int sdl_input_shim(CPU *c, const char *name) {
             memcpy(rt_write_span(c, out, length), text, length);
         } else SDL_JoystickGetGUIDString(guid, NULL, 0);   // même erreur SDL
     } else if (!strcmp(n, "HapticOpenFromJoystick")) {
-        c->eax = ref_acquire(c, SDL_HapticOpenFromJoystick(ref_host(c, argument(c, 0), KIND_JOYSTICK)), KIND_HAPTIC, 1);
+        c->eax = ref_acquire(c, SDL_HapticOpenFromJoystick(ref_host(c, rt_arg32(c, 0), KIND_JOYSTICK)), KIND_HAPTIC, 1);
     } else if (!strcmp(n, "HapticClose")) {
-        uint32_t handle = argument(c, 0);
+        uint32_t handle = rt_arg32(c, 0);
         SDL_HapticClose(ref_host(c, handle, KIND_HAPTIC));
         ref_release(handle, KIND_HAPTIC);
     } else if (!strcmp(n, "HapticRumbleInit")) {
-        c->eax = (uint32_t)SDL_HapticRumbleInit(ref_host(c, argument(c, 0), KIND_HAPTIC));
+        c->eax = (uint32_t)SDL_HapticRumbleInit(ref_host(c, rt_arg32(c, 0), KIND_HAPTIC));
     } else if (!strcmp(n, "HapticRumbleStop")) {
-        c->eax = (uint32_t)SDL_HapticRumbleStop(ref_host(c, argument(c, 0), KIND_HAPTIC));
+        c->eax = (uint32_t)SDL_HapticRumbleStop(ref_host(c, rt_arg32(c, 0), KIND_HAPTIC));
     } else if (!strcmp(n, "HapticRumblePlay")) {
-        float strength = RF(c->esp + 8);
-        c->eax = (uint32_t)SDL_HapticRumblePlay(ref_host(c, argument(c, 0), KIND_HAPTIC), strength, argument(c, 2));
+        float strength = rt_arg_f32(c, 4);
+        c->eax = (uint32_t)SDL_HapticRumblePlay(ref_host(c, rt_arg32(c, 0), KIND_HAPTIC), strength, rt_arg32(c, 2));
     } else return 0;
     return 1;
 }

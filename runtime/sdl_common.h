@@ -1,8 +1,8 @@
 // Types partagés par les ponts SDL2 (vidéo, entrées, audio).
 #pragma once
 // Identifiants des handles rt_handle_* pour les pointeurs SDL hôtes.
-// 'SDLW' est aussi utilisé par le pont des entrées pour retrouver une fenêtre
-// (rt_handle_find(fenetre_hote, RT_SDL_WINDOW)) : ne pas le changer.
+// 'SDLW' est aussi utilisé par le pont Direct3D 9 (d3d9.c) : un HWND invité
+// est un handle de fenêtre (rt_handle_get/rt_handle_find) : ne pas le changer.
 #define RT_SDL_WINDOW    0x53444c57u  /* 'SDLW' */
 #define RT_SDL_GLCONTEXT 0x53444c47u  /* 'SDLG' */
 #define RT_SDL_CURSOR    0x53444c43u  /* 'SDLC' */

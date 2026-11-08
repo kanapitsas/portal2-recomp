@@ -74,8 +74,6 @@ static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static Face *faces;
 static FontSet *font_sets;
 
-static uint32_t arg(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
-
 static uint32_t guest_alloc(CPU *c, uint32_t size) {
     uint32_t address = rt_alloc(size);
     if (!address) rt_trap(c, c->eip, "guest heap exhausted (fonts bridge)");
@@ -93,18 +91,6 @@ static uint32_t buffer_fill(CPU *c, GuestBuffer *b, const void *data, uint64_t s
     return b->address;
 }
 static void buffer_release(GuestBuffer *b) { rt_free(b->address); *b = (GuestBuffer){0}; }
-static uint32_t guest_string(CPU *c, const char *s) {
-    if (!s) return 0;
-    size_t n = strlen(s) + 1;
-    uint32_t a = guest_alloc(c, (uint32_t)n);
-    memcpy(GPTR(a), s, n);
-    return a;
-}
-static const char *host_string(CPU *c, uint32_t address) {
-    if (!address) return NULL;
-    rt_string_length(c, address);
-    return GPTR(address);
-}
 
 // ---------------------------------------------------------------- FreeType
 
@@ -281,7 +267,7 @@ static void open_result(CPU *c, FT_Error error, FT_Face host, uint32_t library, 
 
 static int freetype_shim(CPU *c, const char *name) {
     if (!strcmp(name, "FT_Init_FreeType")) {
-        uint32_t out = arg(c, 0);
+        uint32_t out = rt_arg32(c, 0);
         if (out) rt_write_span(c, out, 4);
         FT_Library library = NULL;
         FT_Error error = FT_Init_FreeType(out ? &library : NULL);
@@ -292,7 +278,7 @@ static int freetype_shim(CPU *c, const char *name) {
         }
         c->eax = (uint32_t)error;
     } else if (!strcmp(name, "FT_Done_FreeType")) {
-        uint32_t handle = arg(c, 0);
+        uint32_t handle = rt_arg32(c, 0);
         FT_Library library = library_of(handle);
         if (library) {  // FT_Done_FreeType détruit aussi les faces de la bibliothèque
             pthread_mutex_lock(&lock);
@@ -307,18 +293,18 @@ static int freetype_shim(CPU *c, const char *name) {
             rt_handle_free(handle, KIND_LIBRARY);
         } else c->eax = (uint32_t)FT_Done_FreeType(NULL);
     } else if (!strcmp(name, "FT_New_Face")) {
-        uint32_t handle = arg(c, 0), path = arg(c, 1), aface = arg(c, 3);
-        FT_Long index = (int32_t)arg(c, 2);
+        uint32_t handle = rt_arg32(c, 0), path = rt_arg32(c, 1), aface = rt_arg32(c, 3);
+        FT_Long index = (int32_t)rt_arg32(c, 2);
         if (aface) rt_write_span(c, aface, 4);
-        const char *guest_path = host_string(c, path);
+        const char *guest_path = rt_guest_cstr_or_null(c, path);
         const char *host_path = guest_path ? rt_read_path(guest_path) : NULL;
         FT_Face face = NULL; FT_Error error;
         if (guest_path && !host_path) error = FT_Err_Cannot_Open_Resource;
         else error = FT_New_Face(library_of(handle), host_path, index, aface ? &face : NULL);
         open_result(c, error, face, handle, aface);
     } else if (!strcmp(name, "FT_New_Memory_Face")) {
-        uint32_t handle = arg(c, 0), base = arg(c, 1), size = arg(c, 2), aface = arg(c, 4);
-        FT_Long index = (int32_t)arg(c, 3);
+        uint32_t handle = rt_arg32(c, 0), base = rt_arg32(c, 1), size = rt_arg32(c, 2), aface = rt_arg32(c, 4);
+        FT_Long index = (int32_t)rt_arg32(c, 3);
         if (aface) rt_write_span(c, aface, 4);
         // FreeType ne copie pas : le tampon invité doit vivre autant que la face,
         // exactement comme sous Linux. La mémoire invitée ne bouge jamais.
@@ -327,23 +313,23 @@ static int freetype_shim(CPU *c, const char *name) {
         FT_Error error = FT_New_Memory_Face(library_of(handle), data, (FT_Long)size, index, aface ? &face : NULL);
         open_result(c, error, face, handle, aface);
     } else if (!strcmp(name, "FT_Done_Face")) {
-        uint32_t guest = arg(c, 0);
+        uint32_t guest = rt_arg32(c, 0);
         if (!guest) { c->eax = (uint32_t)FT_Done_Face(NULL); return 1; }
         Face *f = unlink_face(guest);
         if (!f) rt_trap(c, c->eip, "FT_Done_Face on an unknown FT_Face");
         c->eax = (uint32_t)FT_Done_Face(f->host);
         release_face(f);
     } else if (!strcmp(name, "FT_Select_Charmap")) {
-        Face *f = find_face(c, arg(c, 0));
-        c->eax = (uint32_t)FT_Select_Charmap(f ? f->host : NULL, (FT_Encoding)arg(c, 1));
+        Face *f = find_face(c, rt_arg32(c, 0));
+        c->eax = (uint32_t)FT_Select_Charmap(f ? f->host : NULL, (FT_Encoding)rt_arg32(c, 1));
         if (f) sync_charmap(f);
     } else if (!strcmp(name, "FT_Set_Pixel_Sizes")) {
-        Face *f = find_face(c, arg(c, 0));
-        c->eax = (uint32_t)FT_Set_Pixel_Sizes(f ? f->host : NULL, arg(c, 1), arg(c, 2));
+        Face *f = find_face(c, rt_arg32(c, 0));
+        c->eax = (uint32_t)FT_Set_Pixel_Sizes(f ? f->host : NULL, rt_arg32(c, 1), rt_arg32(c, 2));
         if (f) sync_size(f);
     } else if (!strcmp(name, "FT_Request_Size")) {
-        Face *f = find_face(c, arg(c, 0));
-        uint32_t req = arg(c, 1);
+        Face *f = find_face(c, rt_arg32(c, 0));
+        uint32_t req = rt_arg32(c, 1);
         FT_Size_RequestRec request = {0};
         if (req) {
             rt_span(c, req, 20);
@@ -354,37 +340,37 @@ static int freetype_shim(CPU *c, const char *name) {
         c->eax = (uint32_t)FT_Request_Size(f ? f->host : NULL, req ? &request : NULL);
         if (f) sync_size(f);
     } else if (!strcmp(name, "FT_Select_Size")) {
-        Face *f = find_face(c, arg(c, 0));
-        c->eax = (uint32_t)FT_Select_Size(f ? f->host : NULL, (FT_Int)(int32_t)arg(c, 1));
+        Face *f = find_face(c, rt_arg32(c, 0));
+        c->eax = (uint32_t)FT_Select_Size(f ? f->host : NULL, (FT_Int)(int32_t)rt_arg32(c, 1));
         if (f) sync_size(f);
     } else if (!strcmp(name, "FT_Get_Char_Index")) {
-        Face *f = find_face(c, arg(c, 0));
-        c->eax = FT_Get_Char_Index(f ? f->host : NULL, arg(c, 1));
+        Face *f = find_face(c, rt_arg32(c, 0));
+        c->eax = FT_Get_Char_Index(f ? f->host : NULL, rt_arg32(c, 1));
     } else if (!strcmp(name, "FT_Load_Char") || !strcmp(name, "FT_Load_Glyph")) {
-        Face *f = find_face(c, arg(c, 0));
-        FT_Int32 flags = (FT_Int32)arg(c, 2);
+        Face *f = find_face(c, rt_arg32(c, 0));
+        FT_Int32 flags = (FT_Int32)rt_arg32(c, 2);
         FT_Face host = f ? f->host : NULL;
-        c->eax = (uint32_t)(name[8] == 'C' ? FT_Load_Char(host, arg(c, 1), flags) : FT_Load_Glyph(host, arg(c, 1), flags));
+        c->eax = (uint32_t)(name[8] == 'C' ? FT_Load_Char(host, rt_arg32(c, 1), flags) : FT_Load_Glyph(host, rt_arg32(c, 1), flags));
         if (f) sync_face(c, f);  // le chargement peut aussi changer de taille (bitmaps couleur)
     } else if (!strcmp(name, "FT_Get_Kerning")) {
-        Face *f = find_face(c, arg(c, 0));
-        uint32_t out = arg(c, 4);
+        Face *f = find_face(c, rt_arg32(c, 0));
+        uint32_t out = rt_arg32(c, 4);
         FT_Vector kerning = {0, 0};
         if (out) { rt_write_span(c, out, 8); kerning.x = (int32_t)R32(out); kerning.y = (int32_t)R32(out + 4); }
-        c->eax = (uint32_t)FT_Get_Kerning(f ? f->host : NULL, arg(c, 1), arg(c, 2), arg(c, 3), out ? &kerning : NULL);
+        c->eax = (uint32_t)FT_Get_Kerning(f ? f->host : NULL, rt_arg32(c, 1), rt_arg32(c, 2), rt_arg32(c, 3), out ? &kerning : NULL);
         if (out) { W32(out, (uint32_t)kerning.x); W32(out + 4, (uint32_t)kerning.y); }
     } else if (!strcmp(name, "FT_Get_Postscript_Name")) {
-        Face *f = find_face(c, arg(c, 0));
+        Face *f = find_face(c, rt_arg32(c, 0));
         const char *ps = FT_Get_Postscript_Name(f ? f->host : NULL);
         if (!ps) c->eax = 0;
         else {  // FreeType met le nom en cache dans la face : même durée de vie ici
-            if (!f->postscript || strcmp(GPTR(f->postscript), ps)) { rt_free(f->postscript); f->postscript = guest_string(c, ps); }
+            if (!f->postscript || strcmp(GPTR(f->postscript), ps)) { rt_free(f->postscript); f->postscript = rt_guest_strdup_or_trap(c, ps); }
             c->eax = f->postscript;
         }
     } else if (!strcmp(name, "FT_MulFix")) {
         // FT_Long vaut 32 bits sur i386 : même calcul que FT_MulFix_i386
         // (arrondi au plus proche, demi loin de zéro), résultat tronqué à 32 bits.
-        int64_t ab = (int64_t)(int32_t)arg(c, 0) * (int32_t)arg(c, 1);
+        int64_t ab = (int64_t)(int32_t)rt_arg32(c, 0) * (int32_t)rt_arg32(c, 1);
         c->eax = (uint32_t)(uint64_t)((ab + 0x8000 - (ab < 0)) >> 16);
     } else return 0;
     return 1;
@@ -396,18 +382,11 @@ static int freetype_shim(CPU *c, const char *name) {
 // un motif nul est une faute du code invité, signalée plutôt que reproduite.
 static Pattern *pattern_of(CPU *c, uint32_t handle) {
     if (!handle) rt_trap(c, c->eip, "Fontconfig call on a null FcPattern");
-    Pattern *p = rt_handle_get(handle, KIND_PATTERN);
-    if (!p) rt_trap(c, c->eip, "Fontconfig call on an unknown FcPattern");
-    return p;
+    return rt_handle_require(c, handle, KIND_PATTERN, "FcPattern");
 }
 static FcPattern *host_pattern(CPU *c, uint32_t handle) { return pattern_of(c, handle)->host; }
 
-static FcConfig *config_of(CPU *c, uint32_t handle) {
-    if (!handle) return NULL;
-    FcConfig *config = rt_handle_get(handle, KIND_CONFIG);
-    if (!config) rt_trap(c, c->eip, "Fontconfig call on an unknown FcConfig");
-    return config;
-}
+static FcConfig *config_of(CPU *c, uint32_t handle) { return rt_handle_require(c, handle, KIND_CONFIG, "FcConfig"); }
 
 // Handle invité d'une FcConfig : un seul par configuration, qui garde une
 // référence Fontconfig. FcConfigSetCurrent détruit l'ancienne configuration
@@ -451,7 +430,7 @@ static uint32_t pattern_string(CPU *c, Pattern *p, const FcChar8 *s) {
     if (copies) p->copies = copies;
     if (!sources || !copies) rt_trap(c, c->eip, "out of host memory (FcPattern strings)");
     p->sources[p->count] = s;
-    p->copies[p->count] = guest_string(c, (const char *)s);
+    p->copies[p->count] = rt_guest_strdup_or_trap(c, (const char *)s);
     return p->copies[p->count++];
 }
 
@@ -485,67 +464,67 @@ static int fontconfig_shim(CPU *c, const char *name) {
         c->eax = config_handle(c, FcInitLoadConfigAndFonts());
     } else if (!strcmp(name, "FcConfigSetCurrent")) {
         // FcConfigSetCurrent(NULL) recharge la configuration par défaut (2.13+).
-        c->eax = (uint32_t)FcConfigSetCurrent(config_of(c, arg(c, 0)));
+        c->eax = (uint32_t)FcConfigSetCurrent(config_of(c, rt_arg32(c, 0)));
     } else if (!strcmp(name, "FcConfigAppFontAddFile")) {
         // Chemin invité (dossier du jeu) traduit comme FT_New_Face ; FcFalse si
         // le fichier est introuvable ou n'est pas une police lisible.
-        FcConfig *config = config_of(c, arg(c, 0));
-        const char *guest_path = host_string(c, arg(c, 1));
+        FcConfig *config = config_of(c, rt_arg32(c, 0));
+        const char *guest_path = rt_guest_cstr_or_null(c, rt_arg32(c, 1));
         const char *host_path = guest_path ? rt_read_path(guest_path) : NULL;
         c->eax = host_path ? (uint32_t)FcConfigAppFontAddFile(config, (const FcChar8 *)host_path) : FcFalse;
     } else if (!strcmp(name, "FcPatternCreate")) {
         c->eax = wrap_pattern(c, FcPatternCreate());
     } else if (!strcmp(name, "FcPatternDestroy")) {
-        uint32_t handle = arg(c, 0);
+        uint32_t handle = rt_arg32(c, 0);
         if (handle) { pattern_of(c, handle); drop_pattern(handle, 1); }
     } else if (!strcmp(name, "FcPatternAdd")) {
         // FcPatternAdd(FcPattern*, const char*, FcValue, FcBool) : FcValue i386 de
         // 12 octets passé par valeur (type, puis union alignée sur 4).
-        FcPattern *p = host_pattern(c, arg(c, 0));
-        const char *object = host_string(c, arg(c, 1));
+        FcPattern *p = host_pattern(c, rt_arg32(c, 0));
+        const char *object = rt_guest_cstr_or_null(c, rt_arg32(c, 1));
         FcValue value = {0};
-        value.type = (FcType)(int32_t)arg(c, 2);
+        value.type = (FcType)(int32_t)rt_arg32(c, 2);
         switch (value.type) {
         case FcTypeVoid: break;
-        case FcTypeInteger: value.u.i = (int32_t)arg(c, 3); break;
-        case FcTypeBool: value.u.b = (FcBool)(int32_t)arg(c, 3); break;
-        case FcTypeDouble: { uint64_t bits = (uint64_t)arg(c, 3) | (uint64_t)arg(c, 4) << 32; memcpy(&value.u.d, &bits, 8); break; }
-        case FcTypeString: value.u.s = (const FcChar8 *)host_string(c, arg(c, 3)); break;  // copiée par FcValueSave
+        case FcTypeInteger: value.u.i = (int32_t)rt_arg32(c, 3); break;
+        case FcTypeBool: value.u.b = (FcBool)(int32_t)rt_arg32(c, 3); break;
+        case FcTypeDouble: { uint64_t bits = (uint64_t)rt_arg32(c, 3) | (uint64_t)rt_arg32(c, 4) << 32; memcpy(&value.u.d, &bits, 8); break; }
+        case FcTypeString: value.u.s = (const FcChar8 *)rt_guest_cstr_or_null(c, rt_arg32(c, 3)); break;  // copiée par FcValueSave
         case FcTypeMatrix: {
-            uint32_t m = arg(c, 3); FcMatrix matrix;
+            uint32_t m = rt_arg32(c, 3); FcMatrix matrix;
             if (m) { rt_span(c, m, 32); matrix.xx = RD(m); matrix.xy = RD(m + 8); matrix.yx = RD(m + 16); matrix.yy = RD(m + 24); }
             value.u.m = m ? &matrix : NULL;
-            c->eax = (uint32_t)FcPatternAdd(p, object, value, (FcBool)arg(c, 5));
+            c->eax = (uint32_t)FcPatternAdd(p, object, value, (FcBool)rt_arg32(c, 5));
             return 1;
         }
         default: rt_trap(c, c->eip, "FcPatternAdd value type not bridged (charset/langset/range/FT_Face)");
         }
-        c->eax = (uint32_t)FcPatternAdd(p, object, value, (FcBool)arg(c, 5));
+        c->eax = (uint32_t)FcPatternAdd(p, object, value, (FcBool)rt_arg32(c, 5));
     } else if (!strcmp(name, "FcPatternGetString")) {
-        Pattern *p = pattern_of(c, arg(c, 0));
-        uint32_t out = arg(c, 3);
+        Pattern *p = pattern_of(c, rt_arg32(c, 0));
+        uint32_t out = rt_arg32(c, 3);
         FcChar8 *s = NULL;
         rt_write_span(c, out, 4);
-        FcResult result = FcPatternGetString(p->host, host_string(c, arg(c, 1)), (int)(int32_t)arg(c, 2), &s);
+        FcResult result = FcPatternGetString(p->host, rt_guest_cstr_or_null(c, rt_arg32(c, 1)), (int)(int32_t)rt_arg32(c, 2), &s);
         if (result == FcResultMatch) W32(out, s ? pattern_string(c, p, s) : 0);
         c->eax = (uint32_t)result;
     } else if (!strcmp(name, "FcPatternGetBool")) {
-        FcPattern *p = host_pattern(c, arg(c, 0));
-        uint32_t out = arg(c, 3);
+        FcPattern *p = host_pattern(c, rt_arg32(c, 0));
+        uint32_t out = rt_arg32(c, 3);
         FcBool b = 0;
         rt_write_span(c, out, 4);
-        FcResult result = FcPatternGetBool(p, host_string(c, arg(c, 1)), (int)(int32_t)arg(c, 2), &b);
+        FcResult result = FcPatternGetBool(p, rt_guest_cstr_or_null(c, rt_arg32(c, 1)), (int)(int32_t)rt_arg32(c, 2), &b);
         if (result == FcResultMatch) W32(out, (uint32_t)b);
         c->eax = (uint32_t)result;
     } else if (!strcmp(name, "FcConfigSubstitute")) {
-        c->eax = (uint32_t)FcConfigSubstitute(config_of(c, arg(c, 0)), host_pattern(c, arg(c, 1)), (FcMatchKind)arg(c, 2));
+        c->eax = (uint32_t)FcConfigSubstitute(config_of(c, rt_arg32(c, 0)), host_pattern(c, rt_arg32(c, 1)), (FcMatchKind)rt_arg32(c, 2));
     } else if (!strcmp(name, "FcDefaultSubstitute")) {
-        FcDefaultSubstitute(host_pattern(c, arg(c, 0)));
+        FcDefaultSubstitute(host_pattern(c, rt_arg32(c, 0)));
     } else if (!strcmp(name, "FcFontMatch")) {
-        uint32_t out = arg(c, 2);
+        uint32_t out = rt_arg32(c, 2);
         rt_write_span(c, out, 4);
         FcResult result = FcResultNoMatch;
-        FcPattern *match = FcFontMatch(config_of(c, arg(c, 0)), host_pattern(c, arg(c, 1)), &result);
+        FcPattern *match = FcFontMatch(config_of(c, rt_arg32(c, 0)), host_pattern(c, rt_arg32(c, 1)), &result);
         W32(out, (uint32_t)result);
         c->eax = wrap_pattern(c, match);
     } else if (!strcmp(name, "FcObjectSetCreate")) {
@@ -553,19 +532,19 @@ static int fontconfig_shim(CPU *c, const char *name) {
         c->eax = os ? rt_handle_new(os, KIND_OBJSET) : 0;
         if (os && !c->eax) rt_trap(c, c->eip, "handle table full (FcObjectSet)");
     } else if (!strcmp(name, "FcObjectSetAdd")) {
-        FcObjectSet *os = rt_handle_get(arg(c, 0), KIND_OBJSET);
+        FcObjectSet *os = rt_handle_get(rt_arg32(c, 0), KIND_OBJSET);
         if (!os) rt_trap(c, c->eip, "FcObjectSetAdd on an unknown FcObjectSet");
-        c->eax = (uint32_t)FcObjectSetAdd(os, host_string(c, arg(c, 1)));
+        c->eax = (uint32_t)FcObjectSetAdd(os, rt_guest_cstr_or_null(c, rt_arg32(c, 1)));
     } else if (!strcmp(name, "FcObjectSetDestroy")) {
-        uint32_t handle = arg(c, 0);
+        uint32_t handle = rt_arg32(c, 0);
         FcObjectSet *os = handle ? rt_handle_free(handle, KIND_OBJSET) : NULL;
         if (handle && !os) rt_trap(c, c->eip, "FcObjectSetDestroy on an unknown FcObjectSet");
         if (os) FcObjectSetDestroy(os);
     } else if (!strcmp(name, "FcFontList")) {
-        uint32_t os_handle = arg(c, 2);
+        uint32_t os_handle = rt_arg32(c, 2);
         FcObjectSet *os = os_handle ? rt_handle_get(os_handle, KIND_OBJSET) : NULL;
         if (os_handle && !os) rt_trap(c, c->eip, "FcFontList on an unknown FcObjectSet");
-        FcFontSet *set = FcFontList(config_of(c, arg(c, 0)), host_pattern(c, arg(c, 1)), os);
+        FcFontSet *set = FcFontList(config_of(c, rt_arg32(c, 0)), host_pattern(c, rt_arg32(c, 1)), os);
         if (!set) { c->eax = 0; return 1; }
         // FcFontSet i386 : { int nfont; int sfont; FcPattern **fonts; }.
         // Les motifs restent possédés par l'ensemble (FcFontSetDestroy).
@@ -582,7 +561,7 @@ static int fontconfig_shim(CPU *c, const char *name) {
         pthread_mutex_unlock(&lock);
         c->eax = fs->guest;
     } else if (!strcmp(name, "FcFontSetDestroy")) {
-        uint32_t guest = arg(c, 0);
+        uint32_t guest = rt_arg32(c, 0);
         pthread_mutex_lock(&lock);
         FontSet **p = &font_sets;
         while (*p && (*p)->guest != guest) p = &(*p)->next;

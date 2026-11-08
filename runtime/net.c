@@ -25,7 +25,6 @@
 #include <time.h>
 #include <unistd.h>
 
-static uint32_t arg(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
 static void finish(CPU *c, long result) { if (result < 0) rt_save_errno(c); c->eax = (uint32_t)result; }
 static void fail(CPU *c, int linux_errno) { rt_set_errno(c, linux_errno); c->eax = UINT32_MAX; }
 
@@ -131,9 +130,7 @@ static int host_message_flags(CPU *c, uint32_t flags, int receiving) {
     return native;
 }
 
-// Les opérations réseau bloquantes libèrent le verrou invité.
-#define BLOCKING(call) ({ unsigned saved_ = rt_guest_suspend(); __typeof__(call) result_ = (call); \
-    int error_ = errno; rt_guest_resume(saved_); errno = error_; result_; })
+// Les opérations réseau bloquantes libèrent le verrou invité (RT_BLOCKING, rt.h).
 
 // Options entières de même forme sous Linux et Darwin : niveau et nom Linux ->
 // hôte. Renvoie 0 si l'option n'est pas de cette forme (cas particuliers).
@@ -238,7 +235,7 @@ static uint32_t hostent_buffer, hostent_size;
 static int lookup_host(CPU *c, const char *name) {
     struct addrinfo hints = {0}, *list = NULL;
     hints.ai_family = AF_INET; hints.ai_socktype = SOCK_STREAM; hints.ai_flags = AI_CANONNAME;
-    int error = BLOCKING(getaddrinfo(name, NULL, &hints, &list));
+    int error = RT_BLOCKING(getaddrinfo(name, NULL, &hints, &list));
     if (error) return -1; // h_errno n'est pas exposé (pas d'import __h_errno_location)
     size_t count = 0;
     for (struct addrinfo *i = list; i; i = i->ai_next) if (i->ai_family == AF_INET) ++count;
@@ -348,7 +345,7 @@ static int32_t guest_addrinfo(CPU *c, uint32_t node_text, uint32_t service_text,
     if (node_text) rt_string_length(c, node_text);
     if (service_text) rt_string_length(c, service_text);
     rt_write_span(c, out, 4);
-    int error = BLOCKING(getaddrinfo(node_text ? GPTR(node_text) : NULL, service_text ? GPTR(service_text) : NULL,
+    int error = RT_BLOCKING(getaddrinfo(node_text ? GPTR(node_text) : NULL, service_text ? GPTR(service_text) : NULL,
                                      &native_hints, &list));
     if (error) { int32_t code = linux_addrinfo_error(error); if (code == -11) rt_save_errno(c); return code; }
     uint32_t head = 0, tail = 0;
@@ -430,7 +427,7 @@ static uint32_t ntoa_buffer;
 static int net_shim(CPU *c, const char *name) {
     struct sockaddr_storage address; socklen_t length; int error;
     if (!strcmp(name, "socket")) {
-        int domain = (int32_t)arg(c, 0), type = (int32_t)arg(c, 1), protocol = (int32_t)arg(c, 2);
+        int domain = (int32_t)rt_arg32(c, 0), type = (int32_t)rt_arg32(c, 1), protocol = (int32_t)rt_arg32(c, 2);
         int native_domain = domain == L_AF_INET ? AF_INET : domain == L_AF_INET6 ? AF_INET6 : domain == L_AF_UNIX ? AF_UNIX : -1;
         if (native_domain < 0) { fail(c, 97); return 1; }
         int kind = type & 0xf, flags = type & ~0xf;
@@ -440,49 +437,49 @@ static int net_shim(CPU *c, const char *name) {
         if (fd >= 0 && (flags & 0x80000) && fcntl(fd, F_SETFD, FD_CLOEXEC)) { error = errno; close(fd); errno = error; fd = -1; }
         finish(c, fd);
     } else if (!strcmp(name, "bind") || !strcmp(name, "connect")) {
-        int fd = (int32_t)arg(c, 0);
-        if ((error = host_address(c, arg(c, 1), arg(c, 2), &address, &length, !strcmp(name, "bind")))) { fail(c, error); return 1; }
+        int fd = (int32_t)rt_arg32(c, 0);
+        if ((error = host_address(c, rt_arg32(c, 1), rt_arg32(c, 2), &address, &length, !strcmp(name, "bind")))) { fail(c, error); return 1; }
         int result = !strcmp(name, "bind") ? bind(fd, (struct sockaddr *)&address, length)
-                                           : BLOCKING(connect(fd, (struct sockaddr *)&address, length));
+                                           : RT_BLOCKING(connect(fd, (struct sockaddr *)&address, length));
         finish(c, result);
     } else if (!strcmp(name, "listen")) {
-        finish(c, listen((int32_t)arg(c, 0), (int32_t)arg(c, 1)));
+        finish(c, listen((int32_t)rt_arg32(c, 0), (int32_t)rt_arg32(c, 1)));
     } else if (!strcmp(name, "accept")) {
-        int fd = (int32_t)arg(c, 0); uint32_t out = arg(c, 1), out_length = arg(c, 2);
+        int fd = (int32_t)rt_arg32(c, 0); uint32_t out = rt_arg32(c, 1), out_length = rt_arg32(c, 2);
         length = sizeof(address);
-        int result = BLOCKING(accept(fd, (struct sockaddr *)&address, &length));
+        int result = RT_BLOCKING(accept(fd, (struct sockaddr *)&address, &length));
         if (result >= 0 && out) guest_address(c, &address, length, out, out_length);
         finish(c, result);
     } else if (!strcmp(name, "getsockname")) {
         length = sizeof(address);
-        int result = getsockname((int32_t)arg(c, 0), (struct sockaddr *)&address, &length);
-        if (!result) guest_address(c, &address, length, arg(c, 1), arg(c, 2));
+        int result = getsockname((int32_t)rt_arg32(c, 0), (struct sockaddr *)&address, &length);
+        if (!result) guest_address(c, &address, length, rt_arg32(c, 1), rt_arg32(c, 2));
         finish(c, result);
     } else if (!strcmp(name, "send") || !strcmp(name, "sendto")) {
-        int fd = (int32_t)arg(c, 0); uint32_t buffer = arg(c, 1), size = arg(c, 2);
-        int flags = host_message_flags(c, arg(c, 3), 0);
+        int fd = (int32_t)rt_arg32(c, 0); uint32_t buffer = rt_arg32(c, 1), size = rt_arg32(c, 2);
+        int flags = host_message_flags(c, rt_arg32(c, 3), 0);
         const void *data = rt_span(c, buffer, size);
-        uint32_t target = !strcmp(name, "sendto") ? arg(c, 4) : 0;
-        if (target && (error = host_address(c, target, arg(c, 5), &address, &length, 0))) { fail(c, error); return 1; }
-        ssize_t result = BLOCKING(target ? sendto(fd, data, size, flags, (struct sockaddr *)&address, length)
+        uint32_t target = !strcmp(name, "sendto") ? rt_arg32(c, 4) : 0;
+        if (target && (error = host_address(c, target, rt_arg32(c, 5), &address, &length, 0))) { fail(c, error); return 1; }
+        ssize_t result = RT_BLOCKING(target ? sendto(fd, data, size, flags, (struct sockaddr *)&address, length)
                                          : send(fd, data, size, flags));
         finish(c, result);
     } else if (!strcmp(name, "recv") || !strcmp(name, "recvfrom")) {
-        int fd = (int32_t)arg(c, 0); uint32_t buffer = arg(c, 1), size = arg(c, 2);
-        int flags = host_message_flags(c, arg(c, 3), 1);
+        int fd = (int32_t)rt_arg32(c, 0); uint32_t buffer = rt_arg32(c, 1), size = rt_arg32(c, 2);
+        int flags = host_message_flags(c, rt_arg32(c, 3), 1);
         void *data = rt_write_span(c, buffer, size);
-        uint32_t source = !strcmp(name, "recvfrom") ? arg(c, 4) : 0, source_length = source ? arg(c, 5) : 0;
+        uint32_t source = !strcmp(name, "recvfrom") ? rt_arg32(c, 4) : 0, source_length = source ? rt_arg32(c, 5) : 0;
         length = sizeof(address); memset(&address, 0, sizeof(address));
-        ssize_t result = BLOCKING(recvfrom(fd, data, size, flags, source ? (struct sockaddr *)&address : NULL, source ? &length : NULL));
+        ssize_t result = RT_BLOCKING(recvfrom(fd, data, size, flags, source ? (struct sockaddr *)&address : NULL, source ? &length : NULL));
         if (result >= 0 && source) {
             if (length) guest_address(c, &address, length, source, source_length);
             else { rt_write_span(c, source_length, 4); W32(source_length, 0); }
         }
         finish(c, result);
     } else if (!strcmp(name, "setsockopt")) {
-        finish(c, socket_option(c, (int32_t)arg(c, 0), (int32_t)arg(c, 1), (int32_t)arg(c, 2), arg(c, 3), arg(c, 4)));
+        finish(c, socket_option(c, (int32_t)rt_arg32(c, 0), (int32_t)rt_arg32(c, 1), (int32_t)rt_arg32(c, 2), rt_arg32(c, 3), rt_arg32(c, 4)));
     } else if (!strcmp(name, "select")) {
-        int count = (int32_t)arg(c, 0); uint32_t sets[3] = {arg(c, 1), arg(c, 2), arg(c, 3)}, timeout = arg(c, 4);
+        int count = (int32_t)rt_arg32(c, 0); uint32_t sets[3] = {rt_arg32(c, 1), rt_arg32(c, 2), rt_arg32(c, 3)}, timeout = rt_arg32(c, 4);
         if (count < 0 || count > FD_SETSIZE) { fail(c, 22); return 1; }
         fd_set native[3]; fd_set *pointers[3]; size_t bytes = (size_t)((count + 31) / 32) * 4;
         for (int i = 0; i < 3; ++i) {
@@ -498,7 +495,7 @@ static int net_shim(CPU *c, const char *name) {
             if (seconds < 0 || micro < 0 || micro >= 1000000) { fail(c, 22); return 1; }
             tv.tv_sec = seconds; tv.tv_usec = micro; wait = &tv; limit = seconds + micro * 1e-6;
         }
-        int result = BLOCKING(select(count, pointers[0], pointers[1], pointers[2], wait));
+        int result = RT_BLOCKING(select(count, pointers[0], pointers[1], pointers[2], wait));
         error = errno;
         if (timeout) { // Linux écrit le temps restant
             double left = limit - (now() - start);
@@ -510,7 +507,7 @@ static int net_shim(CPU *c, const char *name) {
         if (result >= 0) for (int i = 0; i < 3; ++i) if (sets[i]) memcpy(GPTR(sets[i]), &native[i], bytes);
         errno = error; finish(c, result);
     } else if (!strcmp(name, "poll")) {
-        uint32_t fds = arg(c, 0), count = arg(c, 1); int timeout = (int32_t)arg(c, 2);
+        uint32_t fds = rt_arg32(c, 0), count = rt_arg32(c, 1); int timeout = (int32_t)rt_arg32(c, 2);
         if (count > 65536) { fail(c, 22); return 1; }
         struct pollfd *native = calloc(count ? count : 1, sizeof(*native));
         if (!native) { fail(c, 12); return 1; }
@@ -519,24 +516,24 @@ static int net_shim(CPU *c, const char *name) {
             native[i].fd = (int32_t)R32(fds + 8 * i);
             native[i].events = host_poll_events(R16(fds + 8 * i + 4));
         }
-        int result = BLOCKING(poll(native, count, timeout));
+        int result = RT_BLOCKING(poll(native, count, timeout));
         if (result >= 0) for (uint32_t i = 0; i < count; ++i) W16(fds + 8 * i + 6, linux_poll_events(native[i].revents));
         error = errno; free(native); errno = error;
         finish(c, result);
     } else if (!strcmp(name, "gethostbyname")) {
-        uint32_t text = arg(c, 0); rt_string_length(c, text);
+        uint32_t text = rt_arg32(c, 0); rt_string_length(c, text);
         c->eax = lookup_host(c, GPTR(text)) ? 0 : hostent_buffer;
     } else if (!strcmp(name, "getpeername")) {
         length = sizeof(address);
-        int result = getpeername((int32_t)arg(c, 0), (struct sockaddr *)&address, &length);
-        if (!result) guest_address(c, &address, length, arg(c, 1), arg(c, 2));
+        int result = getpeername((int32_t)rt_arg32(c, 0), (struct sockaddr *)&address, &length);
+        if (!result) guest_address(c, &address, length, rt_arg32(c, 1), rt_arg32(c, 2));
         finish(c, result);
     } else if (!strcmp(name, "getsockopt")) {
-        finish(c, read_socket_option(c, (int32_t)arg(c, 0), (int32_t)arg(c, 1), (int32_t)arg(c, 2), arg(c, 3), arg(c, 4)));
+        finish(c, read_socket_option(c, (int32_t)rt_arg32(c, 0), (int32_t)rt_arg32(c, 1), (int32_t)rt_arg32(c, 2), rt_arg32(c, 3), rt_arg32(c, 4)));
     } else if (!strcmp(name, "shutdown")) { // SHUT_RD/WR/RDWR identiques
-        finish(c, shutdown((int32_t)arg(c, 0), (int32_t)arg(c, 1)));
+        finish(c, shutdown((int32_t)rt_arg32(c, 0), (int32_t)rt_arg32(c, 1)));
     } else if (!strcmp(name, "inet_pton")) {
-        int family = (int32_t)arg(c, 0); uint32_t text = arg(c, 1), out = arg(c, 2);
+        int family = (int32_t)rt_arg32(c, 0); uint32_t text = rt_arg32(c, 1), out = rt_arg32(c, 2);
         if (family != L_AF_INET && family != L_AF_INET6) { fail(c, 97); return 1; }
         rt_string_length(c, text);
         uint8_t bytes[16];
@@ -544,7 +541,7 @@ static int net_shim(CPU *c, const char *name) {
         if (result == 1) memcpy(rt_write_span(c, out, family == L_AF_INET ? 4 : 16), bytes, family == L_AF_INET ? 4 : 16);
         c->eax = (uint32_t)result;
     } else if (!strcmp(name, "inet_ntop")) {
-        int family = (int32_t)arg(c, 0); uint32_t source = arg(c, 1), out = arg(c, 2), size = arg(c, 3);
+        int family = (int32_t)rt_arg32(c, 0); uint32_t source = rt_arg32(c, 1), out = rt_arg32(c, 2), size = rt_arg32(c, 3);
         if (family != L_AF_INET && family != L_AF_INET6) { rt_set_errno(c, 97); c->eax = 0; return 1; }
         char text[INET6_ADDRSTRLEN];
         const void *bytes = rt_span(c, source, family == L_AF_INET ? 4 : 16);
@@ -554,20 +551,20 @@ static int net_shim(CPU *c, const char *name) {
         memcpy(rt_write_span(c, out, used), text, used);
         c->eax = out;
     } else if (!strcmp(name, "inet_ntoa")) { // struct in_addr passée par valeur
-        struct in_addr address = {arg(c, 0)};
+        struct in_addr address = {rt_arg32(c, 0)};
         if (!ntoa_buffer && !(ntoa_buffer = rt_alloc(16))) { rt_set_errno(c, 12); c->eax = 0; return 1; }
         inet_ntop(AF_INET, &address, GPTR(ntoa_buffer), 16);
         c->eax = ntoa_buffer;
     } else if (!strcmp(name, "getaddrinfo")) {
-        c->eax = (uint32_t)guest_addrinfo(c, arg(c, 0), arg(c, 1), arg(c, 2), arg(c, 3));
+        c->eax = (uint32_t)guest_addrinfo(c, rt_arg32(c, 0), rt_arg32(c, 1), rt_arg32(c, 2), rt_arg32(c, 3));
     } else if (!strcmp(name, "freeaddrinfo")) {
-        free_guest_list(arg(c, 0), 28);
+        free_guest_list(rt_arg32(c, 0), 28);
     } else if (!strcmp(name, "getifaddrs")) {
-        finish(c, guest_ifaddrs(c, arg(c, 0)));
+        finish(c, guest_ifaddrs(c, rt_arg32(c, 0)));
     } else if (!strcmp(name, "freeifaddrs")) {
-        free_guest_list(arg(c, 0), 0);
+        free_guest_list(rt_arg32(c, 0), 0);
     } else if (!strcmp(name, "inet_addr")) {
-        uint32_t text = arg(c, 0); rt_string_length(c, text);
+        uint32_t text = rt_arg32(c, 0); rt_string_length(c, text);
         c->eax = inet_addr(GPTR(text));
     } else return 0;
     return 1;

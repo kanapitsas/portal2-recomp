@@ -1,6 +1,6 @@
 // GÉNÉRÉ par tools/gen_d3d9.py — ne pas éditer à la main.
-// Identifiants des interfaces Direct3D 9 du pont (runtime/d3d9.c) et
-// prototypes des méthodes écrites à la main.
+// Identifiants des interfaces Direct3D 9 du pont (runtime/d3d9.c), rangs de
+// vtable des méthodes et prototypes des méthodes écrites à la main.
 #pragma once
 #include "rt.h"
 
@@ -50,23 +50,241 @@ enum {
 #define D3D9_MASK_IDirect3DDevice9Ex 0x80000u
 #define D3D9_MASK_IDirect3DSwapChain9Ex 0x100000u
 
+// Rang de chaque méthode dans la vtable de l’interface qui la définit.
+#define D3D9_SLOT_IDirect3D9_CheckDepthStencilMatch 12
+#define D3D9_SLOT_IDirect3D9_CheckDeviceFormat 10
+#define D3D9_SLOT_IDirect3D9_CheckDeviceFormatConversion 13
+#define D3D9_SLOT_IDirect3D9_CheckDeviceMultiSampleType 11
+#define D3D9_SLOT_IDirect3D9_CheckDeviceType 9
+#define D3D9_SLOT_IDirect3D9_CreateDevice 16
+#define D3D9_SLOT_IDirect3D9_EnumAdapterModes 7
+#define D3D9_SLOT_IDirect3D9_GetAdapterCount 4
+#define D3D9_SLOT_IDirect3D9_GetAdapterDisplayMode 8
+#define D3D9_SLOT_IDirect3D9_GetAdapterIdentifier 5
+#define D3D9_SLOT_IDirect3D9_GetAdapterModeCount 6
+#define D3D9_SLOT_IDirect3D9_GetAdapterMonitor 15
+#define D3D9_SLOT_IDirect3D9_GetDeviceCaps 14
+#define D3D9_SLOT_IDirect3D9_RegisterSoftwareDevice 3
+#define D3D9_SLOT_IDirect3D9Ex_CreateDeviceEx 20
+#define D3D9_SLOT_IDirect3D9Ex_EnumAdapterModesEx 18
+#define D3D9_SLOT_IDirect3D9Ex_GetAdapterDisplayModeEx 19
+#define D3D9_SLOT_IDirect3D9Ex_GetAdapterLUID 21
+#define D3D9_SLOT_IDirect3D9Ex_GetAdapterModeCountEx 17
+#define D3D9_SLOT_IDirect3DBaseTexture9_GenerateMipSubLevels 16
+#define D3D9_SLOT_IDirect3DBaseTexture9_GetAutoGenFilterType 15
+#define D3D9_SLOT_IDirect3DBaseTexture9_GetLOD 12
+#define D3D9_SLOT_IDirect3DBaseTexture9_GetLevelCount 13
+#define D3D9_SLOT_IDirect3DBaseTexture9_SetAutoGenFilterType 14
+#define D3D9_SLOT_IDirect3DBaseTexture9_SetLOD 11
+#define D3D9_SLOT_IDirect3DCubeTexture9_AddDirtyRect 21
+#define D3D9_SLOT_IDirect3DCubeTexture9_GetCubeMapSurface 18
+#define D3D9_SLOT_IDirect3DCubeTexture9_GetLevelDesc 17
+#define D3D9_SLOT_IDirect3DCubeTexture9_LockRect 19
+#define D3D9_SLOT_IDirect3DCubeTexture9_UnlockRect 20
+#define D3D9_SLOT_IDirect3DDevice9_BeginScene 41
+#define D3D9_SLOT_IDirect3DDevice9_BeginStateBlock 60
+#define D3D9_SLOT_IDirect3DDevice9_Clear 43
+#define D3D9_SLOT_IDirect3DDevice9_ColorFill 35
+#define D3D9_SLOT_IDirect3DDevice9_CreateAdditionalSwapChain 13
+#define D3D9_SLOT_IDirect3DDevice9_CreateCubeTexture 25
+#define D3D9_SLOT_IDirect3DDevice9_CreateDepthStencilSurface 29
+#define D3D9_SLOT_IDirect3DDevice9_CreateIndexBuffer 27
+#define D3D9_SLOT_IDirect3DDevice9_CreateOffscreenPlainSurface 36
+#define D3D9_SLOT_IDirect3DDevice9_CreatePixelShader 106
+#define D3D9_SLOT_IDirect3DDevice9_CreateQuery 118
+#define D3D9_SLOT_IDirect3DDevice9_CreateRenderTarget 28
+#define D3D9_SLOT_IDirect3DDevice9_CreateStateBlock 59
+#define D3D9_SLOT_IDirect3DDevice9_CreateTexture 23
+#define D3D9_SLOT_IDirect3DDevice9_CreateVertexBuffer 26
+#define D3D9_SLOT_IDirect3DDevice9_CreateVertexDeclaration 86
+#define D3D9_SLOT_IDirect3DDevice9_CreateVertexShader 91
+#define D3D9_SLOT_IDirect3DDevice9_CreateVolumeTexture 24
+#define D3D9_SLOT_IDirect3DDevice9_DeletePatch 117
+#define D3D9_SLOT_IDirect3DDevice9_DrawIndexedPrimitive 82
+#define D3D9_SLOT_IDirect3DDevice9_DrawIndexedPrimitiveUP 84
+#define D3D9_SLOT_IDirect3DDevice9_DrawPrimitive 81
+#define D3D9_SLOT_IDirect3DDevice9_DrawPrimitiveUP 83
+#define D3D9_SLOT_IDirect3DDevice9_DrawRectPatch 115
+#define D3D9_SLOT_IDirect3DDevice9_DrawTriPatch 116
+#define D3D9_SLOT_IDirect3DDevice9_EndScene 42
+#define D3D9_SLOT_IDirect3DDevice9_EndStateBlock 61
+#define D3D9_SLOT_IDirect3DDevice9_EvictManagedResources 5
+#define D3D9_SLOT_IDirect3DDevice9_GetAvailableTextureMem 4
+#define D3D9_SLOT_IDirect3DDevice9_GetBackBuffer 18
+#define D3D9_SLOT_IDirect3DDevice9_GetClipPlane 56
+#define D3D9_SLOT_IDirect3DDevice9_GetClipStatus 63
+#define D3D9_SLOT_IDirect3DDevice9_GetCreationParameters 9
+#define D3D9_SLOT_IDirect3DDevice9_GetCurrentTexturePalette 74
+#define D3D9_SLOT_IDirect3DDevice9_GetDepthStencilSurface 40
+#define D3D9_SLOT_IDirect3DDevice9_GetDeviceCaps 7
+#define D3D9_SLOT_IDirect3DDevice9_GetDirect3D 6
+#define D3D9_SLOT_IDirect3DDevice9_GetDisplayMode 8
+#define D3D9_SLOT_IDirect3DDevice9_GetFVF 90
+#define D3D9_SLOT_IDirect3DDevice9_GetFrontBufferData 33
+#define D3D9_SLOT_IDirect3DDevice9_GetGammaRamp 22
+#define D3D9_SLOT_IDirect3DDevice9_GetIndices 105
+#define D3D9_SLOT_IDirect3DDevice9_GetLight 52
+#define D3D9_SLOT_IDirect3DDevice9_GetLightEnable 54
+#define D3D9_SLOT_IDirect3DDevice9_GetMaterial 50
+#define D3D9_SLOT_IDirect3DDevice9_GetNPatchMode 80
+#define D3D9_SLOT_IDirect3DDevice9_GetNumberOfSwapChains 15
+#define D3D9_SLOT_IDirect3DDevice9_GetPaletteEntries 72
+#define D3D9_SLOT_IDirect3DDevice9_GetPixelShader 108
+#define D3D9_SLOT_IDirect3DDevice9_GetPixelShaderConstantB 114
+#define D3D9_SLOT_IDirect3DDevice9_GetPixelShaderConstantF 110
+#define D3D9_SLOT_IDirect3DDevice9_GetPixelShaderConstantI 112
+#define D3D9_SLOT_IDirect3DDevice9_GetRasterStatus 19
+#define D3D9_SLOT_IDirect3DDevice9_GetRenderState 58
+#define D3D9_SLOT_IDirect3DDevice9_GetRenderTarget 38
+#define D3D9_SLOT_IDirect3DDevice9_GetRenderTargetData 32
+#define D3D9_SLOT_IDirect3DDevice9_GetSamplerState 68
+#define D3D9_SLOT_IDirect3DDevice9_GetScissorRect 76
+#define D3D9_SLOT_IDirect3DDevice9_GetSoftwareVertexProcessing 78
+#define D3D9_SLOT_IDirect3DDevice9_GetStreamSource 101
+#define D3D9_SLOT_IDirect3DDevice9_GetStreamSourceFreq 103
+#define D3D9_SLOT_IDirect3DDevice9_GetSwapChain 14
+#define D3D9_SLOT_IDirect3DDevice9_GetTexture 64
+#define D3D9_SLOT_IDirect3DDevice9_GetTextureStageState 66
+#define D3D9_SLOT_IDirect3DDevice9_GetTransform 45
+#define D3D9_SLOT_IDirect3DDevice9_GetVertexDeclaration 88
+#define D3D9_SLOT_IDirect3DDevice9_GetVertexShader 93
+#define D3D9_SLOT_IDirect3DDevice9_GetVertexShaderConstantB 99
+#define D3D9_SLOT_IDirect3DDevice9_GetVertexShaderConstantF 95
+#define D3D9_SLOT_IDirect3DDevice9_GetVertexShaderConstantI 97
+#define D3D9_SLOT_IDirect3DDevice9_GetViewport 48
+#define D3D9_SLOT_IDirect3DDevice9_LightEnable 53
+#define D3D9_SLOT_IDirect3DDevice9_MultiplyTransform 46
+#define D3D9_SLOT_IDirect3DDevice9_Present 17
+#define D3D9_SLOT_IDirect3DDevice9_ProcessVertices 85
+#define D3D9_SLOT_IDirect3DDevice9_Reset 16
+#define D3D9_SLOT_IDirect3DDevice9_SetClipPlane 55
+#define D3D9_SLOT_IDirect3DDevice9_SetClipStatus 62
+#define D3D9_SLOT_IDirect3DDevice9_SetCurrentTexturePalette 73
+#define D3D9_SLOT_IDirect3DDevice9_SetCursorPosition 11
+#define D3D9_SLOT_IDirect3DDevice9_SetCursorProperties 10
+#define D3D9_SLOT_IDirect3DDevice9_SetDepthStencilSurface 39
+#define D3D9_SLOT_IDirect3DDevice9_SetDialogBoxMode 20
+#define D3D9_SLOT_IDirect3DDevice9_SetFVF 89
 #define D3D9_SLOT_IDirect3DDevice9_SetGammaRamp 21
-void d3d9_manual_IDirect3DDevice9_SetGammaRamp(CPU *c, void *self, uint32_t a);
+#define D3D9_SLOT_IDirect3DDevice9_SetIndices 104
+#define D3D9_SLOT_IDirect3DDevice9_SetLight 51
+#define D3D9_SLOT_IDirect3DDevice9_SetMaterial 49
+#define D3D9_SLOT_IDirect3DDevice9_SetNPatchMode 79
+#define D3D9_SLOT_IDirect3DDevice9_SetPaletteEntries 71
+#define D3D9_SLOT_IDirect3DDevice9_SetPixelShader 107
+#define D3D9_SLOT_IDirect3DDevice9_SetPixelShaderConstantB 113
+#define D3D9_SLOT_IDirect3DDevice9_SetPixelShaderConstantF 109
+#define D3D9_SLOT_IDirect3DDevice9_SetPixelShaderConstantI 111
+#define D3D9_SLOT_IDirect3DDevice9_SetRenderState 57
+#define D3D9_SLOT_IDirect3DDevice9_SetRenderTarget 37
+#define D3D9_SLOT_IDirect3DDevice9_SetSamplerState 69
+#define D3D9_SLOT_IDirect3DDevice9_SetScissorRect 75
+#define D3D9_SLOT_IDirect3DDevice9_SetSoftwareVertexProcessing 77
+#define D3D9_SLOT_IDirect3DDevice9_SetStreamSource 100
+#define D3D9_SLOT_IDirect3DDevice9_SetStreamSourceFreq 102
+#define D3D9_SLOT_IDirect3DDevice9_SetTexture 65
+#define D3D9_SLOT_IDirect3DDevice9_SetTextureStageState 67
+#define D3D9_SLOT_IDirect3DDevice9_SetTransform 44
+#define D3D9_SLOT_IDirect3DDevice9_SetVertexDeclaration 87
+#define D3D9_SLOT_IDirect3DDevice9_SetVertexShader 92
+#define D3D9_SLOT_IDirect3DDevice9_SetVertexShaderConstantB 98
+#define D3D9_SLOT_IDirect3DDevice9_SetVertexShaderConstantF 94
+#define D3D9_SLOT_IDirect3DDevice9_SetVertexShaderConstantI 96
+#define D3D9_SLOT_IDirect3DDevice9_SetViewport 47
+#define D3D9_SLOT_IDirect3DDevice9_ShowCursor 12
+#define D3D9_SLOT_IDirect3DDevice9_StretchRect 34
+#define D3D9_SLOT_IDirect3DDevice9_TestCooperativeLevel 3
+#define D3D9_SLOT_IDirect3DDevice9_UpdateSurface 30
+#define D3D9_SLOT_IDirect3DDevice9_UpdateTexture 31
+#define D3D9_SLOT_IDirect3DDevice9_ValidateDevice 70
+#define D3D9_SLOT_IDirect3DDevice9Ex_CheckDeviceState 128
+#define D3D9_SLOT_IDirect3DDevice9Ex_CheckResourceResidency 125
+#define D3D9_SLOT_IDirect3DDevice9Ex_ComposeRects 120
+#define D3D9_SLOT_IDirect3DDevice9Ex_CreateDepthStencilSurfaceEx 131
+#define D3D9_SLOT_IDirect3DDevice9Ex_CreateOffscreenPlainSurfaceEx 130
+#define D3D9_SLOT_IDirect3DDevice9Ex_CreateRenderTargetEx 129
+#define D3D9_SLOT_IDirect3DDevice9Ex_GetDisplayModeEx 133
+#define D3D9_SLOT_IDirect3DDevice9Ex_GetGPUThreadPriority 122
+#define D3D9_SLOT_IDirect3DDevice9Ex_GetMaximumFrameLatency 127
+#define D3D9_SLOT_IDirect3DDevice9Ex_PresentEx 121
+#define D3D9_SLOT_IDirect3DDevice9Ex_ResetEx 132
+#define D3D9_SLOT_IDirect3DDevice9Ex_SetConvolutionMonoKernel 119
+#define D3D9_SLOT_IDirect3DDevice9Ex_SetGPUThreadPriority 123
+#define D3D9_SLOT_IDirect3DDevice9Ex_SetMaximumFrameLatency 126
+#define D3D9_SLOT_IDirect3DDevice9Ex_WaitForVBlank 124
+#define D3D9_SLOT_IDirect3DIndexBuffer9_GetDesc 13
+#define D3D9_SLOT_IDirect3DIndexBuffer9_Lock 11
+#define D3D9_SLOT_IDirect3DIndexBuffer9_Unlock 12
+#define D3D9_SLOT_IDirect3DPixelShader9_GetDevice 3
+#define D3D9_SLOT_IDirect3DPixelShader9_GetFunction 4
 #define D3D9_SLOT_IDirect3DQuery9_GetData 7
-void d3d9_manual_IDirect3DQuery9_GetData(CPU *c, void *self, uint32_t a);
+#define D3D9_SLOT_IDirect3DQuery9_GetDataSize 5
+#define D3D9_SLOT_IDirect3DQuery9_GetDevice 3
+#define D3D9_SLOT_IDirect3DQuery9_GetType 4
 #define D3D9_SLOT_IDirect3DQuery9_Issue 6
-void d3d9_manual_IDirect3DQuery9_Issue(CPU *c, void *self, uint32_t a);
+#define D3D9_SLOT_IDirect3DResource9_FreePrivateData 6
+#define D3D9_SLOT_IDirect3DResource9_GetDevice 3
+#define D3D9_SLOT_IDirect3DResource9_GetPriority 8
+#define D3D9_SLOT_IDirect3DResource9_GetPrivateData 5
+#define D3D9_SLOT_IDirect3DResource9_GetType 10
+#define D3D9_SLOT_IDirect3DResource9_PreLoad 9
+#define D3D9_SLOT_IDirect3DResource9_SetPriority 7
 #define D3D9_SLOT_IDirect3DResource9_SetPrivateData 4
-void d3d9_manual_IDirect3DResource9_SetPrivateData(CPU *c, void *self, uint32_t a);
+#define D3D9_SLOT_IDirect3DStateBlock9_Apply 5
+#define D3D9_SLOT_IDirect3DStateBlock9_Capture 4
+#define D3D9_SLOT_IDirect3DStateBlock9_GetDevice 3
 #define D3D9_SLOT_IDirect3DSurface9_GetContainer 11
-void d3d9_manual_IDirect3DSurface9_GetContainer(CPU *c, void *self, uint32_t a);
+#define D3D9_SLOT_IDirect3DSurface9_GetDC 15
+#define D3D9_SLOT_IDirect3DSurface9_GetDesc 12
+#define D3D9_SLOT_IDirect3DSurface9_LockRect 13
+#define D3D9_SLOT_IDirect3DSurface9_ReleaseDC 16
+#define D3D9_SLOT_IDirect3DSurface9_UnlockRect 14
+#define D3D9_SLOT_IDirect3DSwapChain9_GetBackBuffer 5
+#define D3D9_SLOT_IDirect3DSwapChain9_GetDevice 8
+#define D3D9_SLOT_IDirect3DSwapChain9_GetDisplayMode 7
+#define D3D9_SLOT_IDirect3DSwapChain9_GetFrontBufferData 4
+#define D3D9_SLOT_IDirect3DSwapChain9_GetPresentParameters 9
+#define D3D9_SLOT_IDirect3DSwapChain9_GetRasterStatus 6
+#define D3D9_SLOT_IDirect3DSwapChain9_Present 3
+#define D3D9_SLOT_IDirect3DSwapChain9Ex_GetDisplayModeEx 12
+#define D3D9_SLOT_IDirect3DSwapChain9Ex_GetLastPresentCount 10
+#define D3D9_SLOT_IDirect3DSwapChain9Ex_GetPresentStats 11
+#define D3D9_SLOT_IDirect3DTexture9_AddDirtyRect 21
+#define D3D9_SLOT_IDirect3DTexture9_GetLevelDesc 17
+#define D3D9_SLOT_IDirect3DTexture9_GetSurfaceLevel 18
+#define D3D9_SLOT_IDirect3DTexture9_LockRect 19
+#define D3D9_SLOT_IDirect3DTexture9_UnlockRect 20
+#define D3D9_SLOT_IDirect3DVertexBuffer9_GetDesc 13
+#define D3D9_SLOT_IDirect3DVertexBuffer9_Lock 11
+#define D3D9_SLOT_IDirect3DVertexBuffer9_Unlock 12
 #define D3D9_SLOT_IDirect3DVertexDeclaration9_GetDeclaration 4
-void d3d9_manual_IDirect3DVertexDeclaration9_GetDeclaration(CPU *c, void *self, uint32_t a);
+#define D3D9_SLOT_IDirect3DVertexDeclaration9_GetDevice 3
+#define D3D9_SLOT_IDirect3DVertexShader9_GetDevice 3
+#define D3D9_SLOT_IDirect3DVertexShader9_GetFunction 4
+#define D3D9_SLOT_IDirect3DVolume9_FreePrivateData 6
 #define D3D9_SLOT_IDirect3DVolume9_GetContainer 7
-void d3d9_manual_IDirect3DVolume9_GetContainer(CPU *c, void *self, uint32_t a);
+#define D3D9_SLOT_IDirect3DVolume9_GetDesc 8
+#define D3D9_SLOT_IDirect3DVolume9_GetDevice 3
+#define D3D9_SLOT_IDirect3DVolume9_GetPrivateData 5
+#define D3D9_SLOT_IDirect3DVolume9_LockBox 9
 #define D3D9_SLOT_IDirect3DVolume9_SetPrivateData 4
-void d3d9_manual_IDirect3DVolume9_SetPrivateData(CPU *c, void *self, uint32_t a);
+#define D3D9_SLOT_IDirect3DVolume9_UnlockBox 10
+#define D3D9_SLOT_IDirect3DVolumeTexture9_AddDirtyBox 21
+#define D3D9_SLOT_IDirect3DVolumeTexture9_GetLevelDesc 17
+#define D3D9_SLOT_IDirect3DVolumeTexture9_GetVolumeLevel 18
+#define D3D9_SLOT_IDirect3DVolumeTexture9_LockBox 19
+#define D3D9_SLOT_IDirect3DVolumeTexture9_UnlockBox 20
+#define D3D9_SLOT_IUnknown_AddRef 1
 #define D3D9_SLOT_IUnknown_QueryInterface 0
-void d3d9_manual_IUnknown_QueryInterface(CPU *c, void *self, uint32_t a);
 #define D3D9_SLOT_IUnknown_Release 2
+
+void d3d9_manual_IDirect3DDevice9_SetGammaRamp(CPU *c, void *self, uint32_t a);
+void d3d9_manual_IDirect3DQuery9_GetData(CPU *c, void *self, uint32_t a);
+void d3d9_manual_IDirect3DQuery9_Issue(CPU *c, void *self, uint32_t a);
+void d3d9_manual_IDirect3DResource9_SetPrivateData(CPU *c, void *self, uint32_t a);
+void d3d9_manual_IDirect3DSurface9_GetContainer(CPU *c, void *self, uint32_t a);
+void d3d9_manual_IDirect3DVertexDeclaration9_GetDeclaration(CPU *c, void *self, uint32_t a);
+void d3d9_manual_IDirect3DVolume9_GetContainer(CPU *c, void *self, uint32_t a);
+void d3d9_manual_IDirect3DVolume9_SetPrivateData(CPU *c, void *self, uint32_t a);
+void d3d9_manual_IUnknown_QueryInterface(CPU *c, void *self, uint32_t a);
 void d3d9_manual_IUnknown_Release(CPU *c, void *self, uint32_t a);

@@ -2,9 +2,10 @@
 // implémentation Direct3D 9 native arm64 (libd3d9metal.dylib, contrat dans
 // runtime/d3d9/d3d9metal.h), à la place de libdxvk_d3d9.so.
 //
-// - Direct3DCreate9 est le seul import graphique de shaderapivk.so : il charge
-//   la bibliothèque (P2_D3D9METAL, sinon Frameworks/ de l'app, sinon à côté de
-//   l'exécutable) et rend le mandataire invité de l'IDirect3D9 hôte.
+// - Direct3DCreate9 (Portal 2) et Direct3DCreate9Ex (Half-Life 2) sont les
+//   seuls imports graphiques de shaderapivk.so : ils chargent la bibliothèque
+//   (P2_D3D9METAL, sinon Frameworks/ de l'app, sinon à côté de l'exécutable)
+//   et rendent le mandataire invité de l'IDirect3D9 / IDirect3D9Ex hôte.
 // - Appels COM invités (cdecl, this en premier, l'appelant dépile) : chaque
 //   emplacement de vtable invitée est une adresse dynamique dont la route mène
 //   à d3d9_call puis au thunk généré (tools/gen_d3d9.py).
@@ -22,9 +23,7 @@
 #include "sdl_common.h"
 #include <dlfcn.h>
 #include <limits.h>
-#include <mach-o/dyld.h>
 #include <pthread.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -62,18 +61,9 @@ _Static_assert(sizeof(D3d9HostLocked) == 16 && OFF(D3d9HostLocked, pBits) == 8 &
                LOCKED_RECT_BITS + 4 == LOCKED_RECT_SIZE && LOCKED_BOX_BITS + 4 == LOCKED_BOX_SIZE,
                "D3DLOCKED_RECT / D3DLOCKED_BOX");
 
-static _Thread_local char message[512];
-static __attribute__((noreturn, format(printf, 2, 3))) void fail(CPU *c, const char *format, ...) {
-    va_list list;
-    va_start(list, format);
-    vsnprintf(message, sizeof(message), format, list);
-    va_end(list);
-    rt_trap(c, c->eip, message);
-}
-
 // ---------------------------------------------------------------- bibliothèque native
 static pthread_mutex_t library_lock = PTHREAD_MUTEX_INITIALIZER;
-static d3d9metal_init_fn library_init, test_init;
+static d3d9metal_init_fn test_init;
 static d3d9metal_create_fn library_create, test_create;
 static d3d9_create_ex_fn library_create_ex, test_create_ex;
 static int library_state;   // 0 : à charger, 1 : prête, -1 : absente ou refusée
@@ -86,16 +76,6 @@ int d3d9metal_init(const D3D9MetalHost *host);
 void *d3d9metal_Direct3DCreate9(unsigned sdk_version);
 int32_t Direct3DCreate9Ex(unsigned sdk_version, void **out);
 #else
-static int executable_dir(char *out, size_t size) {
-    char exe[PATH_MAX], real[PATH_MAX];
-    uint32_t length = sizeof(exe);
-    if (_NSGetExecutablePath(exe, &length) || !realpath(exe, real)) return -1;
-    char *slash = strrchr(real, '/');
-    if (!slash) return -1;
-    *slash = 0;
-    return snprintf(out, size, "%s", real) >= (int)size ? -1 : 0;
-}
-
 // Ordre : P2_D3D9METAL, ../Frameworks (app macOS), Frameworks (app iOS), dossier de l'exécutable.
 static void *open_library(char *path, size_t size) {
     const char *env = getenv("P2_D3D9METAL");
@@ -105,8 +85,8 @@ static void *open_library(char *path, size_t size) {
         if (!handle) fprintf(stderr, "d3d9: dlopen %s: %s\n", env, dlerror());
         return handle;
     }
-    char dir[PATH_MAX];
-    if (executable_dir(dir, sizeof(dir))) return NULL;
+    const char *dir = rt_executable_dir();
+    if (!dir) return NULL;
     static const char *const candidates[] = {"%s/../Frameworks/libd3d9metal.dylib", "%s/Frameworks/libd3d9metal.dylib",
                                              "%s/libd3d9metal.dylib"};
     for (size_t i = 0; i < sizeof(candidates) / sizeof(*candidates); ++i) {
@@ -125,7 +105,7 @@ static void *open_library(char *path, size_t size) {
 void rt_d3d9_set_library(d3d9metal_init_fn init, d3d9metal_create_fn create) {
     pthread_mutex_lock(&library_lock);
     test_init = init; test_create = create;
-    library_init = NULL; library_create = NULL; library_create_ex = NULL; library_state = 0;
+    library_create = NULL; library_create_ex = NULL; library_state = 0;
     pthread_mutex_unlock(&library_lock);
 }
 void rt_d3d9_set_library_ex(d3d9_create_ex_fn create_ex) {
@@ -295,7 +275,7 @@ static int load_library(void) {
             if (status) fprintf(stderr, "d3d9: d3d9metal_init failed (%d)\n", status);
             else {
                 if (!test_init) initialized = init;
-                library_init = init; library_create = create; library_create_ex = create_ex; library_state = 1;
+                library_create = create; library_create_ex = create_ex; library_state = 1;
                 fprintf(stderr, "d3d9: %s ready (vendor %04x device %04x, %u display modes, cache %s)\n", library_path,
                         host.vendor_id, host.device_id, host.mode_count, host.cache_dir ? host.cache_dir : "none");
             }
@@ -384,7 +364,7 @@ static int grow(void) {
 // Nouvelle entrée (host absent de la table). Les pointeurs Entry * obtenus
 // avant peuvent être invalidés (agrandissement).
 static Entry *insert(CPU *c, const void *host, uint32_t proxy) {
-    if ((used + 1) * 4 > capacity * 3 && grow()) fail(c, "D3D9 bridge: out of memory (proxy table)");
+    if ((used + 1) * 4 > capacity * 3 && grow()) rt_trapf(c, "D3D9 bridge: out of memory (proxy table)");
     size_t i = hash(host) & (capacity - 1);
     while (entries[i].host && entries[i].host != TOMBSTONE) i = (i + 1) & (capacity - 1);
     if (!entries[i].host) ++used;
@@ -421,10 +401,10 @@ static uint32_t vtable(CPU *c, unsigned iface) {
     if (vtables[iface]) return vtables[iface];
     const D3d9Interface *info = &rt_d3d9_interfaces[iface];
     uint32_t table = rt_alloc(4u * info->slot_count);
-    if (!table) fail(c, "D3D9 bridge: guest vtable allocation failed (%s)", info->name);
+    if (!table) rt_trapf(c, "D3D9 bridge: guest vtable allocation failed (%s)", info->name);
     for (unsigned s = 0; s < info->slot_count; ++s) {
         uint32_t address = rt_dynamic_import(rt_d3d9_methods[info->slots[s]].name);
-        if (!address) fail(c, "D3D9 bridge: dynamic import table is full");
+        if (!address) rt_trapf(c, "D3D9 bridge: dynamic import table is full");
         W32(table + 4 * s, address);
     }
     return vtables[iface] = table;
@@ -434,20 +414,19 @@ static uint32_t vtable(CPU *c, unsigned iface) {
 static unsigned concrete(CPU *c, void *host, unsigned iface) {
     if (!rt_d3d9_interfaces[iface].abstract) return iface;
     if (iface != D3D9_IDirect3DBaseTexture9 && iface != D3D9_IDirect3DResource9)
-        fail(c, "D3D9 bridge: cannot tell the concrete type of a %s", rt_d3d9_interfaces[iface].name);
-    // IDirect3DResource9::GetType (emplacement 10) : D3DRESOURCETYPE.
-    uint32_t type = ((uint32_t (*)(void *))D3D9_VTBL(host)[10])(host);
+        rt_trapf(c, "D3D9 bridge: cannot tell the concrete type of a %s", rt_d3d9_interfaces[iface].name);
+    uint32_t type = ((uint32_t (*)(void *))D3D9_VTBL(host)[D3D9_SLOT_IDirect3DResource9_GetType])(host);   // D3DRESOURCETYPE
     static const int8_t by_type[] = {-1, D3D9_IDirect3DSurface9, -1, D3D9_IDirect3DTexture9, D3D9_IDirect3DVolumeTexture9,
                                      D3D9_IDirect3DCubeTexture9, D3D9_IDirect3DVertexBuffer9, D3D9_IDirect3DIndexBuffer9};
     int result = type < sizeof(by_type) ? by_type[type] : -1;
     if (result < 0 || !((rt_d3d9_interfaces[iface].derived >> result) & 1))
-        fail(c, "D3D9 bridge: host %s reports resource type %u", rt_d3d9_interfaces[iface].name, type);
+        rt_trapf(c, "D3D9 bridge: host %s reports resource type %u", rt_d3d9_interfaces[iface].name, type);
     return (unsigned)result;
 }
 
 uint32_t d3d9_proxy(CPU *c, void *host, unsigned iface) {
     if (!host) return 0;
-    if (iface >= D3D9_INTERFACE_COUNT) fail(c, "D3D9 bridge: bad interface id %u", iface);
+    if (iface >= D3D9_INTERFACE_COUNT) rt_trapf(c, "D3D9 bridge: bad interface id %u", iface);
     Entry *e = find(host);
     // Mandataire existant d'un type compatible : même identité pour le jeu.
     // Sinon (adresse hôte réutilisée par un objet d'un autre type après la
@@ -455,7 +434,7 @@ uint32_t d3d9_proxy(CPU *c, void *host, unsigned iface) {
     if (e && e->proxy && proxy_accepts(tag_of(e->proxy), rt_d3d9_interfaces[iface].derived)) return e->proxy;
     unsigned type = concrete(c, host, iface);
     uint32_t table = vtable(c, type), proxy = rt_alloc(D3D9_PROXY_SIZE);
-    if (!proxy) fail(c, "D3D9 bridge: guest proxy allocation failed");
+    if (!proxy) rt_trapf(c, "D3D9 bridge: guest proxy allocation failed");
     W32(proxy, table);
     W32(proxy + 4, D3D9_TAG << 8 | type);
     W64(proxy + 8, (uint64_t)(uintptr_t)host);
@@ -532,7 +511,7 @@ static void *self_of(CPU *c, const D3d9Method *m) {
         uint32_t tag = R32(object + 4);
         if (__builtin_expect(proxy_accepts(tag, m->accept), 1)) return proxy_host(object);
     }
-    fail(c, "D3D9 bridge: %s called on %#x, which is not a live proxy of that interface", m->name, object);
+    rt_trapf(c, "D3D9 bridge: %s called on %#x, which is not a live proxy of that interface", m->name, object);
 }
 
 // ---------------------------------------------------------------- aides du code généré
@@ -544,7 +523,7 @@ void *d3d9_iface_in(CPU *c, uint32_t guest, uint32_t accept) {
     if (!guest) return NULL;
     uint32_t tag = R32(guest + 4);
     if (!proxy_accepts(tag, accept))
-        fail(c, "D3D9 bridge: interface argument %#x is not a live D3D9 proxy of the expected type (tag %#x)", guest, tag);
+        rt_trapf(c, "D3D9 bridge: interface argument %#x is not a live D3D9 proxy of the expected type (tag %#x)", guest, tag);
     return proxy_host(guest);
 }
 int d3d9_out_slot(CPU *c, uint32_t guest) {
@@ -563,10 +542,7 @@ void d3d9_child_out(CPU *c, uint32_t guest, void *host, unsigned iface, const vo
 }
 
 void *d3d9_hwnd(CPU *c, uint32_t guest) {
-    if (!guest) return NULL;
-    void *window = rt_handle_get(guest, RT_SDL_WINDOW);
-    if (!window) fail(c, "D3D9 bridge: HWND %#x is not an SDL_Window created by the SDL bridge", guest);
-    return window;
+    return rt_handle_require(c, guest, RT_SDL_WINDOW, "HWND (SDL_Window created by the SDL bridge)");
 }
 static uint32_t guest_hwnd(const void *window) { return window ? rt_handle_find(window, RT_SDL_WINDOW) : 0; }
 
@@ -595,11 +571,52 @@ void *d3d9_shared(CPU *c, uint32_t guest, int user_memory, void **slot) {
     if (user_memory && host_device_is_ex(proxy_host(R32(c->esp + 4)))) {
         rt_span(c, guest, 4);
         uint32_t pixels = R32(guest);
-        *slot = pixels ? rt_span(c, pixels, 1) : NULL;
+        *slot = pixels ? GPTR(pixels) : NULL;   // taille validée ensuite par d3d9_user_memory_check (thunk)
         return slot;
     }
     if (!logged) { logged = 1; fprintf(stderr, "d3d9: pSharedHandle ignored outside system-memory user memory\n"); }
     return NULL;
+}
+// Octets d'une image Width×Height au format D3DFMT donné, telle que la lit la
+// bibliothèque depuis la mémoire utilisateur (lignes serrées : Width × octets
+// par pixel ; formats par blocs de 4×4 : blocs entiers). 0 : format inconnu
+// du pont.
+#define D3D9_FOURCC(a, b, c, d) ((uint32_t)(a) | (uint32_t)(b) << 8 | (uint32_t)(c) << 16 | (uint32_t)(d) << 24)
+uint64_t d3d9_image_bytes(uint32_t width, uint32_t height, uint32_t format) {
+    uint64_t block = 0;   // octets par bloc 4×4
+    switch (format) {
+    case D3D9_FOURCC('D', 'X', 'T', '1'): case D3D9_FOURCC('A', 'T', 'I', '1'): block = 8; break;
+    case D3D9_FOURCC('D', 'X', 'T', '2'): case D3D9_FOURCC('D', 'X', 'T', '3'):
+    case D3D9_FOURCC('D', 'X', 'T', '4'): case D3D9_FOURCC('D', 'X', 'T', '5'):
+    case D3D9_FOURCC('A', 'T', 'I', '2'): block = 16; break;
+    }
+    if (block) return ((uint64_t)width + 3) / 4 * (((uint64_t)height + 3) / 4) * block;
+    uint32_t bytes;
+    switch (format) {
+    case 28: case 41: case 50: case 52: case 27: bytes = 1; break;                   // A8, P8, L8, A4L4, R3G3B2
+    case 23: case 24: case 25: case 26: case 29: case 30: case 40: case 51: case 60:  // R5G6B5… A8L8, V8U8
+    case 61: case 70: case 73: case 80: case 81: case 111: case 117: bytes = 2; break;   // L6V5U5, D16*, L16, R16F, CxV8U8
+    case 20: bytes = 3; break;                                                        // R8G8B8
+    case 21: case 22: case 31: case 32: case 33: case 34: case 35: case 62: case 63: case 64: case 67:
+    case 71: case 75: case 77: case 79: case 82: case 83: case 112: case 114: case 118: case 119: bytes = 4; break;
+    case 36: case 110: case 113: case 115: bytes = 8; break;                         // A16B16G16R16(F), Q16W16V16U16, G32R32F
+    case 116: bytes = 16; break;                                                     // A32B32G32R32F
+    default: return 0;
+    }
+    return (uint64_t)width * height * bytes;
+}
+// Après d3d9_shared : valide les pixels de la mémoire utilisateur sur toute
+// l'image (slot non nul : chemin mémoire utilisateur pris, *slot = pixels hôte).
+void d3d9_user_memory_check(CPU *c, void *slot, uint32_t width, uint32_t height, uint32_t format) {
+    void *pixels = slot ? *(void **)slot : NULL;
+    if (!pixels) return;
+    uint64_t size = d3d9_image_bytes(width, height, format);
+    if (!size) {
+        static int logged;
+        if (!logged) { logged = 1; fprintf(stderr, "d3d9: user memory of format %u (%ux%u) has an unknown size, first byte checked only\n", format, width, height); }
+        size = 1;
+    }
+    rt_span(c, (uint32_t)((uintptr_t)pixels - (uintptr_t)M), size);
 }
 
 void *d3d9_params_in(CPU *c, uint32_t guest, D3d9HostParams *h, int input) {
@@ -646,12 +663,8 @@ void d3d9_creation_out(CPU *c, uint32_t guest, const D3d9HostCreation *h) {
 }
 
 uint32_t d3d9_guest_pointer(CPU *c, const void *bits) {
-    if (!bits) return 0;
-    uintptr_t p = (uintptr_t)bits, base = (uintptr_t)M;
-    if (p < base || p - base > UINT32_MAX)
-        fail(c, "D3D9 bridge: the native library returned lock pointer %p outside guest memory "
-                "(lockable memory must come from D3D9MetalHost.alloc_app)", bits);
-    return (uint32_t)(p - base);
+    return rt_guest_address(c, bits, "D3D9 bridge: the native library returned a lock pointer outside guest memory "
+                                     "(lockable memory must come from D3D9MetalHost.alloc_app)");
 }
 void d3d9_lock_ptr_out(CPU *c, uint32_t guest, void *bits, int ok) {
     if (guest) W32(guest, ok ? d3d9_guest_pointer(c, bits) : 0);
@@ -681,9 +694,9 @@ enum { SHADER_LIMIT = 1u << 20 };
 const void *d3d9_shader(CPU *c, uint32_t guest) {
     if (!guest) return NULL;
     uint32_t version = R32(guest), major = (version >> 8) & 0xff, i = 1;
-    if ((version & 0xfffe0000u) != 0xfffe0000u) fail(c, "D3D9 bridge: shader token %#x is not a version token", version);
+    if ((version & 0xfffe0000u) != 0xfffe0000u) rt_trapf(c, "D3D9 bridge: shader token %#x is not a version token", version);
     for (;;) {
-        if (i >= SHADER_LIMIT / 4) fail(c, "D3D9 bridge: shader at %#x has no end token within 1 MiB", guest);
+        if (i >= SHADER_LIMIT / 4) rt_trapf(c, "D3D9 bridge: shader at %#x has no end token within 1 MiB", guest);
         uint32_t token = R32(guest + 4 * i);
         if (token == 0x0000ffffu) break;
         if ((token & 0xffff) == 0xfffe) i += 1 + ((token >> 16) & 0x7fff);
@@ -697,7 +710,7 @@ const void *d3d9_decl(CPU *c, uint32_t guest) {
     if (!guest) return NULL;
     for (uint32_t i = 0; i <= 64; ++i)
         if (R16(guest + 8 * i) == 0xff) return rt_span(c, guest, 8ull * (i + 1));
-    fail(c, "D3D9 bridge: vertex declaration at %#x has no D3DDECL_END", guest);
+    rt_trapf(c, "D3D9 bridge: vertex declaration at %#x has no D3DDECL_END", guest);
 }
 // RGNDATA : en-tête de 32 octets (nCount en +8) puis nCount RECT.
 const void *d3d9_rgndata(CPU *c, uint32_t guest) {
@@ -896,19 +909,16 @@ void (*volatile rt_d3d9_on_present)(void);
 typedef struct { int32_t x1, y1, x2, y2; } D3d9Rect;
 typedef struct { uint32_t X, Y, Width, Height; float MinZ, MaxZ; } D3d9Viewport;
 enum { RS_SCISSOR = 174, RS_COLORWRITE = 168, CLEAR_TARGET = 1 };
-static const D3d9Method *find_method(const char *name);
-static unsigned slot_of(const char *name) { return find_method(name)->slot; }
+enum {
+    s_backbuffer = D3D9_SLOT_IDirect3DDevice9_GetBackBuffer, s_set_rt = D3D9_SLOT_IDirect3DDevice9_SetRenderTarget,
+    s_get_rt = D3D9_SLOT_IDirect3DDevice9_GetRenderTarget, s_set_vp = D3D9_SLOT_IDirect3DDevice9_SetViewport,
+    s_get_vp = D3D9_SLOT_IDirect3DDevice9_GetViewport, s_set_rs = D3D9_SLOT_IDirect3DDevice9_SetRenderState,
+    s_get_rs = D3D9_SLOT_IDirect3DDevice9_GetRenderState, s_release = D3D9_SLOT_IUnknown_Release,
+    s_clear = D3D9_SLOT_IDirect3DDevice9_Clear,
+};
 #define DEV_CALL(type, dev, slot, ...) ((type)D3D9_VTBL(dev)[slot])(dev, __VA_ARGS__)
 void rt_d3d9_draw_overlay(void *dev) {   // aussi appelé par tests/checks_d3d9.c
     if (!fps_overlay_tick()) return;      // masqué : aucun appel au device
-    static unsigned s_backbuffer, s_set_rt, s_get_rt, s_clear, s_set_vp, s_get_vp, s_set_rs, s_get_rs, s_release;
-    if (!s_clear) {
-        s_backbuffer = slot_of("IDirect3DDevice9::GetBackBuffer"); s_set_rt = slot_of("IDirect3DDevice9::SetRenderTarget");
-        s_get_rt = slot_of("IDirect3DDevice9::GetRenderTarget"); s_set_vp = slot_of("IDirect3DDevice9::SetViewport");
-        s_get_vp = slot_of("IDirect3DDevice9::GetViewport"); s_set_rs = slot_of("IDirect3DDevice9::SetRenderState");
-        s_get_rs = slot_of("IDirect3DDevice9::GetRenderState"); s_release = slot_of("IUnknown::Release");
-        s_clear = slot_of("IDirect3DDevice9::Clear");
-    }
     typedef int32_t (*GetBB)(void *, uint32_t, uint32_t, uint32_t, void **);
     typedef int32_t (*RT)(void *, uint32_t, void *);
     typedef int32_t (*GetRT)(void *, uint32_t, void **);
@@ -963,7 +973,7 @@ void rt_d3d9_draw_overlay(void *dev) {   // aussi appelé par tests/checks_d3d9.
 // le ferait demande P2_D3D9_STRICT_EVENTS=1 (réponse de la bibliothèque).
 // Compteurs : un Issue fait pendant un Present (le verrou invité y est
 // relâché) compte comme postérieur, donc attend le Present suivant.
-enum { D3DQUERYTYPE_EVENT = 8, D3DISSUE_END = 1, EVENT_SLOTS = 64, EVENT_PROBE = 4, SLOT_QUERY_GETTYPE = 4 };
+enum { D3DQUERYTYPE_EVENT = 8, D3DISSUE_END = 1, EVENT_SLOTS = 64, EVENT_PROBE = 4 };
 static uint64_t presents_started, presents_done;     // sous le verrou invité
 // Requête -> Present : sondage sur EVENT_PROBE cases, puis éviction de la
 // case d'origine, ce qui ne fait que rendre la réponse de la bibliothèque à
@@ -971,13 +981,9 @@ static uint64_t presents_started, presents_done;     // sous le verrou invité
 // qu'un appareil (un second appareil qui présente libérerait les événements
 // du premier).
 static struct { void *query; uint64_t issued; } event_issued[EVENT_SLOTS];
-static int strict_events(void) {
-    static int value = -1;
-    if (value < 0) value = getenv("P2_D3D9_STRICT_EVENTS") != NULL;
-    return value;
-}
+static int strict_events(void) { return RT_ENV_FLAG("P2_D3D9_STRICT_EVENTS"); }
 static int is_event(void *query) {
-    return ((uint32_t (*)(void *))D3D9_VTBL(query)[SLOT_QUERY_GETTYPE])(query) == D3DQUERYTYPE_EVENT;
+    return ((uint32_t (*)(void *))D3D9_VTBL(query)[D3D9_SLOT_IDirect3DQuery9_GetType])(query) == D3DQUERYTYPE_EVENT;
 }
 static size_t event_find(void *query) {             // SIZE_MAX si absente
     for (size_t k = 0, h = ((uintptr_t)query >> 4) % EVENT_SLOTS; k < EVENT_PROBE; ++k)
@@ -1020,7 +1026,7 @@ void d3d9_manual_IDirect3DQuery9_GetData(CPU *c, void *self, uint32_t a) {
 // avant (étalonnage), lue une fois avant le premier réglage.
 int (*rt_d3d9_window_gamma)(void *window, const uint16_t *ramp) = rt_sdl_window_gamma;
 int (*rt_d3d9_window_gamma_get)(void *window, uint16_t *ramp) = rt_sdl_window_gamma_get;
-enum { D3D9_SLOT_DEVICE_GET_SWAP_CHAIN = 14, D3D9_SLOT_SWAP_CHAIN_GET_PARAMS = 9, GAMMA_ENTRIES = 768 };
+enum { GAMMA_ENTRIES = 768 };
 static struct {                       // fenêtre portant une rampe reportée (Source n'en a qu'une)
     void *window; int applied, has_original; uint16_t original[GAMMA_ENTRIES];
 } gamma_state;
@@ -1030,10 +1036,10 @@ static int gamma_identity(const uint16_t *ramp) {
 }
 static void *windowed_device_window(void *device) {   // fenêtre SDL de la chaîne 0 si fenêtrée, sinon NULL
     void *chain = NULL;
-    if (((int32_t (*)(void *, uint32_t, void **))D3D9_VTBL(device)[D3D9_SLOT_DEVICE_GET_SWAP_CHAIN])(device, 0, &chain) < 0 || !chain)
+    if (((int32_t (*)(void *, uint32_t, void **))D3D9_VTBL(device)[D3D9_SLOT_IDirect3DDevice9_GetSwapChain])(device, 0, &chain) < 0 || !chain)
         return NULL;
     D3d9HostParams params; memset(&params, 0, sizeof(params));
-    int ok = ((int32_t (*)(void *, D3d9HostParams *))D3D9_VTBL(chain)[D3D9_SLOT_SWAP_CHAIN_GET_PARAMS])(chain, &params) >= 0;
+    int ok = ((int32_t (*)(void *, D3d9HostParams *))D3D9_VTBL(chain)[D3D9_SLOT_IDirect3DSwapChain9_GetPresentParameters])(chain, &params) >= 0;
     ((uint32_t (*)(void *))D3D9_VTBL(chain)[D3D9_SLOT_IUnknown_Release])(chain);
     return ok && params.Windowed ? params.hDeviceWindow : NULL;
 }
@@ -1098,7 +1104,6 @@ static int compare_method(const void *key, const void *item) {
     return strcmp((const char *)key, ((const D3d9Method *)item)->name);
 }
 static const D3d9Method *find_method(const char *name) {
-    if (strncmp(name, "IDirect3D", 9) && strncmp(name, "IUnknown::", 10)) return NULL;
     return bsearch(name, rt_d3d9_methods, rt_d3d9_method_count, sizeof(*rt_d3d9_methods), compare_method);
 }
 
