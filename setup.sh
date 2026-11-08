@@ -523,6 +523,13 @@ if [ $IOS = 1 ]; then
     DEVICE=$(xcrun devicectl list devices 2>/dev/null |
         awk '/physical/ && / connected|available \(paired\)/ {for (i = 1; i <= NF; ++i) if ($i ~ /^[0-9A-F]{8}-[0-9A-F]{16}$/) {print $i; exit}}')
     [ -n "$DEVICE" ] || warn "no iPhone connected: a free account needs one registered for its first profile"
+    # One identifier per game, or installing one app replaces the other (and
+    # its data marker would skip the second copy): P2_BUNDLE_ID applies to all.
+    IOS_IDS=$(for id in "${SELECTED[@]}"; do python3 tools/ios_bundle_id.py --game "$id"; done)
+    [ "$(printf '%s\n' "$IOS_IDS" | sort -u | wc -l)" -eq ${#SELECTED[@]} ] ||
+        die "the iPhone apps of ${SELECTED[*]} would share the identifier $(printf '%s\n' "$IOS_IDS" | sort | uniq -d | head -1)
+  (P2_BUNDLE_ID, or the same ios_bundle_id in config/local.json): unset P2_BUNDLE_ID, give each game its own
+  ios_bundle_id, or build one game with --game."
     IOS_APPS=()
     for id in "${SELECTED[@]}"; do
         game_info "$id"
