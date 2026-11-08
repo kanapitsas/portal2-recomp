@@ -90,7 +90,16 @@ static inline void rt_check_memory(uint32_t address, unsigned size, int mode) {
         rt_memory_trap(address, size, mode);
 #endif
 }
-void rt_check_span(uint32_t address, uint64_t length, int mode);
+// Contrôle d'une plage : hors de la zone mmap (modules, tas, pile de test),
+// rien à vérifier ; sinon boucle page par page (rt.c). Un débordement de 4 Go
+// piège dans la version hors ligne.
+void rt_check_span_slow(uint32_t address, uint64_t length, int mode);
+static inline void rt_check_span(uint32_t address, uint64_t length, int mode) {
+    if (!length) return;
+    uint64_t end = (uint64_t)address + length;
+    if (end <= RT_VM_BEGIN || (address >= RT_VM_END && end <= (UINT64_C(1) << 32))) return;
+    rt_check_span_slow(address, length, mode);
+}
 // Accès mémoire invités. La base vaut RT_MEM : M partout, mais le code
 // généré la recopie dans une variable locale (`mem_`, voir tools/lift.py).
 // Une écriture invitée passe par memcpy, sans type : clang devrait sinon
@@ -265,6 +274,9 @@ int rt_madvise(uint32_t address, uint32_t length, int advice);
 void rt_vm_destroy(void);
 int rt_load_segment(const char *directory, const char *name, uint32_t offset,
                     uint32_t addr, uint32_t filesz, uint32_t memsz);
+// Lit `size` octets du fichier directory/name à `offset` dans dst ; -1 si le
+// chemin est trop long, le fichier illisible ou trop court (rt.c).
+int rt_read_file_range(const char *directory, const char *name, uint32_t offset, void *dst, size_t size);
 int rt_init_import_data(const char *name, uint32_t address, uint32_t size);
 int rt_time_data_import(const char *name, uint32_t address);  // time.c
 int rt_load_images(const char *directory);  // généré par lift.py
@@ -394,6 +406,23 @@ void *rt_span(CPU *c, uint32_t address, uint64_t length);
 void *rt_write_span(CPU *c, uint32_t address, uint64_t length);
 uint32_t rt_string_length(CPU *c, uint32_t address);
 
+void rt_set_errno(CPU *c, int value);   // errno invité (libc.c)
+void rt_save_errno(CPU *c);              // errno invité <- errno hôte traduit
+// errno Linux i386 (asm-generic/errno.h) utilisés par le runtime ; les
+// valeurs Darwin coïncident de 1 à 34 sauf EAGAIN (35) et EDEADLK (11).
+enum {
+    RT_EPERM = 1, RT_ENOENT = 2, RT_ESRCH = 3, RT_EIO = 5, RT_E2BIG = 7, RT_EBADF = 9,
+    RT_EAGAIN = 11, RT_ENOMEM = 12, RT_EBUSY = 16, RT_EEXIST = 17, RT_EINVAL = 22,
+    RT_ERANGE = 34, RT_EDEADLK = 35, RT_ENAMETOOLONG = 36, RT_EOVERFLOW = 75,
+    RT_EILSEQ = 84, RT_ETIMEDOUT = 110,
+};
+// Erreurs : errno Darwin -> errno Linux i386 et inverse (strerror) ; libc.c.
+int rt_linux_errno(int darwin);
+int rt_darwin_errno(int linux_value);
+// Fin d'un appel POSIX : rt_finish pose errno (traduit de l'hôte) si result < 0
+// et renvoie result ; rt_fail pose un errno Linux donné et renvoie -1.
+static inline void rt_finish(CPU *c, int result) { if (result < 0) rt_save_errno(c); c->eax = (uint32_t)result; }
+static inline void rt_fail(CPU *c, int linux_errno) { rt_set_errno(c, linux_errno); c->eax = UINT32_MAX; }
 // ---- Helpers partagés par les shims et les ponts (shims.c, bridge.c) ----
 // Arguments cdecl : i-ème mot 32 bits au-dessus de l'adresse de retour ;
 // les variantes flottantes prennent un décalage en octets (listes mixtes
@@ -439,8 +468,10 @@ const char *rt_executable_dir(void);
 // Variable d'environnement booléenne : définie et différente de "0".
 int rt_env_flag(const char *name);
 // Même chose, mémorisée par site d'appel (chemins chauds).
-#define RT_ENV_FLAG(name) ({ static int rt_env_cached_ = -1; \
-    if (__builtin_expect(rt_env_cached_ < 0, 0)) rt_env_cached_ = rt_env_flag(name); rt_env_cached_; })
+#define RT_ENV_FLAG(name) ({ static _Atomic int rt_env_cached_ = -1; \
+    int rt_env_value_ = atomic_load_explicit(&rt_env_cached_, memory_order_relaxed); \
+    if (__builtin_expect(rt_env_value_ < 0, 0)) { rt_env_value_ = rt_env_flag(name); \
+        atomic_store_explicit(&rt_env_cached_, rt_env_value_, memory_order_relaxed); } rt_env_value_; })
 // Appel hôte bloquant : verrou invité relâché, errno conservé.
 #define RT_BLOCKING(call) ({ unsigned rt_saved_ = rt_guest_suspend(); __typeof__(call) rt_result_ = (call); \
     int rt_errno_ = errno; rt_guest_resume(rt_saved_); errno = rt_errno_; rt_result_; })
@@ -470,6 +501,8 @@ void rt_modules_destroy(void);
 int rt_scan_shim(CPU *c, const char *name);
 int rt_libc_shim(CPU *c, const char *name);
 void rt_libc_destroy(void);
+int rt_trace_files(const char *path);   // diagnostic P2_TRACE_FILES (libc.c)
+void rt_strings_extra_destroy(void);    // oublie les adresses invitées de strerror (strings_extra.c)
 uint32_t rt_standard_stream(int index);
 void *rt_stream_file(CPU *c, uint32_t handle);
 int rt_format_shim(CPU *c, const char *name);
@@ -484,6 +517,10 @@ void rt_heap_reset(void);
 size_t rt_heap_table_capacity(void);       // tests : cases de la table adresse -> taille
 void rt_shims_destroy(void);
 size_t rt_atexit_count(void);
+// Exécute les handlers __cxa_atexit du plus récent au plus ancien (ceux de
+// `dso`, ou tous si dso vaut 0), chacun effacé avant son appel ; les handlers
+// enregistrés pendant l'exécution sont honorés, comme dans glibc.
+void rt_run_atexit(CPU *c, uint32_t dso);
 int rt_atexit_get(size_t index, uint32_t *function, uint32_t *arg, uint32_t *dso);  // function 0: already run
 void rt_atexit_clear(size_t index);
 #define RT_RETURN_SENTINEL 0xfffffff0u
@@ -496,9 +533,18 @@ void rt_procfs_set_cmdline(const char *bytes, size_t size);
 const char *rt_write_path(const char *path, int preserve_existing);
 const char *rt_program_path(void);
 void rt_paths_set_program(const char *name);   // défaut : portal2_linux
+int rt_paths_case_insensitive(void);           // toutes les racines résolvent la casse (native.c)
+// iOS seulement (runtime/ios/case_path.c) : casse réelle des composants d'un
+// chemin canonique au-delà des `trusted` premiers octets.
+const char *rt_ios_case_path(const char *canonical, size_t trusted);
+void rt_native_destroy(void);                  // native.c : remise à zéro avec la mémoire invitée
+// Masque de signaux bloqués du thread invité courant (sync.c), pour sigsetjmp.
+uint64_t rt_signal_blocked_mask(void);
+void rt_signal_set_blocked_mask(uint64_t mask);
+// qsort glibc (tri fusion stable, msort_with_tmp) avec un comparateur invité
+// recevant les adresses des éléments ; numeric.c. Piège si le tampon hôte manque.
+void rt_guest_qsort(CPU *c, uint32_t base, uint32_t count, uint32_t size, uint32_t compare);
 int rt_stat_shim(CPU *c, const char *name);
-void rt_set_errno(CPU *c, int value);
-void rt_save_errno(CPU *c);
 
 void rt_guest_enter(void);
 void rt_guest_leave(void);
@@ -565,6 +611,9 @@ void rt_register_shim_resolver(rt_shim_provider provider, rt_shim_resolver resol
 // Exécute le nom comme rt_shim ; en cas de succès, *route (si non NULL)
 // désigne le fournisseur ou handler à rappeler pour ce même nom.
 int rt_shim_route(CPU *c, const char *name, RtShimRoute *route);
+// Résolveurs des fournisseurs intégrés (appelés par nom depuis shims.c).
+int rt_libc_resolve(const char *name, RtShimRoute *route);      // libc.c
+int rt_pthread_resolve(const char *name, RtShimRoute *route);   // pthreads.c
 static inline int rt_route_call(const RtShimRoute *route, CPU *c, const char *name) {
     return route->handler ? route->handler(c, name, route->data) : route->provider(c, name);
 }

@@ -20,9 +20,6 @@
 #include <stdlib.h>
 #include <time.h>
 
-enum { LINUX_EINVAL = 22, LINUX_EAGAIN = 11, LINUX_ETIMEDOUT = 110, LINUX_EOVERFLOW = 75, LINUX_EBUSY = 16 };
-static uint32_t argument(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
-static void fail(CPU *c, int linux_errno) { rt_set_errno(c, linux_errno); c->eax = UINT32_MAX; }
 
 typedef struct Semaphore {
     uint32_t address, value, waiters;
@@ -42,7 +39,7 @@ static void mirror(Semaphore *s) { W32(s->address, s->value << 1); }
 static int semaphore_wait(Semaphore *s, const struct timespec *deadline, int nonblocking) {
     pthread_mutex_lock(&s->mutex);
     int error = 0;
-    if (!s->value && nonblocking) error = LINUX_EAGAIN;
+    if (!s->value && nonblocking) error = RT_EAGAIN;
     else if (!s->value) {
         ++s->waiters;
         unsigned saved = rt_guest_suspend();
@@ -53,7 +50,7 @@ static int semaphore_wait(Semaphore *s, const struct timespec *deadline, int non
         --s->waiters;
         pthread_mutex_unlock(&s->mutex);
         rt_guest_resume(saved);
-        if (error) return error == ETIMEDOUT ? LINUX_ETIMEDOUT : LINUX_EINVAL;
+        if (error) return error == ETIMEDOUT ? RT_ETIMEDOUT : RT_EINVAL;
         mirror(s);
         return 0;
     }
@@ -71,13 +68,13 @@ static int semaphore_shim(CPU *c, const char *name) {
     size_t k = 0;
     while (k < sizeof(known) / sizeof(*known) && strcmp(name, known[k])) ++k;
     if (k == sizeof(known) / sizeof(*known)) return 0;
-    uint32_t address = argument(c, 0);
+    uint32_t address = rt_arg32(c, 0);
     rt_guest_enter();
     int error = 0;
     if (!strcmp(name, "sem_init")) {
-        uint32_t value = argument(c, 2);
+        uint32_t value = rt_arg32(c, 2);
         rt_write_span(c, address, 16);
-        if (value > 0x7fffffffu) error = LINUX_EINVAL;   // SEM_VALUE_MAX
+        if (value > 0x7fffffffu) error = RT_EINVAL;   // SEM_VALUE_MAX
         else {
             Semaphore *s = find_semaphore(address);
             if (s && s->waiters) rt_trap(c, c->eip, "sem_init on a semaphore with blocked waiters");
@@ -90,11 +87,11 @@ static int semaphore_shim(CPU *c, const char *name) {
             // pshared only matters across processes; this runtime has one.
             s->value = value;
             memset(GPTR(address), 0, 16); mirror(s);
-            W32(address + 4, argument(c, 1) ? 0 : 128);  // glibc: FUTEX_PRIVATE_FLAG unless shared
+            W32(address + 4, rt_arg32(c, 1) ? 0 : 128);  // glibc: FUTEX_PRIVATE_FLAG unless shared
         }
     } else {
         Semaphore *s = find_semaphore(address);
-        if (!s) error = LINUX_EINVAL;
+        if (!s) error = RT_EINVAL;
         else if (!strcmp(name, "sem_destroy")) {
             if (s->waiters) rt_trap(c, c->eip, "sem_destroy with blocked waiters");
             Semaphore **link = &semaphores; while (*link != s) link = &(*link)->next;
@@ -102,21 +99,21 @@ static int semaphore_shim(CPU *c, const char *name) {
             pthread_cond_destroy(&s->cond); pthread_mutex_destroy(&s->mutex); free(s);
         } else if (!strcmp(name, "sem_post")) {
             pthread_mutex_lock(&s->mutex);
-            if (s->value == 0x7fffffffu) error = LINUX_EOVERFLOW;
+            if (s->value == 0x7fffffffu) error = RT_EOVERFLOW;
             else { ++s->value; pthread_cond_signal(&s->cond); }
             pthread_mutex_unlock(&s->mutex);
             if (!error) mirror(s);
         } else if (!strcmp(name, "sem_wait")) error = semaphore_wait(s, NULL, 0);
         else if (!strcmp(name, "sem_trywait")) error = semaphore_wait(s, NULL, 1);
         else if (!strcmp(name, "sem_timedwait")) {
-            uint32_t pointer = argument(c, 1);
+            uint32_t pointer = rt_arg32(c, 1);
             struct timespec deadline;
             // glibc validates the timeout before trying the fast path.
-            if (rt_read_timespec(c, pointer, &deadline)) error = LINUX_EINVAL;
+            if (rt_read_timespec(c, pointer, &deadline)) error = RT_EINVAL;
             else error = semaphore_wait(s, &deadline, 0);
         } else { rt_guest_leave(); return 0; }
     }
-    if (error) fail(c, error); else c->eax = 0;
+    if (error) rt_fail(c, error); else c->eax = 0;
     rt_guest_leave();
     return 1;
 }
@@ -125,11 +122,11 @@ RT_SHIM_PROVIDER(semaphore_shim)
 static int priority_shim(CPU *c, const char *name) {
     int max = !strcmp(name, "sched_get_priority_max");
     if (!max && strcmp(name, "sched_get_priority_min")) return 0;
-    uint32_t policy = argument(c, 0);
+    uint32_t policy = rt_arg32(c, 0);
     // Linux: SCHED_OTHER 0, FIFO 1, RR 2, BATCH 3, IDLE 5 (DEADLINE 6 has no range).
     if (policy == 1 || policy == 2) c->eax = max ? 99 : 1;
     else if (policy == 0 || policy == 3 || policy == 5) c->eax = 0;
-    else fail(c, LINUX_EINVAL);
+    else rt_fail(c, RT_EINVAL);
     return 1;
 }
 RT_SHIM_PROVIDER(priority_shim)
@@ -160,16 +157,16 @@ void rt_signal_set_blocked_mask(uint64_t mask) {
 
 static int signal_shim(CPU *c, const char *name) {
     if (!strcmp(name, "sigemptyset")) {
-        memset(rt_write_span(c, argument(c, 0), SIGSET_SIZE), 0, SIGSET_SIZE); c->eax = 0;
+        memset(rt_write_span(c, rt_arg32(c, 0), SIGSET_SIZE), 0, SIGSET_SIZE); c->eax = 0;
     } else if (!strcmp(name, "sigaddset")) {
-        uint32_t set = argument(c, 0), signal = argument(c, 1);
-        if (!valid_signal(signal)) { fail(c, LINUX_EINVAL); return 1; }
+        uint32_t set = rt_arg32(c, 0), signal = rt_arg32(c, 1);
+        if (!valid_signal(signal)) { rt_fail(c, RT_EINVAL); return 1; }
         uint8_t *word = rt_write_span(c, set + (signal - 1) / 32 * 4, 4);
         uint32_t bits; memcpy(&bits, word, 4); bits |= 1u << ((signal - 1) % 32); memcpy(word, &bits, 4);
         c->eax = 0;
     } else if (!strcmp(name, "sigprocmask")) {
-        uint32_t how = argument(c, 0), set = argument(c, 1), old = argument(c, 2);
-        if (set && how > 2) { fail(c, LINUX_EINVAL); return 1; }
+        uint32_t how = rt_arg32(c, 0), set = rt_arg32(c, 1), old = rt_arg32(c, 2);
+        if (set && how > 2) { rt_fail(c, RT_EINVAL); return 1; }
         uint64_t previous = blocked;
         if (set) {
             uint64_t value = kernel_set(rt_span(c, set, 8));
@@ -181,16 +178,16 @@ static int signal_shim(CPU *c, const char *name) {
     } else if (!strcmp(name, "raise")) {
         // Signal ignoré par l'invité : sans effet. Sinon l'action par défaut (fin, cœur) ou
         // un gestionnaire invité, qu'aucun des deux ce runtime ne livre : arrêt explicite.
-        uint32_t signal = argument(c, 0);
-        if (!valid_signal(signal)) { fail(c, LINUX_EINVAL); return 1; }
+        uint32_t signal = rt_arg32(c, 0);
+        if (!valid_signal(signal)) { rt_fail(c, RT_EINVAL); return 1; }
         pthread_mutex_lock(&signal_lock); uint32_t handler = dispositions[signal].handler; pthread_mutex_unlock(&signal_lock);
         if (handler == 1 && signal != 9 && signal != 19) { c->eax = 0; return 1; }
         char message[64]; snprintf(message, sizeof(message), "guest raise(%u)", signal);
         rt_trap(c, c->eip, message);
     } else if (!strcmp(name, "signal")) {
         // glibc : sémantique BSD (SA_RESTART), renvoie l'ancien gestionnaire ou SIG_ERR (-1).
-        uint32_t signal = argument(c, 0), handler = argument(c, 1);
-        if (!valid_signal(signal) || signal == 9 || signal == 19) { fail(c, LINUX_EINVAL); c->eax = UINT32_MAX; return 1; }
+        uint32_t signal = rt_arg32(c, 0), handler = rt_arg32(c, 1);
+        if (!valid_signal(signal) || signal == 9 || signal == 19) { rt_fail(c, RT_EINVAL); return 1; }
         // SIGCHLD ; SIGILL des sondes CPU de Crypto++ (signal + setjmp autour de `por` et
         // `cpuid`, que le code traduit exécute) ; SIGSEGV que vaudio_miles pose le temps
         // d'AIL_startup puis retire. Enregistrés sans être livrés : une instruction illégale
@@ -211,8 +208,8 @@ static int signal_shim(CPU *c, const char *name) {
         pthread_mutex_unlock(&signal_lock);
         c->eax = previous;
     } else if (!strcmp(name, "sigaction")) {
-        uint32_t signal = argument(c, 0), act = argument(c, 1), old = argument(c, 2);
-        if (!valid_signal(signal) || (act && (signal == 9 || signal == 19))) { fail(c, LINUX_EINVAL); return 1; }
+        uint32_t signal = rt_arg32(c, 0), act = rt_arg32(c, 1), old = rt_arg32(c, 2);
+        if (!valid_signal(signal) || (act && (signal == 9 || signal == 19))) { rt_fail(c, RT_EINVAL); return 1; }
         Disposition next = {0};
         if (act) {
             const uint8_t *raw = rt_span(c, act, SIGACTION_SIZE);

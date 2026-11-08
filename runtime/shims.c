@@ -1,4 +1,4 @@
-#include "rt.h"
+#include "modules.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,7 +8,6 @@ typedef struct { uint32_t function, arg, dso; } ExitHandler;
 static ExitHandler *handlers;
 static size_t handler_count, handler_capacity;
 
-void rt_strings_extra_destroy(void);   // strings_extra.c (posix.h)
 void rt_shims_destroy(void) {
     rt_pthreads_destroy();
     rt_futex_destroy();
@@ -22,6 +21,19 @@ void rt_shims_destroy(void) {
 }
 
 size_t rt_atexit_count(void) { return handler_count; }
+void rt_run_atexit(CPU *c, uint32_t dso) {
+    for (;;) {
+        size_t i = handler_count;
+        uint32_t function = 0, argument = 0;
+        while (i--) {
+            function = handlers[i].function; argument = handlers[i].arg;
+            if (function && (!dso || handlers[i].dso == dso)) break;
+        }
+        if (i == (size_t)-1) break;
+        handlers[i].function = 0;
+        rt_invoke(c, function, &argument, 1);
+    }
+}
 // __cxa_finalize marks a handler as run (function 0); exit must skip those.
 void rt_atexit_clear(size_t index) { if (index < handler_count) handlers[index].function = 0; }
 int rt_atexit_get(size_t index, uint32_t *function, uint32_t *arg, uint32_t *dso) {
@@ -32,7 +44,6 @@ int rt_atexit_get(size_t index, uint32_t *function, uint32_t *arg, uint32_t *dso
     return 0;
 }
 
-static uint32_t arg(CPU *c, unsigned index) { return R32(c->esp + 4 + 4 * index); }
 // Une page écrivable est aussi lisible (page_flags, vm.c) : un seul contrôle
 // de la table suffit pour chaque mode.
 static void *span(CPU *c, uint32_t address, uint64_t length, int mode) {
@@ -130,27 +141,27 @@ static void core_tls_get_addr(CPU *c) {
     c->eax = rt_tls_address(c, R32(a), R32(a + 4));
 }
 static void core_memset(CPU *c) {
-    uint32_t a = arg(c, 0), b = arg(c, 1), n = arg(c, 2);
+    uint32_t a = rt_arg32(c, 0), b = rt_arg32(c, 1), n = rt_arg32(c, 2);
     memset(rt_write_span(c, a, n), (int)b, n); c->eax = a;
 }
 static void core_memmove(CPU *c) {
-    uint32_t a = arg(c, 0), b = arg(c, 1), n = arg(c, 2);
+    uint32_t a = rt_arg32(c, 0), b = rt_arg32(c, 1), n = rt_arg32(c, 2);
     void *dst = rt_write_span(c, a, n); void *src = rt_span(c, b, n);
     // memmove also gives a deterministic result for overlapping memcpy;
     // conforming callers must not rely on that extension.
     memmove(dst, src, n); c->eax = a;
 }
 static void core_memcmp(CPU *c) {
-    uint32_t a = arg(c, 0), b = arg(c, 1), n = arg(c, 2);
+    uint32_t a = rt_arg32(c, 0), b = rt_arg32(c, 1), n = rt_arg32(c, 2);
     void *lhs = rt_span(c, a, n); void *rhs = rt_span(c, b, n);
     c->eax = (uint32_t)memcmp(lhs, rhs, n);
 }
-static void core_strlen(CPU *c) { c->eax = rt_string_length(c, arg(c, 0)); }
+static void core_strlen(CPU *c) { c->eax = rt_string_length(c, rt_arg32(c, 0)); }
 static void core_strcmp(CPU *c) {
-    c->eax = (uint32_t)guest_strcmp(c, arg(c, 0), arg(c, 1));
+    c->eax = (uint32_t)guest_strcmp(c, rt_arg32(c, 0), rt_arg32(c, 1));
 }
-static void core_malloc(CPU *c) { c->eax = rt_alloc(arg(c, 0)); }
-static void core_free(CPU *c) { if (rt_free(arg(c, 0))) rt_trap(c, c->eip, "invalid guest free"); }
+static void core_malloc(CPU *c) { c->eax = rt_alloc(rt_arg32(c, 0)); }
+static void core_free(CPU *c) { if (rt_free(rt_arg32(c, 0))) rt_trap(c, c->eip, "invalid guest free"); }
 
 static int core_shim(CPU *c, const char *name) {
     uint32_t a, b, n;
@@ -160,11 +171,11 @@ static int core_shim(CPU *c, const char *name) {
     else if (!strcmp(name, "memcmp")) core_memcmp(c);
     else if (!strcmp(name, "strlen")) core_strlen(c);
     else if (!strcmp(name, "strcpy") || !strcmp(name, "stpcpy")) {
-        a = arg(c, 0); b = arg(c, 1); n = rt_string_length(c, b);
+        a = rt_arg32(c, 0); b = rt_arg32(c, 1); n = rt_string_length(c, b);
         memmove(rt_write_span(c, a, (uint64_t)n + 1), GPTR(b), (size_t)n + 1);
         c->eax = !strcmp(name, "stpcpy") ? a + n : a;
     } else if (!strcmp(name, "strncpy")) {
-        a = arg(c, 0); b = arg(c, 1); n = arg(c, 2);
+        a = rt_arg32(c, 0); b = rt_arg32(c, 1); n = rt_arg32(c, 2);
         uint8_t *to = rt_write_span(c, a, n);
         uint32_t i = rt_bounded_strnlen(c, b, n);
         memmove(to, GPTR(b), i);
@@ -173,15 +184,15 @@ static int core_shim(CPU *c, const char *name) {
     } else if (!strcmp(name, "strcmp")) core_strcmp(c);
     else if (!strcmp(name, "malloc")) core_malloc(c);
     else if (!strcmp(name, "calloc")) {
-        uint64_t size = (uint64_t)arg(c, 0) * arg(c, 1);
+        uint64_t size = (uint64_t)rt_arg32(c, 0) * rt_arg32(c, 1);
         c->eax = size > UINT32_MAX ? 0 : rt_alloc((uint32_t)size);
         if (c->eax) memset(GPTR(c->eax), 0, (size_t)size);
     } else if (!strcmp(name, "realloc")) {
-        a = arg(c, 0); b = arg(c, 1);
+        a = rt_arg32(c, 0); b = rt_arg32(c, 1);
         if (a && !rt_heap_usable_size(a)) rt_trap(c, c->eip, "invalid guest realloc");
         c->eax = rt_realloc(a, b);
     } else if (!strcmp(name, "free")) core_free(c); else if (!strcmp(name, "malloc_usable_size")) {
-        a = arg(c, 0); uint32_t usable = a ? rt_heap_usable_size(a) : 0;
+        a = rt_arg32(c, 0); uint32_t usable = a ? rt_heap_usable_size(a) : 0;
         if (a && !usable) rt_trap(c, c->eip, "invalid guest malloc_usable_size");
         c->eax = usable;
     } else if (!strcmp(name, "__cxa_atexit")) {
@@ -191,10 +202,10 @@ static int core_shim(CPU *c, const char *name) {
             if (!grown) { c->eax = UINT32_MAX; return 1; }
             handlers = grown; handler_capacity = capacity;
         }
-        handlers[handler_count++] = (ExitHandler){arg(c, 0), arg(c, 1), arg(c, 2)};
+        handlers[handler_count++] = (ExitHandler){rt_arg32(c, 0), rt_arg32(c, 1), rt_arg32(c, 2)};
         c->eax = 0;
     } else if (!strcmp(name, "puts")) {
-        a = arg(c, 0); rt_string_length(c, a);
+        a = rt_arg32(c, 0); rt_string_length(c, a);
         c->eax = (uint32_t)puts(GPTR(a));
     } else if (!strcmp(name, "abort")) {
         rt_trap(c, c->eip, "guest libc abort");
@@ -222,8 +233,6 @@ static int core_resolve(const char *name, RtShimRoute *route) {
         if (!strcmp(name, hot[i].name)) { route->handler = hot[i].handler; return 1; }
     return 0;
 }
-int rt_libc_resolve(const char *name, RtShimRoute *route);   // libc.c
-int rt_pthread_resolve(const char *name, RtShimRoute *route);   // pthreads.c
 static const rt_shim_resolver builtin_resolvers[BUILTIN] = {core_resolve, NULL, rt_pthread_resolve, rt_libc_resolve};
 static rt_shim_provider providers[64];
 static rt_shim_resolver resolvers[64];

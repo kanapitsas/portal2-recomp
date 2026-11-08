@@ -8,7 +8,7 @@
 #include <unistd.h>
 
 static int write_stat(CPU *c,uint32_t address,const struct stat *value,int wide) {
-    if(!wide && (value->st_size>INT32_MAX || value->st_blocks>INT32_MAX)){errno=EOVERFLOW;return -1;}
+    if(!wide && (value->st_size>INT32_MAX || value->st_blocks>INT32_MAX || value->st_ino>UINT32_MAX)){errno=EOVERFLOW;return -1;}
     if(value->st_atimespec.tv_sec>INT32_MAX || value->st_atimespec.tv_sec<INT32_MIN ||
        value->st_mtimespec.tv_sec>INT32_MAX || value->st_mtimespec.tv_sec<INT32_MIN ||
        value->st_ctimespec.tv_sec>INT32_MAX || value->st_ctimespec.tv_sec<INT32_MIN){errno=EOVERFLOW;return -1;}
@@ -34,7 +34,7 @@ int rt_stat_shim(CPU *c,const char *name) {
     int fd_call=!strncmp(name,"__fxstat",8)||!strncmp(name,"fstat",5);
     int link_call=!strncmp(name,"__lxstat",8)||!strncmp(name,"lstat",5);
     unsigned arg=versioned?1:0;
-    if(versioned && R32(c->esp+4)!=3){rt_set_errno(c,22);c->eax=UINT32_MAX;return 1;}
+    if(versioned && R32(c->esp+4)!=3){rt_set_errno(c,RT_EINVAL);c->eax=UINT32_MAX;return 1;}
     uint32_t target=R32(c->esp+4+arg*4),destination=R32(c->esp+8+arg*4);
     struct stat native;int result;
     if(fd_call)result=fstat((int32_t)target,&native);
@@ -42,8 +42,10 @@ int rt_stat_shim(CPU *c,const char *name) {
         rt_string_length(c,target);const char *path=rt_read_path(GPTR(target));
         result=path?(link_call?lstat(path,&native):stat(path,&native)):-1;
     }
-    static int trace=-1;if(trace<0)trace=getenv("P2_TRACE_STAT")!=NULL;
-    if(trace&&!fd_call)fprintf(stderr,"[stat] %s %s -> %d\n",name,(const char *)GPTR(target),result);
+    static _Atomic int trace=-1;
+    int tracing=atomic_load_explicit(&trace,memory_order_relaxed);
+    if(tracing<0){tracing=getenv("P2_TRACE_STAT")!=NULL;atomic_store_explicit(&trace,tracing,memory_order_relaxed);}
+    if(tracing&&!fd_call)fprintf(stderr,"[stat] %s %s -> %d\n",name,(const char *)GPTR(target),result);
     if(!result)result=write_stat(c,destination,&native,strstr(name,"64")!=NULL);
     if(result)rt_save_errno(c);
     c->eax=(uint32_t)result;return 1;

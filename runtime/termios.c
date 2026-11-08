@@ -130,13 +130,11 @@ static const char *termios_from_linux(const uint8_t in[LINUX_TERMIOS], struct te
     return NULL;
 }
 
-static uint32_t arg(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
-
 static int termios_shim(CPU *c, const char *name) {
     int get = !strcmp(name, "tcgetattr");
     if (!get && strcmp(name, "tcsetattr")) return 0;
-    int fd = (int32_t)arg(c, 0);
-    uint32_t guest = arg(c, get ? 1 : 2);
+    int fd = (int32_t)rt_arg32(c, 0);
+    uint32_t guest = rt_arg32(c, get ? 1 : 2);
     struct termios host;
     if (tcgetattr(fd, &host)) { rt_save_errno(c); c->eax = UINT32_MAX; return 1; }
     if (get) {
@@ -145,8 +143,8 @@ static int termios_shim(CPU *c, const char *name) {
         memcpy(rt_write_span(c, guest, LINUX_TERMIOS), image, LINUX_TERMIOS);
         c->eax = 0; return 1;
     }
-    int action = (int32_t)arg(c, 1);   // TCSANOW 0, TCSADRAIN 1, TCSAFLUSH 2 : mêmes valeurs
-    if (action < 0 || action > 2) { rt_set_errno(c, 22); c->eax = UINT32_MAX; return 1; }
+    int action = (int32_t)rt_arg32(c, 1);   // TCSANOW 0, TCSADRAIN 1, TCSAFLUSH 2 : mêmes valeurs
+    if (action < 0 || action > 2) { rt_set_errno(c, RT_EINVAL); c->eax = UINT32_MAX; return 1; }
     const char *problem = termios_from_linux(rt_span(c, guest, LINUX_TERMIOS), &host);
     if (problem) rt_trap(c, c->eip, problem);
     if (tcsetattr(fd, action == 0 ? TCSANOW : action == 1 ? TCSADRAIN : TCSAFLUSH, &host)) {

@@ -101,7 +101,7 @@ __attribute__((weak)) uint32_t rt_gl_proc_address(const char *name) { (void)name
 void *rt_handle_require(CPU *c, uint32_t handle, uint32_t kind, const char *what) {
     if (!handle) return NULL;
     void *host = rt_handle_get(handle, kind);
-    if (!host) rt_trapf(c, "%s: unknown handle %#x", what, handle);
+    if (!host) rt_trapf(c, "invalid %s handle %#x", what, handle);
     return host;
 }
 

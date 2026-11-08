@@ -16,8 +16,6 @@
 #include <pthread.h>
 #include <stdlib.h>
 
-static uint32_t argument(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
-static const char *guest_string(CPU *c, uint32_t address) { rt_string_length(c, address); return GPTR(address); }
 static void store_end(uint32_t endptr, uint32_t start, const char *source, const char *end) {
     if (endptr) W32(endptr, start + (uint32_t)(end - source));
 }
@@ -29,12 +27,12 @@ static int negative_sign(const char *s) {
 
 // strtol/strtoul/strtoll/strtoull : `bits` = 32 ou 64.
 static void integer(CPU *c, int is_signed, int bits) {
-    uint32_t start = argument(c, 0), endptr = argument(c, 1);
-    int base = (int32_t)argument(c, 2);
-    const char *source = guest_string(c, start);
+    uint32_t start = rt_arg32(c, 0), endptr = rt_arg32(c, 1);
+    int base = (int32_t)rt_arg32(c, 2);
+    const char *source = rt_guest_cstr(c, start);
     if (endptr) rt_write_span(c, endptr, 4);
     // glibc : base invalide → EINVAL, 0, *endptr non modifié.
-    if (!valid_base(base)) { rt_set_errno(c, EINVAL); c->eax = c->edx = 0; return; }
+    if (!valid_base(base)) { rt_set_errno(c, RT_EINVAL); c->eax = c->edx = 0; return; }
     char *end; errno = 0;
     uint64_t result;
     int range = 0;
@@ -55,15 +53,15 @@ static void integer(CPU *c, int is_signed, int bits) {
         result = range ? (bits == 32 ? UINT32_MAX : UINT64_MAX) : value;
     }
     store_end(endptr, start, source, end);
-    if (range) rt_set_errno(c, ERANGE);
+    if (range) rt_set_errno(c, RT_ERANGE);
     c->eax = (uint32_t)result;
     c->edx = bits == 64 ? (uint32_t)(result >> 32) : c->edx;
 }
 
 // strtod/strtof/strtold : résultat dans ST(0).
 static void floating(CPU *c, int kind /* 0 float, 1 double, 2 long double */) {
-    uint32_t start = argument(c, 0), endptr = argument(c, 1);
-    const char *source = guest_string(c, start);
+    uint32_t start = rt_arg32(c, 0), endptr = rt_arg32(c, 1);
+    const char *source = rt_guest_cstr(c, start);
     if (endptr) rt_write_span(c, endptr, 4);
     char *end; errno = 0;
     double value;
@@ -77,7 +75,7 @@ static void floating(CPU *c, int kind /* 0 float, 1 double, 2 long double */) {
         rt_trap(c, c->eip, "strtold: value outside double range (x87 long double not modeled)");
     }
     store_end(endptr, start, source, end);
-    if (range) rt_set_errno(c, ERANGE);
+    if (range) rt_set_errno(c, RT_ERANGE);
     rt_return_st0(c, value);
 }
 
@@ -104,8 +102,7 @@ static void msort(Sort *s, uint32_t b, uint32_t n) {
     if (n1 > 0) memcpy(tmp, GPTR(b1), (size_t)n1 * size);
     memcpy(GPTR(b), s->tmp, (size_t)(n - n2) * size);
 }
-static void guest_qsort(CPU *c) {
-    uint32_t base = argument(c, 0), count = argument(c, 1), size = argument(c, 2), function = argument(c, 3);
+void rt_guest_qsort(CPU *c, uint32_t base, uint32_t count, uint32_t size, uint32_t function) {
     uint64_t total = (uint64_t)count * size;
     if (total > UINT32_MAX) rt_trap(c, c->eip, "qsort: array size overflow");
     if (count <= 1 || !size) return;
@@ -145,7 +142,7 @@ static void random_seed(uint32_t seed) {
     random_seeded = 1;
 }
 
-int rt_numeric_shim(CPU *c, const char *name) {
+static int rt_numeric_shim(CPU *c, const char *name) {
     if (!strcmp(name, "strtoll") || !strcmp(name, "__strtoll_internal")) integer(c, 1, 64);
     else if (!strcmp(name, "strtoull") || !strcmp(name, "__strtoull_internal")) integer(c, 0, 64);
     // Le paramètre `group` des variantes _internal n'a pas d'effet en locale C.
@@ -154,12 +151,12 @@ int rt_numeric_shim(CPU *c, const char *name) {
     else if (!strcmp(name, "__strtod_internal") || !strcmp(name, "__strtod_l")) floating(c, 1);
     else if (!strcmp(name, "__strtof_internal") || !strcmp(name, "__strtof_l")) floating(c, 0);
     else if (!strcmp(name, "strtold_l")) floating(c, 2);
-    else if (!strcmp(name, "qsort")) guest_qsort(c);
+    else if (!strcmp(name, "qsort")) rt_guest_qsort(c, rt_arg32(c, 0), rt_arg32(c, 1), rt_arg32(c, 2), rt_arg32(c, 3));
     else if (!strcmp(name, "srand")) {
-        pthread_mutex_lock(&random_lock); random_seed(argument(c, 0)); pthread_mutex_unlock(&random_lock);
+        pthread_mutex_lock(&random_lock); random_seed(rt_arg32(c, 0)); pthread_mutex_unlock(&random_lock);
     } else if (!strcmp(name, "rand_r")) {
         // Algorithme exact de la glibc (stdlib/rand_r.c) : trois tours du LCG ANSI.
-        uint32_t seed_address = argument(c, 0), next = R32(seed_address), result;
+        uint32_t seed_address = rt_arg32(c, 0), next = R32(seed_address), result;
         rt_write_span(c, seed_address, 4);
         next = next * 1103515245u + 12345u; result = (next / 65536u) % 2048u;
         next = next * 1103515245u + 12345u; result = (result << 10) ^ ((next / 65536u) % 1024u);

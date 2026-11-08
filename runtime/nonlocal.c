@@ -10,11 +10,9 @@
 // site a resume point of its function (tools/lift.py).
 #include "rt.h"
 
-// __sigsetjmp(env, savemask) : le masque de signaux invité (sync.c) n'est jamais
-// livré à du code invité ; il est enregistré seulement si savemask le demande,
-// et siglongjmp le rétablit.
-uint64_t rt_signal_blocked_mask(void);
-void rt_signal_set_blocked_mask(uint64_t mask);
+// __sigsetjmp(env, savemask) : le masque de signaux invité (sync.c,
+// rt_signal_blocked_mask) n'est jamais livré à du code invité ; il est
+// enregistré seulement si savemask le demande, et siglongjmp le rétablit.
 
 static int nonlocal_shim(CPU *c, const char *name) {
     if (!strcmp(name, "_setjmp") || !strcmp(name, "__sigsetjmp")) {

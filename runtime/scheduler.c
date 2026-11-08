@@ -14,7 +14,6 @@ static _Thread_local unsigned depth, ticks;
 // Threads bloqués sur gate : céder seulement s'il y en a. Exporté pour que le
 // code généré puisse tester sans appel (déclaration dans rt.h, branche fast-path).
 _Atomic unsigned rt_guest_waiting;
-#define waiting rt_guest_waiting
 // Diagnostic P2_GATE_TIMING=1 : temps d'attente du verrou par le thread principal.
 static uint64_t main_wait_ticks, main_waits, report_last, report_start;
 static void gate_report(uint64_t now) {
@@ -30,13 +29,15 @@ static void gate_report(uint64_t now) {
 }
 static void acquire(void) {
     if(!pthread_mutex_trylock(&gate))return;
-    static int timing=-1;
-    if(timing<0)timing=getenv("P2_GATE_TIMING")!=NULL;
-    int measure=timing && pthread_main_np();
+    // Lu avant la prise du verrou : atomique, plusieurs threads peuvent y passer en même temps.
+    static _Atomic int timing=-1;
+    int enabled=atomic_load_explicit(&timing,memory_order_relaxed);
+    if(enabled<0){enabled=getenv("P2_GATE_TIMING")!=NULL;atomic_store_explicit(&timing,enabled,memory_order_relaxed);}
+    int measure=enabled && pthread_main_np();
     uint64_t start=measure?mach_absolute_time():0;
-    ++waiting;
+    ++rt_guest_waiting;
     if(pthread_mutex_lock(&gate))abort();
-    --waiting;
+    --rt_guest_waiting;
     if(measure){uint64_t now=mach_absolute_time();main_wait_ticks+=now-start;++main_waits;gate_report(now);}
 }
 void rt_guest_enter(void) {

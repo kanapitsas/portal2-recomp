@@ -34,7 +34,6 @@ static _Thread_local Thread *current;
 static pthread_mutex_t join_lock=PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t join_cond=PTHREAD_COND_INITIALIZER;
 static pthread_key_t foreign_key;
-static uint32_t argument(CPU *c,unsigned index){return R32(c->esp+4+index*4);}
 static ThreadAttr *find_attr(uint32_t address){for(ThreadAttr *a=attributes;a;a=a->next)if(a->address==address)return a;return NULL;}
 static Thread *find_thread(uint32_t handle){for(Thread *t=threads;t;t=t->next)if(t->handle==handle)return t;return NULL;}
 static void unlink_thread(Thread *t){Thread **link=&threads;while(*link && *link!=t)link=&(*link)->next;if(*link)*link=t->next;}
@@ -53,14 +52,19 @@ static void *thread_entry(void *opaque) {
     rt_guest_leave();
     return NULL;
 }
-// Allocate a guest stack with a guard page below and above. Gate held.
+// Allocate a guest stack with a guard below and above. Gate held. Guards are
+// whole host pages (16 KiB on Apple silicon): under RT_FAST_MEMORY a host page
+// carries the union of its guest pages' rights, so a 4 KiB guard sharing a
+// host page with the stack would not fault. The stack itself keeps the size
+// the guest asked for (rounded to 4 KiB) and starts on a host page.
 static int map_stack(CPU *c,Thread *t,uint32_t size){
+    uint32_t page=(uint32_t)rt_host_page_size();
     size=(size+4095)&~4095u;
-    t->length=(size+8192+16383)&~16383u;
+    t->length=((page+size+page-1)&~(page-1))+page;   // garde basse, pile, garde haute d'au moins une page hôte entière
     t->stack=rt_mmap(c,0,t->length,3,0x22,-1,0);
     if(t->stack==UINT32_MAX){t->stack=0;return -1;}
-    if(rt_mprotect(t->stack,4096,0) || rt_mprotect(t->stack+4096+size,t->length-4096-size,0))rt_trap(c,c->eip,"guest thread stack protection failed");
-    t->cpu.esp=t->stack+4096+size;
+    if(rt_mprotect(t->stack,page,0) || rt_mprotect(t->stack+page+size,t->length-page-size,0))rt_trap(c,c->eip,"guest thread stack protection failed");
+    t->cpu.esp=t->stack+page+size;
     return 0;
 }
 static int linux_signal_valid(uint32_t signal){return signal<=64;}
@@ -68,9 +72,9 @@ static int linux_signal_valid(uint32_t signal){return signal<=64;}
 // the record, its stack, TCB and TLS blocks are released (a later join or
 // detach of the same handle gets ESRCH, as after a detached thread's end).
 static int join(Thread *t,uint32_t output,const struct timespec *deadline,int nonblocking){
-    if(t==current)return 35;                                   // EDEADLK
+    if(t==current)return RT_EDEADLK;
     if(t->joined || t->joining || t->detached || t->foreign)return EINVAL;
-    if(!t->finished && nonblocking)return 16;                  // EBUSY
+    if(!t->finished && nonblocking)return RT_EBUSY;
     t->joining=1;
     unsigned saved;int error=0;
     if(deadline){
@@ -82,14 +86,14 @@ static int join(Thread *t,uint32_t output,const struct timespec *deadline,int no
     if(!error){saved=rt_guest_suspend();error=pthread_join(t->native,NULL);rt_guest_resume(saved);}
     t->joining=0;
     if(!error){t->joined=1;if(output)W32(output,t->result);release(t);}
-    return error==ETIMEDOUT?110:error;
+    return error==ETIMEDOUT?RT_ETIMEDOUT:error;
 }
 int rt_thread_shim(CPU *c,const char *name) {
     if(!c->tid)c->tid=1;
     if(c->tid==1 && !main_handle){main_handle=rt_thread_pointer(c);main_native=pthread_self();}
-    uint32_t address=argument(c,0);int error=0;
+    uint32_t address=rt_arg32(c,0);int error=0;
     if(!strcmp(name,"pthread_self"))c->eax=rt_thread_pointer(c);
-    else if(!strcmp(name,"pthread_equal"))c->eax=address==argument(c,1);
+    else if(!strcmp(name,"pthread_equal"))c->eax=address==rt_arg32(c,1);
     else if(!strcmp(name,"pthread_attr_init")) {
         if(!address || find_attr(address))error=EINVAL;
         else {ThreadAttr *a=calloc(1,sizeof(*a));if(!a)error=ENOMEM;
@@ -99,17 +103,17 @@ int rt_thread_shim(CPU *c,const char *name) {
         ThreadAttr **link=&attributes;while(*link && (*link)->address!=address)link=&(*link)->next;
         if(!*link)error=EINVAL;
         else if(!strcmp(name,"pthread_attr_destroy")){ThreadAttr *a=*link;*link=a->next;free(a);}
-        else {uint32_t size=argument(c,1);if(size<16384 || size>256*1024*1024)error=EINVAL;else (*link)->size=size;}
+        else {uint32_t size=rt_arg32(c,1);if(size<16384 || size>256*1024*1024)error=EINVAL;else (*link)->size=size;}
         c->eax=error;
     } else if(!strcmp(name,"pthread_create")) {
-        uint32_t attr_address=argument(c,1);ThreadAttr *attr=find_attr(attr_address);
+        uint32_t attr_address=rt_arg32(c,1);ThreadAttr *attr=find_attr(attr_address);
         if(attr_address && !attr){c->eax=EINVAL;return 1;}
         Thread *t=calloc(1,sizeof(*t));if(!t){c->eax=ENOMEM;return 1;}
         rt_cpu_reset(&t->cpu);t->cpu.tid=next_tid++;
         t->cpu.fcw=c->fcw;t->cpu.mxcsr=c->mxcsr;
-        if(map_stack(c,t,attr?attr->size:8*1024*1024)){free(t);c->eax=11;return 1;}
+        if(map_stack(c,t,attr?attr->size:8*1024*1024)){free(t);c->eax=RT_EAGAIN;return 1;}
         t->handle=rt_thread_pointer(&t->cpu);
-        t->entry=argument(c,2);t->argument=argument(c,3);
+        t->entry=rt_arg32(c,2);t->argument=rt_arg32(c,3);
         pthread_attr_t native_attr;error=pthread_attr_init(&native_attr);
         if(!error){
             error=pthread_attr_setstacksize(&native_attr,16*1024*1024);
@@ -118,18 +122,18 @@ int rt_thread_shim(CPU *c,const char *name) {
             if(!error)error=pthread_create(&t->native,&native_attr,thread_entry,t);
             pthread_attr_destroy(&native_attr);
         }
-        if(error){rt_munmap(t->stack,t->length);free(t);}
+        if(error){rt_munmap(t->stack,t->length);rt_tls_release(t->cpu.tid);free(t);}   // TCB alloué par rt_thread_pointer
         else {t->next=threads;threads=t;W32(address,t->handle);}
-        c->eax=error==EAGAIN?11:(uint32_t)error;
+        c->eax=error==EAGAIN?RT_EAGAIN:(uint32_t)error;
     } else if(!strcmp(name,"pthread_join") || !strcmp(name,"pthread_tryjoin_np") || !strcmp(name,"pthread_timedjoin_np")) {
-        Thread *t=find_thread(address);uint32_t output=argument(c,1);
-        if(!t){c->eax=3;return 1;}                             // ESRCH
+        Thread *t=find_thread(address);uint32_t output=rt_arg32(c,1);
+        if(!t){c->eax=RT_ESRCH;return 1;}
         struct timespec deadline={0};int timed=!strcmp(name,"pthread_timedjoin_np");
-        if(timed && !t->finished && rt_read_timespec(c,argument(c,2),&deadline)){c->eax=EINVAL;return 1;}
+        if(timed && !t->finished && rt_read_timespec(c,rt_arg32(c,2),&deadline)){c->eax=EINVAL;return 1;}
         c->eax=(uint32_t)join(t,output,timed?&deadline:NULL,!strcmp(name,"pthread_tryjoin_np"));
     } else if(!strcmp(name,"pthread_detach")) {
         Thread *t=find_thread(address);
-        if(!t)error=address==main_handle?0:3;
+        if(!t)error=address==main_handle?0:RT_ESRCH;
         else if(t->joined || t->joining || t->detached || t->foreign)error=EINVAL;
         else {
             error=pthread_detach(t->native);
@@ -137,9 +141,9 @@ int rt_thread_shim(CPU *c,const char *name) {
         }
         c->eax=(uint32_t)error;
     } else if(!strcmp(name,"pthread_kill")) {
-        Thread *t=find_thread(address);uint32_t signal=argument(c,1);
+        Thread *t=find_thread(address);uint32_t signal=rt_arg32(c,1);
         int alive=address==main_handle || (t && !t->finished && !t->joined);
-        if(!alive)c->eax=3;
+        if(!alive)c->eax=RT_ESRCH;
         else if(!linux_signal_valid(signal))c->eax=EINVAL;
         else if(signal)rt_trap(c,c->eip,signal==9?"pthread_kill(SIGKILL) terminates the whole Linux process; not emulated":"guest signal delivery to a thread is not implemented");
         else c->eax=0;
@@ -150,16 +154,16 @@ int rt_thread_shim(CPU *c,const char *name) {
     } else if(!strcmp(name,"pthread_setname_np")) {
         // Linux : 15 octets au plus (ERANGE). Darwin ne nomme que le thread courant ; le nom
         // d'un autre thread ne sert qu'aux outils de débogage et n'est pas appliqué.
-        uint32_t length=rt_string_length(c,argument(c,1));
-        if(length>15){c->eax=34;return 1;}
-        if(address==rt_thread_pointer(c))pthread_setname_np((const char *)GPTR(argument(c,1)));
+        uint32_t length=rt_string_length(c,rt_arg32(c,1));
+        if(length>15){c->eax=RT_ERANGE;return 1;}
+        if(address==rt_thread_pointer(c))pthread_setname_np((const char *)GPTR(rt_arg32(c,1)));
         c->eax=0;
     } else if(!strcmp(name,"pthread_setaffinity_np")) {
         // Darwin has no CPU pinning on Apple silicon. The mask is validated as
         // Linux would (ESRCH, EINVAL for no online CPU), then left as a hint.
-        Thread *t=find_thread(address);uint32_t size=argument(c,1);
-        if(!(address==main_handle || (t && !t->joined && !t->finished))){c->eax=3;return 1;}
-        const uint8_t *mask=rt_span(c,argument(c,2),size);
+        Thread *t=find_thread(address);uint32_t size=rt_arg32(c,1);
+        if(!(address==main_handle || (t && !t->joined && !t->finished))){c->eax=RT_ESRCH;return 1;}
+        const uint8_t *mask=rt_span(c,rt_arg32(c,2),size);
         int cpus=1;size_t length=sizeof(cpus);
         if(sysctlbyname("hw.logicalcpu",&cpus,&length,NULL,0) || cpus<1)cpus=1;
         int any=0;for(uint32_t bit=0;bit<(uint32_t)cpus && bit/8<size;++bit)if(mask[bit/8]>>(bit%8)&1)any=1;
@@ -168,20 +172,20 @@ int rt_thread_shim(CPU *c,const char *name) {
         Thread *t=find_thread(address);pthread_t native;
         if(t && !t->joined && !t->foreign)native=t->native;
         else if(address==main_handle)native=main_native;
-        else {c->eax=3;return 1;}
+        else {c->eax=RT_ESRCH;return 1;}
         struct sched_param param;int policy;
         if(!strcmp(name,"pthread_getschedparam")){
             error=pthread_getschedparam(native,&policy,&param);
             if(!error){
                 uint32_t guest_policy=policy==SCHED_FIFO?1:policy==SCHED_RR?2:0,priority=(uint32_t)param.sched_priority;
-                uint8_t *policy_out=rt_write_span(c,argument(c,1),4),*param_out=rt_write_span(c,argument(c,2),4);
+                uint8_t *policy_out=rt_write_span(c,rt_arg32(c,1),4),*param_out=rt_write_span(c,rt_arg32(c,2),4);
                 memcpy(policy_out,&guest_policy,4);memcpy(param_out,&priority,4);
             }
         } else {
-            uint32_t guest_policy=argument(c,1);
+            uint32_t guest_policy=rt_arg32(c,1);
             if(guest_policy>2){c->eax=EINVAL;return 1;}
             policy=guest_policy==1?SCHED_FIFO:guest_policy==2?SCHED_RR:SCHED_OTHER;
-            memset(&param,0,sizeof(param));int32_t priority;memcpy(&priority,rt_span(c,argument(c,2),4),4);param.sched_priority=priority;
+            memset(&param,0,sizeof(param));int32_t priority;memcpy(&priority,rt_span(c,rt_arg32(c,2),4),4);param.sched_priority=priority;
             error=pthread_setschedparam(native,policy,&param);
         }
         c->eax=(uint32_t)error;

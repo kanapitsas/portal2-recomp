@@ -24,18 +24,7 @@ int rt_register_tls(const char *directory, const char *name, uint32_t id,
     if (!m) return -1;
     m->initial = calloc(1, memsz);
     if (!m->initial) { free(m); return -1; }
-    if (filesz) {
-        char path[4096];
-        int n = snprintf(path, sizeof(path), "%s/%s", directory, name);
-        if (n < 0 || (size_t)n >= sizeof(path)) { free(m->initial); free(m); return -1; }
-        FILE *file = fopen(path, "rb");
-        int failed = !file;
-        if (file) {
-            failed = fseek(file, (long)offset, SEEK_SET) || fread(m->initial, 1, filesz, file) != filesz;
-            fclose(file);
-        }
-        if (failed) { free(m->initial); free(m); return -1; }
-    }
+    if (filesz && rt_read_file_range(directory, name, offset, m->initial, filesz)) { free(m->initial); free(m); return -1; }
     m->id = id; m->size = memsz; m->alignment = alignment;
     m->next = modules; modules = m;
     return 0;

@@ -15,7 +15,6 @@
 
 enum { SOURCE_NARROW, SOURCE_WIDE, SOURCE_FILE };
 enum { NOT_READ = -2 };       // aucun caractère lu (largeur épuisée) : rien à remettre
-enum { LINUX_ERANGE = 34, LINUX_EILSEQ = 84 };
 
 typedef struct {
     CPU *c;
@@ -116,7 +115,6 @@ static void store_end(Store *s) {
     if (s->wide) W32(s->address + 4 * s->written, 0);
     else W8(s->address + s->written, 0);
 }
-#define store_integer rt_store_integer
 void rt_store_integer(CPU *c, uint32_t address, unsigned size, uint64_t value) {
     rt_span(c, address, size);
     if (size == 1) W8(address, (uint32_t)value);
@@ -132,7 +130,7 @@ static uint64_t convert_integer(CPU *c, const char *text, int base, int is_signe
         long long value = strtoll(text, NULL, base);
         if (!wide64 && value > INT32_MAX) { value = INT32_MAX; errno = ERANGE; }
         if (!wide64 && value < INT32_MIN) { value = INT32_MIN; errno = ERANGE; }
-        if (errno) rt_set_errno(c, LINUX_ERANGE);
+        if (errno) rt_set_errno(c, RT_ERANGE);
         return (uint64_t)value;
     }
     unsigned long long value = strtoull(text, NULL, base);
@@ -142,7 +140,7 @@ static uint64_t convert_integer(CPU *c, const char *text, int base, int is_signe
         if (errno == ERANGE || magnitude > UINT32_MAX) { value = UINT32_MAX; errno = ERANGE; }
         else value = (uint32_t)value;
     }
-    if (errno) rt_set_errno(c, LINUX_ERANGE);
+    if (errno) rt_set_errno(c, RT_ERANGE);
     return value;
 }
 
@@ -208,7 +206,7 @@ static int scan(Input *in, const uint32_t *f, uint32_t arguments) {
     int32_t ch;
 #define INPUT_ERROR() return done ? done : EOF
 #define CONVERSION_ERROR() return done
-#define ENCODING_ERROR() do { rt_set_errno(c, LINUX_EILSEQ); return done; } while (0)
+#define ENCODING_ERROR() do { rt_set_errno(c, RT_EILSEQ); return done; } while (0)
     while (*f) {
         uint32_t fc = *f++;
         if (fc != '%') {
@@ -254,7 +252,7 @@ static int scan(Input *in, const uint32_t *f, uint32_t arguments) {
             if (ch != '%') { input_unget(in, ch); CONVERSION_ERROR(); }
             break;
         case 'n':
-            if (!suppress) store_integer(c, next_argument(c, &arguments), size, in->consumed);
+            if (!suppress) rt_store_integer(c, next_argument(c, &arguments), size, in->consumed);
             break;
         case 'd': case 'i': case 'u': case 'o': case 'x': case 'X': {
             int base = conversion == 'd' || conversion == 'u' ? 10 : conversion == 'i' ? 0 :
@@ -280,7 +278,7 @@ static int scan(Input *in, const uint32_t *f, uint32_t arguments) {
             if (!n.length || (n.length == 1 && (n.text[0] == '-' || n.text[0] == '+'))) CONVERSION_ERROR();
             if (!suppress) {
                 int is_signed = conversion == 'd' || conversion == 'i';
-                store_integer(c, next_argument(c, &arguments), size,
+                rt_store_integer(c, next_argument(c, &arguments), size,
                               convert_integer(c, n.text, base, is_signed, size == 8));
                 ++done;
             }
@@ -298,7 +296,7 @@ static int scan(Input *in, const uint32_t *f, uint32_t arguments) {
             char *end; errno = 0;
             double value = is_long ? strtod(n.text, &end) : (double)strtof(n.text, &end);
             if (end == n.text) CONVERSION_ERROR();
-            if (errno == ERANGE) rt_set_errno(c, LINUX_ERANGE);
+            if (errno == ERANGE) rt_set_errno(c, RT_ERANGE);
             if (!suppress) {
                 uint32_t address = next_argument(c, &arguments);
                 if (is_long) { rt_span(c, address, 8); WD(address, value); }
@@ -376,7 +374,6 @@ static int run(Input *in, uint32_t format_address, int wide_format, uint32_t arg
     return result;
 }
 
-void *rt_stream_file(CPU *c, uint32_t handle);
 int rt_scan_shim(CPU *c, const char *name) {
     int kind;
     if (!strcmp(name, "__isoc99_sscanf") || !strcmp(name, "sscanf")) kind = SOURCE_NARROW;

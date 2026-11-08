@@ -1,8 +1,5 @@
 #include "posix.h"
 #include <TargetConditionals.h>
-#if TARGET_OS_IPHONE
-const char *rt_ios_case_path(const char *canonical, size_t trusted);
-#endif
 #include <errno.h>
 #include <limits.h>
 #include <pthread.h>
@@ -234,7 +231,6 @@ static const char *read_path_uncached(const char *path) {
     return path;
 #endif
 }
-#define WHITEOUTS RT_WHITEOUTS
 static _Thread_local char parent_buffer[PATH_MAX];
 static const char *relative_parent(const char *relative,size_t length) {
     if(length>=PATH_MAX)return NULL;
@@ -321,7 +317,7 @@ int rt_path_lower(const char *relative,char out[2][PATH_MAX]) {
     return count;
 }
 static int whiteout_marker(const char *relative,char out[PATH_MAX]) {
-    int count=*relative?snprintf(out,PATH_MAX,"%s/" WHITEOUTS "/%s/.wh",user_root,relative):-1;
+    int count=*relative?snprintf(out,PATH_MAX,"%s/" RT_WHITEOUTS "/%s/.wh",user_root,relative):-1;
     if(count<0 || count>=PATH_MAX){errno=*relative?ENAMETOOLONG:EINVAL;return -1;}
     return 0;
 }
@@ -344,7 +340,7 @@ int rt_path_clear_whiteout(const char *relative) {
     return unlink(marker) && errno!=ENOENT?-1:0;
 }
 int rt_path_hidden_name(const char *relative_dir,const char *name) {
-    if(!*relative_dir && !strcmp(name,WHITEOUTS))return 1;
+    if(!*relative_dir && !strcmp(name,RT_WHITEOUTS))return 1;
     char relative[PATH_MAX];
     int count=*relative_dir?snprintf(relative,PATH_MAX,"%s/%s",relative_dir,name):snprintf(relative,PATH_MAX,"%s",name);
     if(count<0 || count>=PATH_MAX)return 0;
