@@ -49,7 +49,7 @@ struct Game: Identifiable, Equatable {
         let info = try? file.resolvingSymlinksInPath().resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
         guard info?.isRegularFile == true, (info?.fileSize ?? 0) > 0,
               FileManager.default.isReadableFile(atPath: file.path), isDir(url.appendingPathComponent("platform")) else {
-            return "Incomplete game data: check \(relative) (missing, unreadable or empty) and the platform folder. Restore the files with Steam, choose a complete game folder, or download the game data below:"
+            return "Incomplete game data: check \(relative) (missing, unreadable or empty) and the platform folder. An empty placeholder does not help. In Steam, verify the integrity of Portal 2's files (Properties > Installed Files), choose a complete game folder, or download the game data below:"
         }
         return nil
     }
@@ -635,7 +635,7 @@ func snapshot(to path: String, state: String) {
     }
     switch state {
     case "incomplete":
-        model.states["portal2"]?.dataIssue = "Incomplete game data: portal2_dlc2/scripts/editoritems.txt is missing, unreadable or empty. Restore the files with Steam, choose a complete game folder, or download the game data below:"
+        model.states["portal2"]?.dataIssue = "Incomplete game data: portal2_dlc2/scripts/editoritems.txt is missing, unreadable or empty. An empty placeholder does not help. In Steam, verify the integrity of Portal 2's files (Properties > Installed Files), choose a complete game folder, or download the game data below:"
         model.states["portal2"]?.selected = false
     case "building": model.phase = .installing
         model.step = "Recompiling Portal 2 (about 10 minutes the first time, seconds afterwards)"; model.progress = 0.25

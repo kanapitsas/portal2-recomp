@@ -205,7 +205,8 @@ check_game() {  # game id -> dies unless FOUND_GAME and FOUND_LINUX are that gam
         [ -f "$FOUND_GAME/portal2/pak01_dir.vpk" ] && [ -d "$FOUND_GAME/platform" ] \
             || die "$FOUND_GAME does not look like Portal 2 (no portal2/pak01_dir.vpk or platform/)"
         portal2_data_ready "$FOUND_GAME" || die "Portal 2 game data is incomplete: $FOUND_GAME/portal2_dlc2/scripts/editoritems.txt is missing, unreadable or empty.
-  Restore it from your Steam copy, or download the complete game data:
+  An empty placeholder does not help. In Steam: Portal 2 > Properties > Installed Files >
+  Verify integrity of game files; or download the complete game data:
   open steam://open/console, type: download_depot 620 621, wait for
   'Depot download complete', then choose depot_621 as the game folder."
         for f in mssmp3.asi mssvoice.asi binkawin.asi; do

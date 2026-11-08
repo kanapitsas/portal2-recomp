@@ -22,8 +22,10 @@ int rt_validate_game_data(const char *program, const char *game, FILE *errors) {
     if (errors) fprintf(errors,
         "Portal 2 game data is incomplete: %s is missing, unreadable or empty.\n"
         "Game folder: %s\nEffective file: %s\n"
-        "Restore this file from your Steam copy, or download the complete game data\n"
-        "with download_depot 620 621 in the Steam console and choose depot_621 in Natif Installer.\n"
+        "An empty placeholder does not help: the game needs the real file. In Steam, right-click\n"
+        "Portal 2 > Properties > Installed Files > Verify integrity of game files, or download the\n"
+        "complete game data with download_depot 620 621 in the Steam console and choose depot_621\n"
+        "in Natif Installer. No rebuild is needed: the data is read at launch.\n"
         "If you use a custom data folder, verify that folder, not a different Steam installation.\n",
         relative, game, resolved ? resolved : "not found (check user overrides too)");
     return -1;
