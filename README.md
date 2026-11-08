@@ -25,23 +25,38 @@ share them.
 
 ## Status at a glance (8 November 2026)
 
-- **Mac**: fully playable. On an M3 Pro, Metal (the default) runs a scene at
-  122 fps where OpenGL gets 81 (2560×1440, MSAA 4×).
-- **iPhone**: fully playable on an iPhone 15 Pro Max at a steady 60 fps, with
-  touch controls and portals fired by **tapping the back of the phone**.
-- **Controllers**: physical controllers work on Mac and iPhone (tested with
-  an 8BitDo SN30 Pro). On Mac, turn Steam Input off for Portal 2.
+**Portal 2**: fully playable.
+
+- **Mac**: on an M3 Pro, Metal (the default) runs a scene at 122 fps where
+  OpenGL gets 81 (2560×1440, MSAA 4×).
+- **iPhone**: steady 60 fps on an iPhone 15 Pro Max, with touch controls and
+  portals fired by **tapping the back of the phone**.
+- **Controllers**: work on Mac and iPhone (tested with an 8BitDo SN30 Pro).
+  On Mac, turn Steam Input off for Portal 2.
 - **Co-op** over the local network: a Mac hosts, an iPhone or a second copy
   on the same Mac joins. Connection and map load are checked; a full co-op
   course has not been played yet.
+
+**Half-Life 2** (experimental), with Episode One, Episode Two and Lost Coast
+([details](#half-life-2-experimental)):
+
+- **Mac**: 120 fps with Metal on an M3 Pro at 1280×720 (the display's
+  limit). Players report an hour on an M4 Pro with no issue, and mostly
+  60 fps (dips to 50) on an M4 Air at 2560×1664, maximum settings, with a
+  DualShock 4.
+- **Episodes and Lost Coast**: their first maps load; they have not been
+  played through.
+- **iPhone**: 60 fps on an iPhone 15 Pro Max, with touch controls and gyro
+  aiming, in a short test.
+
+**Both games**
+
 - **Install**: the Natif Installer app from the
   [releases](https://github.com/kanapitsas/source-recomp/releases), or one
   command, `setup.sh`, for either game or both. Only the Xcode command line
   tools are required.
-- **Half-Life 2** (experimental), with Episode One, Episode Two and Lost
-  Coast: plays on Mac at 120 fps with Metal (M3 Pro, 720p), from the same installer or checkout; runs on iPhone at 60 fps with its
-  own touch controls (first short test on an iPhone 15 Pro Max); see
-  [below](#half-life-2-experimental).
+- **Multiplayer**: only Portal 2's LAN co-op. No Steam invites or online
+  play, and Half-Life 2: Deathmatch is not supported.
 
 ## How it works
 
