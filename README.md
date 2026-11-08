@@ -40,8 +40,7 @@ share them.
 **Half-Life 2** (experimental), with Episode One, Episode Two and Lost Coast
 ([details](#half-life-2-experimental)):
 
-- **Mac**: 120 fps with Metal on an M3 Pro at 1280×720 (the display's
-  limit). Players report an hour on an M4 Pro with no issue, and mostly
+- **Mac**: 120 fps with Metal on an M3 Pro at 1280×720. Players report an hour on an M4 Pro with no issue, and mostly
   60 fps (dips to 50) on an M4 Air at 2560×1664, maximum settings, with a
   DualShock 4.
 - **Episodes and Lost Coast**: their first maps load; they have not been
