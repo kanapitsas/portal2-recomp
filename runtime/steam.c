@@ -35,6 +35,7 @@
 // SHIMS: SteamInternal_FindOrCreateGameServerInterface SteamInternal_GameServer_Init
 // SHIMS: SteamGameServer_Shutdown SteamGameServer_RunCallbacks SteamGameServer_GetHSteamPipe
 // SHIMS: SteamGameServer_GetHSteamUser SteamGameServer_GetIPCCallCount
+// SHIMS: SteamInternal_SteamAPI_Init SteamInternal_GameServer_Init_V2 SteamAPI_SetBreakpadAppID
 
 #define KIND_INTERFACE 0x5354494du   // 'STIM'
 #define OPAQUE_SLOTS 32u             // interfaces absentes du SDK 1.53a (GameCoordinator...)
@@ -64,7 +65,45 @@ static int repository(char *out, size_t size) {
     return snprintf(out, size, "%s/..", real) >= (int)size ? -1 : 0;
 }
 
-// Valeur (chaîne ou nombre) d'une clé de premier niveau de config/local.json.
+// Valeur (chaîne ou nombre) d'une clé de premier niveau d'un texte JSON. Les
+// clés des sections ("games": {"hl2": {...}}, autre jeu que Portal 2) sont
+// ignorées : seules les clés de profondeur 1 comptent, quel que soit leur ordre.
+int steam_config_text_value(const char *text, const char *key, char *out, size_t size) {
+    int depth = 0;
+    size_t key_length = strlen(key);
+    for (const char *p = text; *p; ++p) {
+        if (*p == '{' || *p == '[') { ++depth; continue; }
+        if (*p == '}' || *p == ']') { --depth; continue; }
+        if (*p != '"') continue;
+        const char *start = ++p;                  // chaîne : clé ou valeur
+        while (*p && *p != '"') p += (*p == '\\' && p[1]) ? 2 : 1;
+        if (!*p) return 0;
+        size_t length = (size_t)(p - start);
+        if (depth != 1 || length != key_length || memcmp(start, key, length)) continue;
+        const char *q = p + 1;
+        while (*q == ' ' || *q == '\t' || *q == '\n' || *q == '\r') ++q;
+        if (*q++ != ':') continue;                // une valeur égale au nom de la clé
+        while (*q == ' ' || *q == '\t' || *q == '\n' || *q == '\r') ++q;
+        size_t used = 0;
+        if (*q == '"') {
+            for (++q; *q && *q != '"' && used + 1 < size; ++q) {
+                if (*q == '\\' && q[1]) ++q;
+                out[used++] = *q;
+            }
+            if (*q != '"') return 0;
+        } else {
+            while ((*q == '-' || (*q >= '0' && *q <= '9')) && used + 1 < size) out[used++] = *q++;
+            if (!used) return 0;
+        }
+        out[used] = 0;
+        return 1;
+    }
+    return 0;
+}
+
+// Valeur d'une clé de premier niveau de config/local.json (celles de Portal 2 et
+// les clés partagées ; un autre jeu reçoit les siennes de tools/run_game.py ou
+// de son lanceur, par l'environnement).
 static int config_value(const char *key, char *out, size_t size) {
     char root[PATH_MAX], file[PATH_MAX];
     if (repository(root, sizeof(root)) || snprintf(file, sizeof(file), "%s/config/local.json", root) >= (int)sizeof(file))
@@ -75,27 +114,7 @@ static int config_value(const char *key, char *out, size_t size) {
     size_t n = fread(text, 1, sizeof(text) - 1, f);
     fclose(f);
     text[n] = 0;
-    char quoted[128];
-    snprintf(quoted, sizeof(quoted), "\"%s\"", key);
-    const char *p = strstr(text, quoted);
-    if (!p) return 0;
-    p += strlen(quoted);
-    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') ++p;
-    if (*p++ != ':') return 0;
-    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') ++p;
-    size_t used = 0;
-    if (*p == '"') {
-        for (++p; *p && *p != '"' && used + 1 < size; ++p) {
-            if (*p == '\\' && p[1]) ++p;
-            out[used++] = *p;
-        }
-        if (*p != '"') return 0;
-    } else {
-        while ((*p == '-' || (*p >= '0' && *p <= '9')) && used + 1 < size) out[used++] = *p++;
-        if (!used) return 0;
-    }
-    out[used] = 0;
-    return 1;
+    return steam_config_text_value(text, key, out, size);
 }
 
 const char *steam_dylib_path(void) {
@@ -140,6 +159,14 @@ void *steam_flat(CPU *c, const char *symbol) {
     return fn;
 }
 #define FLAT(type, name) ((type)steam_flat(c, name))
+// Ce que fait la fonction flat de la dylib (ldr x8,[x0]; ldr xN,[x8,#off]; br xN), sans
+// dépendre du SDK de la dylib chargée : la disposition est celle de la version demandée.
+void *steam_slot(CPU *c, void *self, uint32_t slot) {
+    if (!self) rt_trap(c, c->eip, "Steam: method called on a null interface");
+    void *fn = (*(void ***)self)[slot];
+    if (!fn) rt_trap(c, c->eip, "Steam: empty vtable slot");
+    return fn;
+}
 
 // ---------------------------------------------------------------- aides du code généré
 const char *steam_in_string(CPU *c, uint32_t address) {
@@ -685,18 +712,73 @@ static void log_once(int *done, const char *what) {
     if (!*done) { *done = 1; fprintf(stderr, "steam: %s ignored (breakpad stays disabled)\n", what); }
 }
 
+// Mécanisme documenté par Valve : SteamAppId désigne le jeu ; le client vérifie
+// toujours la possession. Pris dans config/local.json s'il manque.
+static void set_app_id(void) {
+    char appid[32];
+    // Le lanceur de Half-Life 2 laisse SteamAppId défini mais vide : traité comme absent.
+    const char *current = getenv("SteamAppId");
+    if ((!current || !*current) && config_value("steam_appid", appid, sizeof(appid))) {
+        setenv("SteamAppId", appid, 1); setenv("SteamGameId", appid, 1);
+        fprintf(stderr, "steam: SteamAppId=%s from config/local.json\n", appid);
+    }
+}
+
+// SteamErrMsg du SDK 1.59+ : char[k_cchMaxSteamErrMsg = 1024], écrit par la dylib.
+#define STEAM_ERR_MSG 1024u
+// Liste des versions à vérifier : chaînes terminées par NUL, la dernière suivie d'un
+// second NUL (SteamAPI_InitEx). Chaque chaîne est validée en mémoire invitée.
+static const char *interface_list(CPU *c, uint32_t address) {
+    if (!address) return NULL;
+    uint32_t at = address;
+    for (int n = 0; n < 256; ++n) {
+        size_t length = rt_string_length(c, at);
+        if (!length) return GPTR(address);
+        at += (uint32_t)length + 1;
+    }
+    rt_trap(c, c->eip, "Steam: unterminated interface version list");
+    return NULL;
+}
+
 static int steam_shim(CPU *c, const char *name) {
-    static int breakpad_logged, comment_logged, minidump_logged;
+    static int breakpad_logged, comment_logged, minidump_logged, breakpad_app_logged;
     if (strstr(name, "::")) return method_shim(c, name);
     if (strncmp(name, "Steam", 5)) return 0;
-    if (!strcmp(name, "SteamAPI_InitSafe")) {
-        // Mécanisme documenté par Valve : SteamAppId désigne le jeu ; le client
-        // vérifie toujours la possession. Pris dans config/local.json s'il manque.
-        char appid[32];
-        if (!getenv("SteamAppId") && config_value("steam_appid", appid, sizeof(appid))) {
-            setenv("SteamAppId", appid, 0); setenv("SteamGameId", appid, 0);
-            fprintf(stderr, "steam: SteamAppId=%s from config/local.json\n", appid);
+    if (!strcmp(name, "SteamInternal_SteamAPI_Init")) {
+        // ESteamAPIInitResult (const char *pszInternalCheckInterfaceVersions, SteamErrMsg *)
+        set_app_id();
+        const char *versions = interface_list(c, arg(c, 0));
+        char *message = arg(c, 1) ? steam_out(c, arg(c, 1), STEAM_ERR_MSG) : NULL;
+        int32_t (*init)(const char *, char *) = FLAT(int32_t (*)(const char *, char *), name);
+        Capture capture; capture_begin(&capture);
+        int32_t result = init(versions, message);
+        capture_end(&capture);
+        if (result) {
+            fprintf(stderr, "steam: SteamAPI_InitEx failed (%d): %s (SteamAppId=%s, versions:", result,
+                    message ? message : "", getenv("SteamAppId") ? getenv("SteamAppId") : "unset");
+            for (const char *v = versions; v && *v; v += strlen(v) + 1) fprintf(stderr, " %s", v);
+            fputs(")\n", stderr);
         }
+        else enable_manual_dispatch(c);
+        c->eax = (uint32_t)result;
+    } else if (!strcmp(name, "SteamInternal_GameServer_Init_V2")) {
+        // (uint32 unIP, uint16 usGamePort, uint16 usQueryPort, EServerMode, const char *pchVersionString,
+        //  const char *pszInternalCheckInterfaceVersions, SteamErrMsg *) -> ESteamAPIInitResult
+        const char *version = steam_in_string(c, arg(c, 4));
+        const char *versions = interface_list(c, arg(c, 5));
+        char *message = arg(c, 6) ? steam_out(c, arg(c, 6), STEAM_ERR_MSG) : NULL;
+        int32_t (*init)(uint32_t, uint16_t, uint16_t, int32_t, const char *, const char *, char *) =
+            FLAT(int32_t (*)(uint32_t, uint16_t, uint16_t, int32_t, const char *, const char *, char *), name);
+        Capture capture; capture_begin(&capture);
+        int32_t result = init(arg(c, 0), (uint16_t)arg(c, 1), (uint16_t)arg(c, 2), (int32_t)arg(c, 3), version, versions, message);
+        capture_end(&capture);
+        if (result) fprintf(stderr, "steam: SteamGameServer_InitEx failed (%d): %s\n", result, message ? message : "");
+        else enable_manual_dispatch(c);
+        c->eax = (uint32_t)result;
+    } else if (!strcmp(name, "SteamAPI_SetBreakpadAppID")) {
+        log_once(&breakpad_app_logged, "SteamAPI_SetBreakpadAppID");
+    } else if (!strcmp(name, "SteamAPI_InitSafe")) {
+        set_app_id();
         bool (*init)(void) = FLAT(bool (*)(void), "SteamAPI_InitSafe");
         Capture capture; capture_begin(&capture);
         bool ok = init();

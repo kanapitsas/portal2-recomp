@@ -1,10 +1,17 @@
 #!/bin/bash
 # Construit la sonde iOS (ios/probe) : build/ios/<cible>/probe.app.
-#   tools/build_ios_probe.sh [sim|device]
+#   tools/build_ios_probe.sh [--game portal2|hl2] [sim|device]
+# Identifier: the game's plus ".probe" (tools/ios_bundle_id.py), the one
+# tools/ios_device.sh [--game ...] probe launches.
 # Appareil : signée par ios/signing/sign.py (profil obtenu par Xcode).
 # Lancement : P2_PROBE_CLIP=1 (test de découpe au plan proche, ES 3 brut).
 set -euo pipefail
 cd "$(dirname "$0")/.."
+GAME_OPT=()
+case "${1:-}" in
+  --game) GAME_OPT=(--game "${2:?--game needs a value}"); shift 2 ;;
+  --game=*) GAME_OPT=(--game "${1#--game=}"); shift ;;
+esac
 TARGET=${1:-sim}
 case "$TARGET" in
   sim)    SDK=iphonesimulator; TRIPLE=arm64-apple-ios17.0-simulator; PLATFORM=ios-simulator; PLIST=iPhoneSimulator ;;
@@ -20,8 +27,8 @@ xcrun --sdk $SDK clang -target $TRIPLE -isysroot "$(xcrun --sdk $SDK --show-sdk-
   $(for f in UIKit Foundation CoreGraphics QuartzCore OpenGLES Metal AVFoundation AudioToolbox CoreAudio CoreMotion \
              GameController CoreHaptics CoreBluetooth; do echo -framework $f; done) \
   -Wl,-platform_version,$PLATFORM,17.0,18.0 -o "$APP/probe"
-PROBE_ID=$(python3 tools/ios_bundle_id.py --probe)
-sed -e 's/@EXECUTABLE@/probe/' -e "s|@IDENTIFIER@|$PROBE_ID|" -e 's/@NAME@/P2 Probe/' \
+PROBE_ID=$(python3 tools/ios_bundle_id.py ${GAME_OPT[@]+"${GAME_OPT[@]}"} --probe)
+sed -e 's/@EXECUTABLE@/probe/' -e "s|@IDENTIFIER@|$PROBE_ID|" -e 's/@NAME@/P2 Probe/' -e 's/@GAME@/probe/' \
     -e "s/@PLATFORM@/$PLIST/" ios/Info.plist.in > "$APP/Info.plist"
 if [ "$TARGET" = sim ]; then codesign -s - -f "$APP" >/dev/null 2>&1; else python3 ios/signing/sign.py "$APP"; fi
 echo "$APP"

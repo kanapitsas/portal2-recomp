@@ -8,6 +8,9 @@ The C is generated in files grouped by guest address (lift.generate_sharded),
 compiled in parallel, and each object is cached by the hash of its source,
 included headers, compiler and flags: an unchanged file is never recompiled.
 Generated code is AOT C, with traps for instructions/imports not yet ported.
+
+--game picks the game (tools/games.py): Portal 2 builds build/portal2-native
+from build/game, Half-Life 2 build/hl2/hl2-native from build/hl2.
 """
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -20,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import time
+import games
 import lift
 import localconfig
 import peprep
@@ -40,17 +44,19 @@ PE_TOOLS = GEN_TOOLS + ['tools/peprep.py']
 # Greffons Windows que libMiles charge lui-même depuis bin/linux32 de la copie
 # du jeu (runtime/pe.c) : mssmp3 décode les voix MP3, mssvoice le chat vocal,
 # binkawin l'audio des vidéos Bink.
-PE_PLUGINS = ('mssmp3.asi', 'mssvoice.asi', 'binkawin.asi')
+# mssmixer.mix : mélangeur que le libMiles de Half-Life 2 charge (absent de Portal 2).
+PE_PLUGINS = ('mssmp3.asi', 'mssvoice.asi', 'binkawin.asi', 'mssmixer.mix')
 KEEP_CONFIGURATIONS = 2   # objets conservés pour les deux derniers jeux d'options
 
 
-def roots(layout):
-    result = ['portal2_linux:symbol:main']
+def roots(layout, roots_file='config/game-roots.json'):
+    program = layout.get('program', 'portal2_linux')
+    result = [f'{program}:symbol:main']
     for module in layout['modules']:
-        if module['name'] in ('libtier0.so', 'libvstdlib.so', 'portal2_linux'):
+        if module['name'] in ('libtier0.so', 'libvstdlib.so', program):
             if module['init']: result.append(f'{module["name"]}:init:dt')
             result += [f'{module["name"]}:init:{i}' for i in range(len(module['init_array']))]
-    extra = Path('config/game-roots.json')
+    extra = Path(roots_file)
     if extra.exists(): result += json.loads(extra.read_text())
     return list(dict.fromkeys(result))
 
@@ -72,8 +78,8 @@ def generation_key(layout_path, layout, specs, whole_game):
                   lift.SHARD_BITS, 'v1')
 
 
-def generate(args, layout, specs):
-    out = Path('build/game/gen')
+def generate(args, layout, specs, out=Path('build/game/gen')):
+    out = Path(out)
     manifest_path = out / 'manifest.json'
     key = generation_key(args.layout, layout, specs, args.all)
     manifest = read_manifest(manifest_path)
@@ -99,18 +105,19 @@ def read_manifest(path):
     return manifest if isinstance(manifest, dict) and isinstance(manifest.get('shards'), dict) else {}
 
 
-def generate_plugins(config_path, log=print):
+def generate_plugins(config, out=Path('build/game/gen/pe'), log=print):
     """Relocatable C of the PE plugins in bin/linux32 (lift.generate_pe), in
-    build/game/gen/pe: one file per plugin, rewritten only when it changes."""
-    out = Path('build/game/gen/pe')
+    `out` (<build_dir>/gen/pe): one file per plugin, rewritten only when it
+    changes. `config`: the game's merged config (localconfig.game_config)."""
+    out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    config = json.loads(Path(config_path).read_text()) if Path(config_path).exists() else {}
-    root = Path(config.get('game_root', '')) / 'bin/linux32'
+    # Portal 2 : greffons de la copie du jeu ; Half-Life 2 : ceux du dépôt Linux (runtime/paths.c).
+    roots = [Path(config[key]) / 'bin/linux32' for key in ('game_root', 'linux_root') if config.get(key)]
     sources, stats = [], []
     for name in PE_PLUGINS:
-        path = root / name
-        if not config.get('game_root') or not path.is_file():
-            log(f'PE plugin {name} not found under {root}: Miles will not see it')
+        path = next((root / name for root in roots if (root / name).is_file()), None)
+        if not path:
+            log(f'PE plugin {name} not found under {" or ".join(map(str, roots)) or "(no game_root)"}: Miles will not see it')
             continue
         tag = name.split('.')[0].lower()
         target = out / f'pe_{tag}.c'
@@ -240,8 +247,9 @@ def disk_usage(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--layout', type=Path, default=Path('build/game/prep/layout.json'))
-    parser.add_argument('--out', type=Path, default=Path('build/portal2-native'))
+    games.add_argument(parser)
+    parser.add_argument('--layout', type=Path, help='default: <build_dir>/prep/layout.json of the game')
+    parser.add_argument('--out', type=Path, help='default: the game\'s binary (build/portal2-native, build/hl2/hl2-native)')
     parser.add_argument('--opt', default='1', choices=['0', '1', '2', '3'], help='generated code')
     parser.add_argument('--runtime-opt', choices=['0', '1', '2', '3'], help='runtime and main (default: --opt)')
     parser.add_argument('--debug', default='lines', choices=sorted(DEBUG),
@@ -270,20 +278,28 @@ def main():
     parser.add_argument('--order-file', type=Path,
                         help='linker order file (tools/hot_order.py): hot code grouped together')
     parser.add_argument('--jobs', type=int, default=os.cpu_count() or 1)
-    parser.add_argument('--stats', type=Path, default=Path('build/game/build-stats.json'))
+    parser.add_argument('--stats', type=Path, help='default: <build_dir>/build-stats.json')
     parser.add_argument('--config', type=Path, default=Path('config/local.json'),
                         help='game_root: game copy holding bin/linux32/*.asi (PE plugins)')
     args = parser.parse_args()
+    config = localconfig.game_config(localconfig.load(args.config), args.game)
+    game = games.profile(config)
+    build_dir = Path(game['build_dir'])
+    args.layout = args.layout or build_dir / 'prep/layout.json'
+    args.out = args.out or Path(game['binary'])
+    args.stats = args.stats or build_dir / 'build-stats.json'
+    if not args.layout.exists():
+        parser.exit(1, f'{args.layout} missing: run python3 tools/gameprep.py --game {game["name"]}\n')
     if args.release:
         args.opt, args.fast_memory = '2', True
     sys.stdout.reconfigure(line_buffering=True)
     started = time.time()
     layout = json.loads(args.layout.read_text())
     try:
-        manifest, generation_time = generate(args, layout, roots(layout))
+        manifest, generation_time = generate(args, layout, roots(layout, game['roots']), build_dir / 'gen')
     except lift.Unsupported as exc:
         parser.exit(1, f'game lift: {exc}\n')
-    plugin_sources, plugin_stats = generate_plugins(args.config)
+    plugin_sources, plugin_stats = generate_plugins(config, build_dir / 'gen/pe')
     imports = lift.import_map(layout)
     unimplemented = sorted({imports[a] for a in manifest['used_imports']} - lift.SHIMS)
     if unimplemented:
@@ -301,19 +317,21 @@ def main():
                    '-Wno-profile-instr-out-of-date', '-Wno-profile-instr-missing']
     runtime_flags = [f'-O{args.runtime_opt or args.opt}', '-g', *WARNINGS, *memory, *profile, '-Iruntime', *HOST_CFLAGS]
     generated_flags = [f'-O{args.opt}', DEBUG[args.debug], *GENERATED_TUNING, *WARNINGS, *memory, *profile, '-Iruntime']
-    sources = Path('build/game/gen/src')
+    sources = build_dir / 'gen/src'
     units = [(str(p), runtime_flags) for p in sorted(Path('runtime').glob('*.c'))]
-    units.append(('src/main.c', runtime_flags))
+    program = layout.get('program', 'portal2_linux')
+    units.append(('src/main.c', [*runtime_flags, f'-DRT_GAME_PROGRAM="{program}"']))
     units += [(str(sources / name), generated_flags) for name in sorted(manifest['shards'])]
     units.append((str(sources / 'dispatch.c'), generated_flags))
     units += [(str(p), generated_flags) for p in plugin_sources]
     # Objets instrumentés à part : supprimables d'un bloc une fois le profil extrait.
-    cache = Path('build/game/obj-pgo-generate' if args.pgo_generate else 'build/game/obj')
+    cache = build_dir / ('obj-pgo-generate' if args.pgo_generate else 'obj')
     compile_started = time.time()
     objects, compiled, cpu = compile_units(units, cache, args.jobs, identity)
     compile_time = time.time() - compile_started
     link_started = time.time()
-    response = Path('build/game/link.rsp')
+    response = build_dir / 'link.rsp'
+    args.out.parent.mkdir(parents=True, exist_ok=True)
     response.write_text('\n'.join(str(o) for o in objects) + '\n')
     temporary = args.out.with_name(f'.{args.out.name}.tmp')
     link_flags = (['-fprofile-instr-generate'] if args.pgo_generate else []) + \

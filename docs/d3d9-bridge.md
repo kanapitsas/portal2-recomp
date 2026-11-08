@@ -104,8 +104,30 @@ in the environment.)
   `D3DLOCKED_BOX` (12 → 16). Offsets are `_Static_assert`ed in `d3d9.c`.
 - Not bridged (logged once, `E_NOTIMPL` or 0): `RegisterSoftwareDevice`,
   `GetAdapterMonitor`, `DrawRectPatch`, `DrawTriPatch`, `GetDC`, `ReleaseDC`,
-  `SetPrivateData` with `D3DSPD_IUNKNOWN`, `QueryInterface` for interfaces
-  outside d3d9 (e.g. `IDirect3DDevice9Ex`). `pSharedHandle` is ignored.
+  `SetPrivateData` with `D3DSPD_IUNKNOWN`, `CheckResourceResidency`,
+  `GetPresentStats` (`D3DPRESENTSTATS` holds 64-bit counters aligned
+  differently on i386), `QueryInterface` for interfaces outside d3d9.
+- `pSharedHandle`: on an extended device, a single-level `SYSTEMMEM`
+  texture or offscreen plain surface takes "user memory": the guest HANDLE
+  holds the guest address of the pixels, handed to the library as a host
+  pointer in a 64-bit HANDLE. Half-Life 2's shaderapivk.so creates its
+  upload sources this way before `UpdateSurface` (HDR sky faces, fonts...).
+  Every other handle (shared resources) is still passed as NULL.
+- Event queries (`D3DQUERYTYPE_EVENT`): an event issued before a Present
+  that has since finished reads as reached, even while the library still
+  answers `S_FALSE`. Source's frame sync waits each frame for the event of
+  the previous one, sleeping 1 ms per poll; libd3d9metal submits a frame at
+  Present and signals the event once the frame has run, so the CPU and GPU
+  took turns (HL2 on Metal: 83 → 118 fps). Safe for Source because
+  shaderapivk only creates event queries for that sync (two queries, plus a
+  support probe released at once), never to guard buffer reuse; it assumes
+  one device (the Present counters are process-wide).
+  `P2_D3D9_STRICT_EVENTS=1` restores the library's answer. Portal 2 goes
+  through the same path.
+- D3D9Ex: `Direct3DCreate9Ex` calls the export of the same name in the native
+  library (optional: without it, `D3DERR_NOTAVAILABLE`). `IDirect3D9Ex`,
+  `IDirect3DDevice9Ex` and `IDirect3DSwapChain9Ex` are bridged; Half-Life 2
+  needs them (Portal 2 only uses `Direct3DCreate9`).
 
 ## What the native library must do (beyond `runtime/d3d9/d3d9metal.h`)
 

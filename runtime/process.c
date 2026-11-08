@@ -4,6 +4,7 @@
 // avec ENOEXEC, comme sur un Linux sans binfmt adapté). Les numéros de signaux
 // et les statuts wait sont traduits entre Darwin et Linux.
 // SHIMS: setenv getpid getuid getpwuid gethostname getrusage getloadavg kill wait waitpid
+// SHIMS: geteuid getgid getegid getlogin_r
 // SHIMS: fork execvp popen pclose system _exit exit alarm uuid_generate mallinfo mount
 #include "posix.h"
 #include "modules.h"
@@ -122,6 +123,21 @@ static int process_shim(CPU *c, const char *name) {
         c->eax = (uint32_t)getpid();
     } else if (!strcmp(name, "getuid")) {
         c->eax = (uint32_t)getuid();
+    } else if (!strcmp(name, "geteuid")) {
+        c->eax = (uint32_t)geteuid();
+    } else if (!strcmp(name, "getgid")) {
+        c->eax = (uint32_t)getgid();
+    } else if (!strcmp(name, "getegid")) {
+        c->eax = (uint32_t)getegid();
+    } else if (!strcmp(name, "getlogin_r")) {
+        // Renvoie un numéro d'erreur Linux (0 si réussi), pas -1 + errno.
+        uint32_t buffer = arg(c, 0), size = arg(c, 1);
+        char login[256];
+        if (getlogin_r(login, sizeof(login))) { c->eax = (uint32_t)rt_linux_errno(errno); return 1; }
+        size_t length = strlen(login) + 1;
+        if (length > size) { c->eax = 34; return 1; }   // ERANGE
+        memcpy(rt_write_span(c, buffer, (uint32_t)length), login, length);
+        c->eax = 0;
     } else if (!strcmp(name, "getpwuid")) {
         struct passwd entry, *found = NULL; char buffer[16384];
         errno = 0;

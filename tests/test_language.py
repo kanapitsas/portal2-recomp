@@ -74,5 +74,24 @@ class LanguageTests(unittest.TestCase):
         self.assertEqual(language.acf_candidates('/s/steamapps/common/Portal 2')[0], Path('/s/steamapps/appmanifest_620.acf'))
 
 
+    def test_half_life_2_uses_its_own_folder_and_appmanifest(self):
+        # Regression: the HL2 app looked for portal2/resource and appmanifest_620.acf, so always english.
+        with tempfile.TemporaryDirectory() as tmp:
+            steamapps = Path(tmp) / 'steamapps'
+            root = steamapps / 'common/Half-Life 2'
+            (root / 'hl2/resource').mkdir(parents=True)
+            (root / 'hl2/resource/gameui_french.txt').write_text('x')
+            (steamapps / 'appmanifest_220.acf').write_text(ACF % ('french', 'french'))
+            config = {'game': 'hl2', 'game_root': str(root), 'steam_appid': 220}
+            self.assertEqual(language.acf_candidates(str(root), 220)[0], steamapps / 'appmanifest_220.acf')
+            self.assertTrue(language.installed('french', str(root), 'hl2'))
+            self.assertFalse(language.installed('french', str(root)))
+            self.assertEqual(language.choose(env={}, config=config, acf_texts=[ACF % ('french', 'french')])[0], 'french')
+            self.assertEqual(language.choose(env={}, config=dict(config, game='portal2'),
+                                             acf_texts=[ACF % ('french', 'french')])[0], 'english')
+            self.assertEqual(language.language_args(config, ['-game', 'hl2_complete'])[1], 'french')
+            self.assertEqual(language.language_args(config, ['-language', 'german']), [])
+
+
 if __name__ == '__main__':
     unittest.main()

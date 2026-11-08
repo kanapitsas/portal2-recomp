@@ -130,6 +130,72 @@ class LifterTests(unittest.TestCase):
         self.assertIn('default: c->flags = f; rt_jump_any(c, a); return;', code)
         self.assertEqual(count, 9)
 
+    def test_pic_jump_table_with_scheduled_moves(self):
+        # HL2 server.so 0x66e286: GCC puts `mov ecx, [ebp - 0x2c]` between the
+        # table load and the add; a write to the base register must still stop it.
+        got, base = 0x10020000, 0x10000000
+        def program(middle):
+            insns = {0x10: (0x13, 'cmp', 'esi, 0x1'), 0x13: (0x15, 'ja', hex(base + 0x40)),
+                     0x15: (0x1c, 'mov', 'eax, dword ptr [ebx + 4*esi - 0x100]'),
+                     0x1c: (0x1f, 'mov', middle), 0x1f: (0x21, 'add', 'eax, ebx'),
+                     0x21: (0x23, 'jmp', 'eax'), 0x30: (0x31, 'ret', ''), 0x31: (0x32, 'ret', ''),
+                     0x40: (0x41, 'ret', '')}
+            return {pc + base: (nxt + base, op, args) for pc, (nxt, op, args) in insns.items()}
+        tables = lift.JumpTables({'modules': []}, program('ecx, dword ptr [ebp - 0x2c]'))
+        module = {'gotplt': got}
+        tables.module = lambda address: module
+        entries = {got - 0x100: base + 0x30 - got, got - 0xfc: base + 0x31 - got}
+        tables.read32 = lambda address: (entries[address] & 0xffffffff) if address in entries else None
+        self.assertEqual(tables(base + 0x21), [base + 0x30, base + 0x31])
+        clobbered = lift.JumpTables({'modules': []}, program('ebx, dword ptr [ebp - 0x2c]'))
+        clobbered.module, clobbered.read32 = tables.module, tables.read32
+        self.assertIsNone(clobbered(base + 0x21))
+        # HL2 engine.so 0x258c48: an SSE conversion into an unrelated register.
+        converted = lift.JumpTables({'modules': []}, program('edx, xmm2'))
+        converted.insns[base + 0x1c] = (base + 0x1f, 'cvttss2si', 'edx, xmm2')
+        converted.module, converted.read32 = tables.module, tables.read32
+        self.assertEqual(converted(base + 0x21), [base + 0x30, base + 0x31])
+        swapped = lift.JumpTables({'modules': []}, program('ecx, edx'))
+        swapped.insns[base + 0x1c] = (base + 0x1f, 'xchg', 'ecx, ebx')   # also writes the base
+        swapped.module, swapped.read32 = tables.module, tables.read32
+        self.assertIsNone(swapped(base + 0x21))
+
+    def test_fused_pic_jump_table(self):
+        # HL2 engine.so 0x261014 / vphysics.so 0x42295: `add R, [R + 4*I - D]; jmp R`.
+        got, base = 0x10020000, 0x10000000
+        insns = {0x10: (0x13, 'cmp', 'edi, 0x1'), 0x13: (0x15, 'ja', hex(base + 0x40)),
+                 0x15: (0x1c, 'add', 'eax, dword ptr [eax + 4*edi - 0x100]'), 0x1c: (0x1e, 'jmp', 'eax'),
+                 0x30: (0x31, 'ret', ''), 0x31: (0x32, 'ret', ''), 0x40: (0x41, 'ret', '')}
+        insns = {pc + base: (nxt + base, op, args) for pc, (nxt, op, args) in insns.items()}
+        tables = lift.JumpTables({'modules': []}, insns)
+        module = {'gotplt': got}
+        tables.module = lambda address: module
+        entries = {got - 0x100: base + 0x30 - got, got - 0xfc: base + 0x31 - got}
+        tables.read32 = lambda address: (entries[address] & 0xffffffff) if address in entries else None
+        self.assertEqual(tables(base + 0x1c), [base + 0x30, base + 0x31])
+        insns[base + 0x15] = (base + 0x1c, 'add', 'eax, dword ptr [ecx + 4*edi - 0x100]')   # base is not R
+        other = lift.JumpTables({'modules': []}, insns)
+        other.module, other.read32 = tables.module, tables.read32
+        self.assertIsNone(other(base + 0x1c))
+
+    def test_pic_jump_table_with_prescaled_index(self):
+        # HL2 shaderapivk.so 0x25299: `mov ecx, [edi + ebx - D]; add ecx, edi; jmp ecx`,
+        # EBX = 4*index computed in another block: entries read while they are code.
+        got, base = 0x10020000, 0x10000000
+        insns = {0x15: (0x1c, 'mov', 'ecx, dword ptr [edi + ebx - 0x100]'), 0x1c: (0x1e, 'add', 'ecx, edi'),
+                 0x1e: (0x20, 'jmp', 'ecx'), 0x30: (0x31, 'ret', ''), 0x31: (0x32, 'ret', '')}
+        insns = {pc + base: (nxt + base, op, args) for pc, (nxt, op, args) in insns.items()}
+        tables = lift.JumpTables({'modules': []}, insns)
+        module = {'gotplt': got}
+        tables.module = lambda address: module
+        entries = {got - 0x100: base + 0x30 - got, got - 0xfc: base + 0x31 - got, got - 0xf8: 0x7fff0000}
+        tables.read32 = lambda address: (entries[address] & 0xffffffff) if address in entries else None
+        self.assertEqual(tables(base + 0x1e), [base + 0x30, base + 0x31])
+        insns[base + 0x15] = (base + 0x1c, 'mov', 'ecx, dword ptr [esi + ebx - 0x100]')   # neither is the added base
+        other = lift.JumpTables({'modules': []}, insns)
+        other.module, other.read32 = tables.module, tables.read32
+        self.assertIsNone(other(base + 0x1e))
+
     def test_jump_table_with_bad_declared_case_is_not_guessed(self):
         insns = {0x10: (0x13, 'cmp', 'eax, 0x1'), 0x13: (0x15, 'ja', '0x40'),
                  0x15: (0x1c, 'jmp', 'dword ptr [4*eax + 0x1000]'), 0x40: (0x41, 'ret', ''),
@@ -162,10 +228,10 @@ class LifterTests(unittest.TestCase):
         self.assertIsNone(lift.import_called(0x300, insns, imports, tables))
 
     def test_audit_scan_collects_every_rejection(self):
-        insns = {0x10: (0x12, 'rsm', ''), 0x12: (0x14, 'vzeroall', ''), 0x14: (0x15, 'ret', '')}
+        insns = {0x10: (0x12, 'rsm', ''), 0x12: (0x14, 'vpaddd', 'ymm0, ymm1, ymm2'), 0x14: (0x15, 'ret', '')}
         count, failures, indirect = lift.scan(0x10, insns)
         self.assertEqual(count, 3)
-        self.assertEqual([op for _, op, _, _ in failures], ['rsm', 'vzeroall'])
+        self.assertEqual([op for _, op, _, _ in failures], ['rsm', 'vpaddd'])
         with self.assertRaises(lift.Unsupported):   # the generator itself stays fail-closed
             lift.lift(0x10, insns)
 
@@ -224,3 +290,13 @@ class ResolveExportTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CpuidGatedInstructions(unittest.TestCase):
+    def test_aes_and_sse41_trap_in_place(self):
+        # Une fonction qui contient une branche AES-NI reste traduite ; l'instruction piège.
+        for op, args in (('aesenc', 'xmm2, xmm1'), ('pinsrd', 'xmm7, ebp, 0x3'), ('xgetbv', '')):
+            code, successors = lift.translate(0x1000, (0x1004, op, args))
+            self.assertIn('rt_trap(c, 0x1000u', code)
+            self.assertIn('not reported by CPUID', code)
+            self.assertEqual(successors, [])

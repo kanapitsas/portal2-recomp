@@ -1,26 +1,35 @@
 #!/bin/bash
-# Portal 2 on a real iOS device, over the cable (xcrun devicectl).
+# The game on a real iOS device, over the cable (xcrun devicectl).
+#   tools/ios_device.sh [--game portal2|hl2] <command> ...
+# Game: --game, else P2_GAME, else config/local.json (tools/games.py selected);
+# its app is <ios_dir>/device/<ios_app> (build/ios/device/Portal2.app,
+# build/hl2/ios/device/HalfLife2.app) and logs land in <ios_dir>/device.
 #   tools/ios_device.sh probe [VAR=value...]    probe app (P2_PROBE_CLIP=1: near-plane clipping)
-#   tools/ios_device.sh install                  install build/ios/device/Portal2.app
+#   tools/ios_device.sh install                  install the game's app
 #   tools/ios_device.sh data                     copy the data into Documents (prep, game, linux)
 #   tools/ios_device.sh has-data                 exit 0 when the data on the device is complete
 #   tools/ios_device.sh has-mark                 exit 0 when a copy state marker exists (used by setup.sh)
-#   tools/ios_device.sh has-game                 exit 0 when Documents/game/portal2 exists (older copies)
+#   tools/ios_device.sh has-game                 exit 0 when Documents/game/<mod> exists (older copies)
 #   tools/ios_device.sh prep                     copy only Documents/prep again (after gameprep: ~80 MB)
 #   tools/ios_device.sh run [seconds] [VAR=value...]   launch (default 180 s), then fetch Documents/game.log
 #   tools/ios_device.sh backtap                  fetch the back-tap dataset (Documents/backtap/dataset.csv)
 #   tools/ios_device.sh saves status|pull|push [--force] [--dry-run]   saves between the Mac and the iPhone
-#                                                (tools/save_sync.py; docs/usage.md#saves-between-mac-and-iphone)
+#                                                (tools/save_sync.py; docs/usage.md#saves-between-mac-and-iphone; Portal 2 only)
 # Device: P2_DEVICE (UDID or name), else the first connected iPhone/iPad.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+GAME_OPT=()
+case "${1:-}" in
+  --game) GAME_OPT=(--game "${2:?--game needs a value}"); shift 2 ;;
+  --game=*) GAME_OPT=(--game "${1#--game=}"); shift ;;
+esac
+# Paths and identifiers of the game (tools/ios_game.py): GAME_ROOT, LINUX_ROOT,
+# PREP, IOS_DIR, IOS_APP, APP_ID, PROBE_ID, MOD, IOS_DATA.
+VARS=$(python3 tools/ios_game.py ${GAME_OPT[@]+"${GAME_OPT[@]}"} --target device)
+eval "$VARS"
 DEVICE=${P2_DEVICE:-$(xcrun devicectl list devices 2>/dev/null |
   awk '/physical/ && / connected|available \(paired\)/ {for (i = 1; i <= NF; ++i) if ($i ~ /^[0-9A-F]{8}-[0-9A-F]{16}$/) {print $i; exit}}')}
 [ -n "$DEVICE" ] || { echo "aucun appareil connecté (câble, appareil déverrouillé, mode développeur)"; exit 1; }
-APP_ID=$(python3 tools/ios_bundle_id.py)
-PROBE_ID=$(python3 tools/ios_bundle_id.py --probe)
-GAME_ROOT=$(python3 -c "import json;print(json.load(open('config/local.json'))['game_root'])")
-LINUX_ROOT=$(python3 -c "import json;print(json.load(open('config/local.json'))['linux_root'])")
 dc() {  # sous-commande de trois mots, --device, puis le reste (options et arguments)
   xcrun devicectl "${@:1:3}" --device "$DEVICE" "${@:4}"
 }
@@ -61,14 +70,15 @@ probe)
   cat build/ios/device/probe.log
   ;;
 install)
-  dc device install app build/ios/device/Portal2.app
+  dc device install app "$IOS_APP"
   ;;
 data)
-  # Sans la bande son ni sdk_content (inutiles au jeu) : ~11,5 Go.
+  # Dossiers du profil (ios_data) : Portal 2 sans la bande son ni sdk_content
+  # (~11,5 Go), Half-Life 2 avec les épisodes et Lost Coast (~10 Go).
   mark_data incomplete
-  copy_to $APP_ID build/game/prep Documents/prep
+  copy_to $APP_ID "$PREP" Documents/prep
   copy_to $APP_ID "$LINUX_ROOT" Documents/linux
-  for d in bin platform update portal2 portal2_dlc1 portal2_dlc2; do
+  for d in $IOS_DATA; do
     [ -e "$GAME_ROOT/$d" ] && copy_to $APP_ID "$GAME_ROOT/$d" "Documents/game/$d"
   done
   mark_data complete
@@ -83,13 +93,13 @@ has-mark)  # un état existe (copie commencée par cette version du script)
   has_file "$DATA_MARK"
   ;;
 has-game)  # copies antérieures au marqueur : le dossier du jeu suffit
-  has_file Documents/game/portal2
+  has_file "Documents/game/$MOD"
   ;;
 prep)
   # Fichier par fichier : chacun remplace son homologue (les adresses des
-  # modules suivent build/game/prep, celui avec lequel l'app a été construite).
-  for f in build/game/prep/*; do copy_to $APP_ID "$f" "Documents/prep/$(basename "$f")" >/dev/null; done
-  echo "Documents/prep : $(ls build/game/prep | wc -l | tr -d ' ') fichiers copiés"
+  # modules suivent $PREP, celui avec lequel l'app a été construite).
+  for f in "$PREP"/*; do copy_to $APP_ID "$f" "Documents/prep/$(basename "$f")" >/dev/null; done
+  echo "Documents/prep : $(ls "$PREP" | wc -l | tr -d ' ') fichiers copiés"
   ;;
 run)
   shift
@@ -98,10 +108,10 @@ run)
   dc device process launch --terminate-existing \
     --environment-variables "$(env_json P2_LOG_FILE=Documents/game.log P2_FRAME_LOG=1 "$@")" $APP_ID
   sleep "$SECONDS_MAX"
-  mkdir -p build/ios/device
+  mkdir -p "$IOS_DIR"
   dc device copy from --domain-type appDataContainer --domain-identifier $APP_ID \
-    --source Documents/game.log --destination build/ios/device/game.log
-  echo "journal : build/ios/device/game.log ($(wc -l < build/ios/device/game.log) lignes)"
+    --source Documents/game.log --destination "$IOS_DIR/game.log"
+  echo "journal : $IOS_DIR/game.log ($(wc -l < "$IOS_DIR/game.log") lignes)"
   ;;
 backtap)
   mkdir -p build/ios/device/backtap
@@ -110,6 +120,8 @@ backtap)
   echo "dataset: build/ios/device/backtap/dataset.csv ($(($(wc -l < build/ios/device/backtap/dataset.csv) - 1)) examples)"
   ;;
 saves)
+  # tools/save_sync.py knows Portal 2's folders only (portal2-userdata/portal2).
+  [ "$MOD" = portal2 ] || { echo "saves: Portal 2 only for now ($MOD saves are in Documents/hl2-userdata on the device)"; exit 2; }
   action=${2:-status}; shift; shift || true
   case "$action" in status|pull|push) ;; *) echo "saves status|pull|push [--force] [--dry-run]"; exit 2 ;; esac
   if [ "$action" = pull ] && pgrep -x portal2-native >/dev/null && [[ " $* " != *" --force "* ]]; then

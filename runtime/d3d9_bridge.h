@@ -77,7 +77,7 @@ void d3d9_iface_out(CPU *c, uint32_t guest, void *host, unsigned iface);
 // arrière (dépend de la chaîne d'échange ou du périphérique sans partager).
 void d3d9_child_out(CPU *c, uint32_t guest, void *host, unsigned iface, const void *parent, int shared);
 void *d3d9_hwnd(CPU *c, uint32_t guest);
-void *d3d9_shared(CPU *c, uint32_t guest);
+void *d3d9_shared(CPU *c, uint32_t guest, int user_memory, void **slot);
 void *d3d9_params_in(CPU *c, uint32_t guest, D3d9HostParams *host, int input);
 void d3d9_params_out(CPU *c, uint32_t guest, const D3d9HostParams *host);
 void *d3d9_adapter_id_in(CPU *c, uint32_t guest, D3d9HostAdapterId *host);
@@ -85,6 +85,10 @@ void d3d9_adapter_id_out(CPU *c, uint32_t guest, const D3d9HostAdapterId *host);
 void *d3d9_creation_in(CPU *c, uint32_t guest, D3d9HostCreation *host);
 void d3d9_creation_out(CPU *c, uint32_t guest, const D3d9HostCreation *host);
 void d3d9_lock_ptr_out(CPU *c, uint32_t guest, void *bits, int ok);
+// Rampe gamma d'un appareil fenêtré, reportée sur sa fenêtre SDL (Mac :
+// SDL_SetWindowGammaRamp). Remplaçable par les tests.
+extern int (*rt_d3d9_window_gamma)(void *window, const uint16_t *ramp);
+extern int (*rt_d3d9_window_gamma_get)(void *window, uint16_t *ramp);
 void *d3d9_locked_in(CPU *c, uint32_t guest, D3d9HostLocked *host, uint32_t guest_size);
 void d3d9_lockrect_out(CPU *c, uint32_t guest, const D3d9HostLocked *host, int ok);
 void d3d9_lockbox_out(CPU *c, uint32_t guest, const D3d9HostLocked *host, int ok);
@@ -104,6 +108,10 @@ uint32_t d3d9_guest_pointer(CPU *c, const void *host);
 // NULL/NULL pour revenir à libd3d9metal.dylib.
 #include "d3d9/d3d9metal.h"
 void rt_d3d9_set_library(d3d9metal_init_fn init, d3d9metal_create_fn create);
+// Direct3DCreate9Ex de d3d9.h (exporté par libd3d9metal à côté du contrat) :
+// HRESULT, IDirect3D9Ex* dans *out. Facultatif : absent, D3DERR_NOTAVAILABLE.
+typedef int32_t (*d3d9_create_ex_fn)(unsigned sdk_version, void **out);
+void rt_d3d9_set_library_ex(d3d9_create_ex_fn create_ex);   // tests ; NULL : celui de la bibliothèque
 const D3D9MetalHost *rt_d3d9_host(void);
 uint32_t rt_d3d9_find_proxy(const void *host);   // 0 si aucun
 // Tests sans fenêtre : CAMetalLayer rendue pour un HWND à la place de la vue SDL (NULL : SDL).

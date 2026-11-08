@@ -6,7 +6,7 @@
 // « C.UTF-8 », ont le même LC_NUMERIC (séparateur décimal « . », aucun groupement).
 // SHIMS: strtoll strtoull strtold_l __strtod_internal __strtof_internal __strtol_internal
 // SHIMS: __strtoll_internal __strtoul_internal __strtoull_internal __strtod_l __strtof_l
-// SHIMS: qsort rand srand
+// SHIMS: qsort rand srand rand_r
 #include "rt.h"
 #include "modules.h"
 #include <ctype.h>
@@ -157,6 +157,15 @@ int rt_numeric_shim(CPU *c, const char *name) {
     else if (!strcmp(name, "qsort")) guest_qsort(c);
     else if (!strcmp(name, "srand")) {
         pthread_mutex_lock(&random_lock); random_seed(argument(c, 0)); pthread_mutex_unlock(&random_lock);
+    } else if (!strcmp(name, "rand_r")) {
+        // Algorithme exact de la glibc (stdlib/rand_r.c) : trois tours du LCG ANSI.
+        uint32_t seed_address = argument(c, 0), next = R32(seed_address), result;
+        rt_write_span(c, seed_address, 4);
+        next = next * 1103515245u + 12345u; result = (next / 65536u) % 2048u;
+        next = next * 1103515245u + 12345u; result = (result << 10) ^ ((next / 65536u) % 1024u);
+        next = next * 1103515245u + 12345u; result = (result << 10) ^ ((next / 65536u) % 1024u);
+        W32(seed_address, next);
+        c->eax = result;
     } else if (!strcmp(name, "rand")) {
         pthread_mutex_lock(&random_lock);
         if (!random_seeded) random_seed(1);

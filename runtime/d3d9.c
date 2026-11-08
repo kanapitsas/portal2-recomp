@@ -15,7 +15,7 @@
 //   arrête le jeu avec un message explicite.
 // - Attentes hôtes (blocking_begin/end) : verrou invité relâché puis repris.
 //
-// SHIMS: Direct3DCreate9
+// SHIMS: Direct3DCreate9 Direct3DCreate9Ex
 #include "d3d9_bridge.h"
 #include "fps_overlay.h"
 #include "frame_times.h"
@@ -75,6 +75,7 @@ static __attribute__((noreturn, format(printf, 2, 3))) void fail(CPU *c, const c
 static pthread_mutex_t library_lock = PTHREAD_MUTEX_INITIALIZER;
 static d3d9metal_init_fn library_init, test_init;
 static d3d9metal_create_fn library_create, test_create;
+static d3d9_create_ex_fn library_create_ex, test_create_ex;
 static int library_state;   // 0 : à charger, 1 : prête, -1 : absente ou refusée
 static char library_path[PATH_MAX];
 
@@ -83,6 +84,7 @@ static char library_path[PATH_MAX];
 // l'app signée ; tools/build_ios.py --d3d9metal lie libd3d9metal.a).
 int d3d9metal_init(const D3D9MetalHost *host);
 void *d3d9metal_Direct3DCreate9(unsigned sdk_version);
+int32_t Direct3DCreate9Ex(unsigned sdk_version, void **out);
 #else
 static int executable_dir(char *out, size_t size) {
     char exe[PATH_MAX], real[PATH_MAX];
@@ -123,7 +125,13 @@ static void *open_library(char *path, size_t size) {
 void rt_d3d9_set_library(d3d9metal_init_fn init, d3d9metal_create_fn create) {
     pthread_mutex_lock(&library_lock);
     test_init = init; test_create = create;
-    library_init = NULL; library_create = NULL; library_state = 0;
+    library_init = NULL; library_create = NULL; library_create_ex = NULL; library_state = 0;
+    pthread_mutex_unlock(&library_lock);
+}
+void rt_d3d9_set_library_ex(d3d9_create_ex_fn create_ex) {
+    pthread_mutex_lock(&library_lock);
+    test_create_ex = create_ex;
+    library_create_ex = NULL; library_state = 0;
     pthread_mutex_unlock(&library_lock);
 }
 
@@ -265,14 +273,16 @@ static int load_library(void) {
         library_state = -1;
         d3d9metal_init_fn init = test_init;
         d3d9metal_create_fn create = test_create;
+        d3d9_create_ex_fn create_ex = test_create_ex;
         if (!init) {
 #ifdef RT_D3D9METAL_STATIC
-            init = d3d9metal_init; create = d3d9metal_Direct3DCreate9;
+            init = d3d9metal_init; create = d3d9metal_Direct3DCreate9; create_ex = Direct3DCreate9Ex;
             snprintf(library_path, sizeof(library_path), "libd3d9metal (linked in)");
 #else
             void *handle = open_library(library_path, sizeof(library_path));
             init = handle ? (d3d9metal_init_fn)dlsym(handle, "d3d9metal_init") : NULL;
             create = handle ? (d3d9metal_create_fn)dlsym(handle, "d3d9metal_Direct3DCreate9") : NULL;
+            create_ex = handle ? (d3d9_create_ex_fn)dlsym(handle, "Direct3DCreate9Ex") : NULL;
             if (!init || !create) fprintf(stderr, "d3d9: %s: %s\n", library_path, handle ? "d3d9metal_* exports missing" : "not loaded");
 #endif
         } else snprintf(library_path, sizeof(library_path), "(test library)");
@@ -285,7 +295,7 @@ static int load_library(void) {
             if (status) fprintf(stderr, "d3d9: d3d9metal_init failed (%d)\n", status);
             else {
                 if (!test_init) initialized = init;
-                library_init = init; library_create = create; library_state = 1;
+                library_init = init; library_create = create; library_create_ex = create_ex; library_state = 1;
                 fprintf(stderr, "d3d9: %s ready (vendor %04x device %04x, %u display modes, cache %s)\n", library_path,
                         host.vendor_id, host.device_id, host.mode_count, host.cache_dir ? host.cache_dir : "none");
             }
@@ -560,10 +570,35 @@ void *d3d9_hwnd(CPU *c, uint32_t guest) {
 }
 static uint32_t guest_hwnd(const void *window) { return window ? rt_handle_find(window, RT_SDL_WINDOW) : 0; }
 
-void *d3d9_shared(CPU *c, uint32_t guest) {
+// pSharedHandle. Une création d3d9Ex en mémoire système à un seul niveau
+// (texture, surface hors écran) y passe un pointeur vers ses pixels : la
+// bibliothèque part de cette « mémoire utilisateur ». shaderapivk.so de
+// Half-Life 2 crée ainsi les textures qu'il copie ensuite par UpdateSurface
+// (faces du ciel HDR, polices...) : sans ce pointeur, elles partaient de
+// pages non initialisées. Le HANDLE invité (4 octets) contient l'adresse
+// invitée des pixels ; l'hôte attend un HANDLE de 8 octets contenant un
+// pointeur hôte. Hors de ce cas (vraie ressource partagée, appareil non Ex,
+// qui la refuseraient), NULL comme avant. L'appelant est le thunk d'une
+// méthode d'appareil : son this invité est en esp+4. Le mandataire d'un
+// appareil créé par IDirect3D9Ex::CreateDevice est typé IDirect3DDevice9,
+// d'où la question posée à l'objet hôte lui-même.
+static int host_device_is_ex(void *device) {
+    void *ex = NULL;
+    typedef int32_t (*QueryEx)(void *, const void *, void **);
+    int yes = ((QueryEx)D3D9_VTBL(device)[0])(device, rt_d3d9_interfaces[D3D9_IDirect3DDevice9Ex].iid, &ex) >= 0 && ex;
+    if (ex) ((uint32_t (*)(void *))D3D9_VTBL(ex)[2])(ex);
+    return yes;
+}
+void *d3d9_shared(CPU *c, uint32_t guest, int user_memory, void **slot) {
     static int logged;
-    (void)c;
-    if (guest && !logged) { logged = 1; fprintf(stderr, "d3d9: pSharedHandle ignored (not supported by Direct3D 9)\n"); }
+    if (!guest) return NULL;
+    if (user_memory && host_device_is_ex(proxy_host(R32(c->esp + 4)))) {
+        rt_span(c, guest, 4);
+        uint32_t pixels = R32(guest);
+        *slot = pixels ? rt_span(c, pixels, 1) : NULL;
+        return slot;
+    }
+    if (!logged) { logged = 1; fprintf(stderr, "d3d9: pSharedHandle ignored outside system-memory user memory\n"); }
     return NULL;
 }
 
@@ -913,11 +948,131 @@ void rt_d3d9_draw_overlay(void *dev) {   // aussi appelé par tests/checks_d3d9.
     ((Release)D3D9_VTBL(back)[s_release])(back);
 }
 
+// Requêtes D3DQUERYTYPE_EVENT. Source (mat_frame_sync_enable) attend, à
+// chaque image, l'événement émis à l'image précédente, en dormant 1 ms entre
+// deux GetData. Sous Direct3D, le pilote soumet le travail au fil de l'eau
+// et l'événement est vite atteint ; libd3d9metal ne soumet l'image qu'au
+// Present, et ne le signale qu'une fois l'image entière exécutée : CPU et
+// GPU travaillent alors l'un après l'autre (HL2 : 83 i/s, 120 sans cette
+// attente). Un événement émis avant un Present terminé depuis est donc
+// annoncé atteint : le jeu garde au plus une image d'avance, et libd3d9metal
+// borne déjà l'avance par ses surfaces d'affichage.
+// Sûr pour Source parce que shaderapivk ne crée d'événements que pour cette
+// synchronisation (deux requêtes, et une sonde de prise en charge aussitôt
+// libérée) : aucun ne protège la réutilisation d'un tampon. Un autre jeu qui
+// le ferait demande P2_D3D9_STRICT_EVENTS=1 (réponse de la bibliothèque).
+// Compteurs : un Issue fait pendant un Present (le verrou invité y est
+// relâché) compte comme postérieur, donc attend le Present suivant.
+enum { D3DQUERYTYPE_EVENT = 8, D3DISSUE_END = 1, EVENT_SLOTS = 64, EVENT_PROBE = 4, SLOT_QUERY_GETTYPE = 4 };
+static uint64_t presents_started, presents_done;     // sous le verrou invité
+// Requête -> Present : sondage sur EVENT_PROBE cases, puis éviction de la
+// case d'origine, ce qui ne fait que rendre la réponse de la bibliothèque à
+// la requête évincée. Les compteurs sont communs au processus : Source n'a
+// qu'un appareil (un second appareil qui présente libérerait les événements
+// du premier).
+static struct { void *query; uint64_t issued; } event_issued[EVENT_SLOTS];
+static int strict_events(void) {
+    static int value = -1;
+    if (value < 0) value = getenv("P2_D3D9_STRICT_EVENTS") != NULL;
+    return value;
+}
+static int is_event(void *query) {
+    return ((uint32_t (*)(void *))D3D9_VTBL(query)[SLOT_QUERY_GETTYPE])(query) == D3DQUERYTYPE_EVENT;
+}
+static size_t event_find(void *query) {             // SIZE_MAX si absente
+    for (size_t k = 0, h = ((uintptr_t)query >> 4) % EVENT_SLOTS; k < EVENT_PROBE; ++k)
+        if (event_issued[(h + k) % EVENT_SLOTS].query == query) return (h + k) % EVENT_SLOTS;
+    return SIZE_MAX;
+}
+static size_t event_place(void *query) {
+    size_t i = event_find(query), h = ((uintptr_t)query >> 4) % EVENT_SLOTS;
+    for (size_t k = 0; i == SIZE_MAX && k < EVENT_PROBE; ++k)
+        if (!event_issued[(h + k) % EVENT_SLOTS].query) i = (h + k) % EVENT_SLOTS;
+    return i == SIZE_MAX ? h : i;
+}
+void d3d9_manual_IDirect3DQuery9_Issue(CPU *c, void *self, uint32_t a) {
+    uint32_t flags = R32(a);
+    c->eax = (uint32_t)((int32_t (*)(void *, uint32_t))D3D9_VTBL(self)[D3D9_SLOT_IDirect3DQuery9_Issue])(self, flags);
+    if ((int32_t)c->eax < 0 || !(flags & D3DISSUE_END) || strict_events() || !is_event(self)) return;
+    size_t i = event_place(self);
+    event_issued[i].query = self; event_issued[i].issued = presents_started;
+}
+void d3d9_manual_IDirect3DQuery9_GetData(CPU *c, void *self, uint32_t a) {
+    uint32_t data = R32(a), size = R32(a + 4), flags = R32(a + 8);
+    void *out = d3d9_out(c, data, size);
+    int32_t hr = ((int32_t (*)(void *, void *, uint32_t, uint32_t))D3D9_VTBL(self)[D3D9_SLOT_IDirect3DQuery9_GetData])(
+        self, out, size, flags);
+    size_t i = hr == 1 /* S_FALSE */ && !strict_events() ? event_find(self) : SIZE_MAX;
+    if (i != SIZE_MAX && event_issued[i].issued < presents_done && is_event(self)) {
+        if (out) { uint32_t yes = 1; memcpy(out, &yes, size < 4 ? size : 4); }   // BOOL TRUE (octets bas)
+        hr = 0;
+    }
+    c->eax = (uint32_t)hr;
+}
+// Rampe gamma (curseur Luminosité de Source, mat_monitorgamma). Direct3D 9
+// ne l'applique qu'à un appareil plein écran, et libd3d9metal fait de même ;
+// sur Mac le jeu tourne en fenêtre (ou plein écran du bureau) : le curseur ne
+// faisait rien dans Half-Life 2. Pour un appareil fenêtré, la rampe est
+// reportée sur sa fenêtre SDL, comme le fait déjà Portal 2 par
+// SDL_SetWindowGammaRamp (SDL la retire quand la fenêtre perd le focus et la
+// remet ensuite). La rampe neutre (réglage par défaut) ne touche pas l'écran ;
+// revenir à la rampe neutre après un réglage remet la rampe que l'écran avait
+// avant (étalonnage), lue une fois avant le premier réglage.
+int (*rt_d3d9_window_gamma)(void *window, const uint16_t *ramp) = rt_sdl_window_gamma;
+int (*rt_d3d9_window_gamma_get)(void *window, uint16_t *ramp) = rt_sdl_window_gamma_get;
+enum { D3D9_SLOT_DEVICE_GET_SWAP_CHAIN = 14, D3D9_SLOT_SWAP_CHAIN_GET_PARAMS = 9, GAMMA_ENTRIES = 768 };
+static struct {                       // fenêtre portant une rampe reportée (Source n'en a qu'une)
+    void *window; int applied, has_original; uint16_t original[GAMMA_ENTRIES];
+} gamma_state;
+static int gamma_identity(const uint16_t *ramp) {
+    for (unsigned i = 0; i < GAMMA_ENTRIES; ++i) if (ramp[i] >> 8 != (i & 255)) return 0;
+    return 1;
+}
+static void *windowed_device_window(void *device) {   // fenêtre SDL de la chaîne 0 si fenêtrée, sinon NULL
+    void *chain = NULL;
+    if (((int32_t (*)(void *, uint32_t, void **))D3D9_VTBL(device)[D3D9_SLOT_DEVICE_GET_SWAP_CHAIN])(device, 0, &chain) < 0 || !chain)
+        return NULL;
+    D3d9HostParams params; memset(&params, 0, sizeof(params));
+    int ok = ((int32_t (*)(void *, D3d9HostParams *))D3D9_VTBL(chain)[D3D9_SLOT_SWAP_CHAIN_GET_PARAMS])(chain, &params) >= 0;
+    ((uint32_t (*)(void *))D3D9_VTBL(chain)[D3D9_SLOT_IUnknown_Release])(chain);
+    return ok && params.Windowed ? params.hDeviceWindow : NULL;
+}
+void d3d9_manual_IDirect3DDevice9_SetGammaRamp(CPU *c, void *self, uint32_t a) {
+    uint32_t chain = R32(a), flags = R32(a + 4), guest_ramp = R32(a + 8);
+    const uint16_t *ramp = d3d9_in(c, guest_ramp, GAMMA_ENTRIES * 2);
+    ((void (*)(void *, uint32_t, uint32_t, const void *))D3D9_VTBL(self)[D3D9_SLOT_IDirect3DDevice9_SetGammaRamp])(
+        self, chain, flags, ramp);
+    if (!ramp || chain || !rt_d3d9_window_gamma) return;
+    int identity = gamma_identity(ramp);
+    if (identity && !gamma_state.applied) return;
+    void *window = windowed_device_window(self);
+    if (!window) return;
+    if (gamma_state.window != window) {   // autre fenêtre : la précédente a disparu avec son appareil
+        memset(&gamma_state, 0, sizeof(gamma_state));
+        gamma_state.window = window;
+        if (identity) return;
+    }
+    if (identity) {
+        if (rt_d3d9_window_gamma(window, gamma_state.has_original ? gamma_state.original : ramp) == 0)
+            gamma_state.applied = 0;
+        return;
+    }
+    if (!gamma_state.has_original && rt_d3d9_window_gamma_get)
+        gamma_state.has_original = rt_d3d9_window_gamma_get(window, gamma_state.original) == 0;
+    if (rt_d3d9_window_gamma(window, ramp) == 0) gamma_state.applied = 1;
+}
+
+// Une requête libérée puis réallouée à la même adresse peut retrouver une
+// entrée périmée : seul un événement en profite, et un événement jamais émis
+// n'a rien à attendre.
+
 static int d3d9_present_call(CPU *c, const char *name, void *data) {
     const D3d9Method *m = data;
     if (m->name[9] == 'D') rt_d3d9_draw_overlay(self_of(c, m));   // IDirect3DDevice9::Present (pas la chaîne d'échange)
+    uint64_t ticket = ++presents_started;
     d3d9_call(c, name, data);
     if ((int32_t)c->eax >= 0) {
+        if (presents_done < ticket) presents_done = ticket;
         rt_frame_log_tick();                                  // P2_FRAME_LOG, Mac et iOS (sdl_video.c)
         void (*hook)(void) = rt_d3d9_on_present;
         if (hook) hook();
@@ -931,7 +1086,8 @@ static int d3d9_timed_present(CPU *c, const char *name, void *data) {
     return 1;
 }
 static int is_present(const D3d9Method *m) {
-    return !strcmp(m->name, "IDirect3DDevice9::Present") || !strcmp(m->name, "IDirect3DSwapChain9::Present");
+    return !strcmp(m->name, "IDirect3DDevice9::Present") || !strcmp(m->name, "IDirect3DSwapChain9::Present")
+        || !strcmp(m->name, "IDirect3DDevice9Ex::PresentEx");
 }
 static rt_shim_handler handler_of(const D3d9Method *m) {
     if (!is_present(m)) return d3d9_call;
@@ -958,6 +1114,27 @@ static int d3d9_shim(CPU *c, const char *name) {
         void *d3d = library_create(sdk);
         if (!d3d) fprintf(stderr, "d3d9: d3d9metal_Direct3DCreate9(%u) returned NULL\n", sdk);
         c->eax = d3d9_proxy(c, d3d, D3D9_IDirect3D9);
+        return 1;
+    }
+    if (!strcmp(name, "Direct3DCreate9Ex")) {
+        // Direct3DCreate9Ex(UINT SDKVersion, IDirect3D9Ex **out). Half-Life 2
+        // ne se replie pas sur Direct3DCreate9 : sans IDirect3D9Ex, pas de rendu.
+        uint32_t sdk = R32(c->esp + 4), out = R32(c->esp + 8);
+        if (!out) { c->eax = 0x8876086cu; return 1; }   // D3DERR_INVALIDCALL
+        rt_write_span(c, out, 4); W32(out, 0);
+        if (!load_library() || !library_create_ex) {
+            static int logged;
+            if (!logged++) fprintf(stderr, "d3d9: Direct3DCreate9Ex(%u): %s, returning D3DERR_NOTAVAILABLE\n", sdk,
+                                   library_state > 0 ? "the native library does not export Direct3DCreate9Ex"
+                                                     : "no native Direct3D 9 library");
+            c->eax = 0x8876086au;   // D3DERR_NOTAVAILABLE
+            return 1;
+        }
+        void *d3d = NULL;
+        int32_t hr = library_create_ex(sdk, &d3d);
+        if (hr < 0 || !d3d) fprintf(stderr, "d3d9: Direct3DCreate9Ex(%u) failed (0x%08x)\n", sdk, (uint32_t)hr);
+        else W32(out, d3d9_proxy(c, d3d, D3D9_IDirect3D9Ex));
+        c->eax = (uint32_t)hr;
         return 1;
     }
     const D3d9Method *m = find_method(name);

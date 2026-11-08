@@ -32,6 +32,8 @@ REGS.update({r[1:]: (r, 16, 0) for r in ['esp', 'ebp', 'esi', 'edi']})
 _MEMORY_OPERAND = re.compile(r'(?:(byte|word|dword|qword|xmmword) ptr )?(?:(gs|fs):)?\[(.*)\]')
 _RELOCATED_IMMEDIATE = re.compile(r'@c?0x[0-9a-f]+')
 _HEX_LITERAL = re.compile(r'0x[0-9a-f]+')
+_PIC_TABLE_LOAD = re.compile(r'dword ptr \[(\w+) \+ 4\*(\w+) ([+-]) (0x[0-9a-f]+)\]')
+_PIC_TABLE_LOAD_PRESCALED = re.compile(r'dword ptr \[(\w+) \+ (\w+) ([+-]) (0x[0-9a-f]+)\]')
 _SWITCH_TABLE = re.compile(r'(?:dword ptr )?\[(?:4\*(\w+) \+ (0x[0-9a-f]+)|(0x[0-9a-f]+) \+ 4\*(\w+))\]')
 CC = dict(o='O', no='NO', b='B', c='B', nae='B', ae='AE', nb='AE', nc='AE',
           e='E', z='E', ne='NE', nz='NE', be='BE', na='BE', a='A', nbe='A',
@@ -212,6 +214,16 @@ def code_address(address, rebase):
     return f'({address:#x}u + {CODE_RELOCATED})' if rebase else f'{address:#x}u'
 
 
+# AES-NI, PCLMULQDQ, SSE4.1/4.2, AVX, XSAVE, RDRAND/RDSEED et VIA PadLock.
+CPUID_GATED = frozenset('''aesenc aesenclast aesdec aesdeclast aesimc aeskeygenassist pclmulqdq
+    mpsadbw phminposuw pextrb pinsrb pinsrd pextrq pinsrq pmovzxbw pmovzxbd pmovzxbq pmovzxwd pmovzxwq
+    pmovzxdq pmovsxbw pmovsxbd pmovsxbq pmovsxwd pmovsxwq pmovsxdq ptest pblendw pblendvb blendps blendpd
+    blendvps blendvpd dpps dppd insertps extractps roundps roundpd roundss roundsd pmulld pmuldq pminsb
+    pminsd pminuw pminud pmaxsb pmaxsd pmaxuw pmaxud pcmpeqq pcmpgtq packusdw movntdqa pcmpestri pcmpestrm
+    pcmpistri pcmpistrm crc32 popcnt vzeroall vzeroupper xgetbv xsave xrstor rdrand rdseed
+    xstorerng xstore xcryptecb xcryptcbc xcryptctr xcryptcfb xcryptofb xsha1 xsha256 montmul'''.split())
+
+
 def translate(pc, insn, entries=frozenset(), callees=None, cases=None, rebase=False):
     if callees is None:
         callees = set()
@@ -220,6 +232,18 @@ def translate(pc, insn, entries=frozenset(), callees=None, cases=None, rebase=Fa
     here, after = code_address(pc, rebase), code_address(nxt, rebase)
     if op in ('int3', 'ud2', 'hlt'):
         return f'rt_trap(c, {here}, "{op}");', []
+    if op == 'push' and args in ('ds', 'es', 'ss', 'cs'):
+        # Mémoire plate : sélecteurs utilisateur Linux i386 (__USER_DS 0x7b, __USER_CS 0x73).
+        return f'c->esp -= 4; W32(c->esp, {0x73 if args == "cs" else 0x7b}u); {end}', [nxt]
+    if op == 'pop' and args in ('ds', 'es'):
+        # Recharger DS/ES avec un sélecteur plat ne change rien ; un autre sélecteur ne serait
+        # pas émulé : arrêt explicite.
+        return (f'if ((R32(c->esp) & 0xffffu) != 0x7bu) rt_trap(c, {here}, "pop {args}: non-flat selector"); '
+                f'c->esp += 4; {end}'), [nxt]
+    if op in CPUID_GATED:
+        # Extension que rt_cpuid (runtime/cpu.c) n'annonce pas : le code qui la choisit
+        # selon CPUID (OpenSSL, Crypto++, libvpx) ne l'atteint pas ; sinon, arrêt explicite.
+        return f'rt_trap(c, {here}, "{op}: CPU extension not reported by CPUID");', []
     string = string_instruction(op, args, nxt)
     if string is not None:
         return string
@@ -251,6 +275,16 @@ def translate(pc, insn, entries=frozenset(), callees=None, cases=None, rebase=Fa
         if target.imm is not None:
             call = 'c->flags = f; ' + call
         return f'{call} if (c->eip != {after}) goto resume; f = c->flags; {end}', [nxt]
+    if op in ('jecxz', 'jcxz'):
+        # Saut court si ECX (CX) vaut 0, sans lire ni modifier les indicateurs.
+        target = int(args.split()[0], 0)
+        test = 'c->ecx == 0' if op == 'jecxz' else '(c->ecx & 0xffffu) == 0'
+        if target in entries:
+            callees.add(target)
+            branch = f'c->flags = f; rt_jump_fn(c, fn_{target:x}, {code_address(target, rebase)}); return;'
+            return f'if ({test}) {{ {branch} }} {end}', [nxt]
+        branch = ('rt_poll(); ' if target <= pc else '') + f'goto L{target:x};'
+        return f'if ({test}) {{ {branch} }} {end}', [target, nxt]
     if op == 'jmp' or (op.startswith('j') and op[1:] in CC):
         target = Operand(args)
         if target.imm is None:
@@ -643,6 +677,9 @@ class JumpTables:
     Recognised forms (GCC, i386):
       jmp dword ptr [4*I + T]                          absolute table (relocated)
       mov R, dword ptr [B + 4*I + D]; add R, B; jmp R  PIC table of GOT offsets, B = GOT
+      add R, dword ptr [R + 4*I + D]; jmp R            same, fused (R = GOT)
+      mov R, dword ptr [B + I + D]; add R, B; jmp R    same, I already scaled (bound unknown)
+    with up to MAX_NEUTRAL unrelated moves scheduled between the PIC steps.
     The bound comes from a preceding `cmp I, N; ja/jae`; otherwise entries are
     read while they remain plausible code addresses. Candidates are only an
     optimisation: the generated code compares the real computed target with
@@ -687,6 +724,50 @@ class JumpTables:
             out.append((pc,) + tuple(self.insns[pc]))
         return out
 
+    MAX_NEUTRAL = 3
+    # Explicit-operand instructions that also write registers implicitly.
+    IMPLICIT_WRITES = frozenset({'xchg', 'xadd', 'cmpxchg', 'cmpxchg8b', 'mul', 'div', 'idiv',
+                                 'cpuid', 'rdtsc', 'enter', 'leave', 'bswap'})
+
+    def skip_neutral(self, history, start, protected):
+        """Index of the first instruction from `start` that may write a register
+        of `protected`; None if more than MAX_NEUTRAL others come first.
+
+        An instruction is skipped when its only register effect is its first
+        operand (plus flags) and that operand is a general register outside
+        `protected`, an SSE/MMX register or memory: GCC schedules such moves,
+        conversions and arithmetic between the steps of a PIC switch."""
+        families = {REGS[r][0] for r in protected if r in REGS}
+        for i in range(start, min(len(history), start + self.MAX_NEUTRAL + 1)):
+            _, _, op, args = history[i]
+            parts = [x.strip() for x in args.split(',')]
+            if (op.startswith(('j', 'call', 'ret', 'push', 'pop', 'loop', 'rep'))
+                    or op in self.IMPLICIT_WRITES or len(parts) < 2 or 'es:' in args
+                    or re.fullmatch(r'(lods|scas|cmps|ins|outs)[bwdq]?', op)):
+                return i
+            destination = parts[0]
+            if destination in REGS:
+                if REGS[destination][0] in families:
+                    return i
+            elif not (re.fullmatch(r'x?mm\d+', destination) or '[' in destination):
+                return i
+        return None
+
+    @staticmethod
+    def table_load(operand, base_register):
+        """(index register, scaled, displacement) of `dword ptr [B + 4*I +- D]` or
+        `dword ptr [B + I +- D]` (I pre-scaled) with B = base_register; None otherwise."""
+        m = _PIC_TABLE_LOAD.fullmatch(operand)
+        if m:
+            if m[1] != base_register:
+                return None
+            return m[2], True, int(m[4], 16) * (-1 if m[3] == '-' else 1)
+        m = _PIC_TABLE_LOAD_PRESCALED.fullmatch(operand)
+        if not m or base_register not in (m[1], m[2]):
+            return None
+        index = m[2] if m[1] == base_register else m[1]
+        return index, False, int(m[4], 16) * (-1 if m[3] == '-' else 1)
+
     def bound(self, history, index):
         """Number of table entries implied by `cmp index, N; ja` (None if unknown)."""
         aliases = {index}
@@ -719,22 +800,42 @@ class JumpTables:
         nxt, op, args = self.insns[pc]
         if op != 'jmp':
             return None
-        history = self.before(pc, 8)
+        history = self.before(pc, 12)
         m = _SWITCH_TABLE.fullmatch(args)
         if m:
             index = m[1] or m[4]; table = int(m[2] or m[3], 16); base = 0; rest = history
         elif args in REGS and REGS[args][1] == 32 and len(history) >= 2:
-            (_, _, add_op, add_args), (_, _, mov_op, mov_args) = history[0], history[1]
-            add = [x.strip() for x in add_args.split(',')]
-            m = re.fullmatch(r'dword ptr \[(\w+) \+ 4\*(\w+) ([+-]) (0x[0-9a-f]+)\]',
-                             mov_args.split(',', 1)[-1].strip())
-            if not (add_op == 'add' and add[0] == args and mov_op == 'mov' and m
-                    and mov_args.split(',')[0].strip() == args and add[1] == m[1]):
+            # GCC may schedule unrelated moves between the three instructions
+            # (`mov R, [B + 4*I - D]; mov ecx, [ebp - 0x2c]; add R, B; jmp R`).
+            at = self.skip_neutral(history, 0, {args})
+            if at is None:
                 return None
+            _, _, add_op, add_args = history[at]
+            add = [x.strip() for x in add_args.split(',', 1)]
+            if not (add_op == 'add' and len(add) == 2 and add[0] == args):
+                return None
+            fused = self.table_load(add[1], args)
+            if fused:
+                # `add R, [R + 4*I - D]; jmp R`: R already holds the GOT.
+                load = fused
+            else:
+                if add[1] not in REGS:
+                    return None
+                at = self.skip_neutral(history, at + 1, {args, add[1]})
+                if at is None:
+                    return None
+                _, _, mov_op, mov_args = history[at]
+                load = self.table_load(mov_args.split(',', 1)[-1].strip(), add[1])
+                if not (mov_op == 'mov' and load and mov_args.split(',')[0].strip() == args):
+                    return None
             mod = self.module(pc)
             base = mod['gotplt'] if mod else 0
-            displacement = int(m[4], 16) * (-1 if m[3] == '-' else 1)
-            table, index, rest = (base + displacement) & 0xffffffff, m[2], history[2:]
+            index, scaled, displacement = load
+            table, rest = (base + displacement) & 0xffffffff, history[at + 1:]
+            if not scaled:
+                # Index already multiplied by 4 earlier (`mov R, [B + I - D]`):
+                # its bound is not tracked, entries are read while plausible.
+                rest = []
         else:
             return None
         if index not in REGS:

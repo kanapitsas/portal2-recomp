@@ -7,7 +7,7 @@
 // passer d'une entrée large à une destination étroite (ou l'inverse) n'accepte
 // que l'ASCII, sinon EILSEQ comme wcrtomb/mbrtowc de la glibc.
 // Non géré (rt_trap) : arguments positionnels, drapeaux ' I m, long double.
-// SHIMS: __isoc99_fscanf __isoc99_swscanf
+// SHIMS: __isoc99_fscanf __isoc99_swscanf fscanf swscanf
 #include "rt_locale.h"
 #include <errno.h>
 #include <stdio.h>
@@ -380,10 +380,21 @@ void *rt_stream_file(CPU *c, uint32_t handle);
 int rt_scan_shim(CPU *c, const char *name) {
     int kind;
     if (!strcmp(name, "__isoc99_sscanf") || !strcmp(name, "sscanf")) kind = SOURCE_NARROW;
-    else if (!strcmp(name, "__isoc99_swscanf")) kind = SOURCE_WIDE;
-    else if (!strcmp(name, "__isoc99_fscanf")) kind = SOURCE_FILE;
+    // fscanf/swscanf sans __isoc99_ : même syntaxe sauf le %a GNU (allocation), absent des
+    // formats du jeu ; un tel format serait mal lu, d'où le piège ci-dessous.
+    else if (!strcmp(name, "__isoc99_swscanf") || !strcmp(name, "swscanf")) kind = SOURCE_WIDE;
+    else if (!strcmp(name, "__isoc99_fscanf") || !strcmp(name, "fscanf")) kind = SOURCE_FILE;
     else return 0;
     uint32_t first = R32(c->esp + 4), format = R32(c->esp + 8), arguments = c->esp + 12;
+    if (strncmp(name, "__isoc99_", 9) && kind != SOURCE_NARROW) {
+        int wide_format = kind == SOURCE_WIDE;
+        for (uint32_t at = format;; at += wide_format ? 4 : 1) {
+            uint32_t ch = wide_format ? R32(at) : R8(at);
+            if (!ch) break;
+            uint32_t next = wide_format ? R32(at + 4) : R8(at + 1);
+            if (ch == '%' && (next == 'a')) rt_trap(c, c->eip, "GNU %a scanf allocation is not implemented");
+        }
+    }
     Input in = {.c = c, .kind = kind, .address = first};
     if (kind == SOURCE_FILE) in.file = rt_stream_file(c, first);
     int wide = kind == SOURCE_WIDE;

@@ -25,6 +25,10 @@ int rt_sdl_window_scale(void);
 void rt_sdl_force_scales(int display, int window);
 // Encoche : hauteur d'écran annoncée au jeu (celle que reçoit une fenêtre plein écran).
 int rt_sdl_notch_height(int height, int frame_h, int visible_top, double safe_top);
+// Rampe gamma (768 entrées : rouge, vert, bleu) sur l'écran d'une SDL_Window*
+// hôte ; 0 si appliquée (rampe gamma Direct3D 9 d'un appareil fenêtré).
+int rt_sdl_window_gamma(void *window, const uint16_t *ramp);
+int rt_sdl_window_gamma_get(void *window, uint16_t *ramp);   // rampe actuelle de l'écran (0 si lue)
 // Fenêtres Metal (rendu Direct3D 9 natif) : drapeaux SDL invités → hôtes
 // (SDL_WINDOW_VULKAN devient SDL_WINDOW_METAL), et CAMetalLayer* d'une
 // SDL_Window* hôte avec la taille de rendu en pixels (NULL si non Metal).

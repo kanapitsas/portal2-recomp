@@ -295,7 +295,8 @@ RT_CHECK(d3d9_generated_tables_match_d3d9_h) {
         {D3D9_IDirect3DTexture9, 22}, {D3D9_IDirect3DCubeTexture9, 22}, {D3D9_IDirect3DVolumeTexture9, 22},
         {D3D9_IDirect3DSurface9, 17}, {D3D9_IDirect3DVolume9, 11}, {D3D9_IDirect3DVertexBuffer9, 14},
         {D3D9_IDirect3DIndexBuffer9, 14}, {D3D9_IDirect3DVertexDeclaration9, 5}, {D3D9_IDirect3DVertexShader9, 5},
-        {D3D9_IDirect3DPixelShader9, 5}, {D3D9_IDirect3DStateBlock9, 6}, {D3D9_IDirect3DQuery9, 8}};
+        {D3D9_IDirect3DPixelShader9, 5}, {D3D9_IDirect3DStateBlock9, 6}, {D3D9_IDirect3DQuery9, 8},
+        {D3D9_IDirect3D9Ex, 22}, {D3D9_IDirect3DDevice9Ex, 134}, {D3D9_IDirect3DSwapChain9Ex, 13}};
     for (size_t i = 0; i < sizeof(sizes) / sizeof(*sizes); ++i) {
         const D3d9Interface *info = &rt_d3d9_interfaces[sizes[i].iface];
         assert(!info->abstract && info->slot_count == sizes[i].slots);
@@ -624,6 +625,224 @@ RT_CHECK(d3d9_get_container_iunknown_keeps_one_reference) {
     assert(CALL0(level, IUnknown, Release).eax == 0 && rt_d3d9_live_proxies() == live);
 }
 
+// pSharedHandle d'une création d3d9Ex en mémoire système à un seul niveau :
+// le HANDLE invité contient l'adresse invitée des pixels (« mémoire
+// utilisateur ») et l'hôte doit recevoir un HANDLE contenant le pointeur hôte
+// correspondant. shaderapivk.so de Half-Life 2 crée ainsi les faces du ciel
+// HDR avant de les copier par UpdateSurface ; ignoré, le ciel partait de pages
+// non initialisées (blocs de couleurs). Ailleurs (pool DEFAULT, plusieurs
+// niveaux, appareil non Ex), NULL comme avant.
+static void *user_memory_device_vtbl[119];
+static Fake user_memory_device = {user_memory_device_vtbl, 0, 0, NULL, NULL};
+static int user_memory_device_is_ex;
+static struct { unsigned creates; void *shared, *pixels; } user_memory_seen;
+static int32_t user_memory_query(Fake *self, const uint8_t *iid, void **out) {
+    if (user_memory_device_is_ex && !memcmp(iid, rt_d3d9_interfaces[D3D9_IDirect3DDevice9Ex].iid, 16)) {
+        ++self->refs; *out = self; return 0;
+    }
+    *out = NULL; return (int32_t)D3D9_E_NOINTERFACE;
+}
+static int32_t user_memory_record(void **out, void *shared) {
+    ++user_memory_seen.creates;
+    user_memory_seen.shared = shared;
+    user_memory_seen.pixels = shared ? *(void **)shared : NULL;
+    *out = NULL;
+    return (int32_t)0x8876086cu;   // D3DERR_INVALIDCALL : pas d'objet à envelopper
+}
+static int32_t user_memory_create_texture(Fake *self, uint32_t w, uint32_t h, uint32_t levels, uint32_t usage,
+                                          uint32_t format, uint32_t pool, void **out, void *shared) {
+    (void)self; (void)w; (void)h; (void)levels; (void)usage; (void)format; (void)pool;
+    return user_memory_record(out, shared);
+}
+static int32_t user_memory_create_plain(Fake *self, uint32_t w, uint32_t h, uint32_t format, uint32_t pool, void **out,
+                                        void *shared) {
+    (void)self; (void)w; (void)h; (void)format; (void)pool;
+    return user_memory_record(out, shared);
+}
+
+RT_CHECK(d3d9_system_memory_user_pointer_reaches_host) {
+    fill(user_memory_device_vtbl, 119);
+    user_memory_device_vtbl[0] = (void *)user_memory_query;
+    user_memory_device_vtbl[1] = (void *)f_addref; user_memory_device_vtbl[2] = (void *)f_release;
+    user_memory_device_vtbl[slot_of("IDirect3DDevice9", "CreateTexture")] = (void *)user_memory_create_texture;
+    user_memory_device_vtbl[slot_of("IDirect3DDevice9", "CreateOffscreenPlainSurface")] = (void *)user_memory_create_plain;
+    unsigned live = rt_d3d9_live_proxies();
+    CPU c; rt_cpu_reset(&c); c.esp = STACK;
+    user_memory_device.refs = 1;
+    // Mandataire typé IDirect3DDevice9 comme celui que rend IDirect3D9Ex::CreateDevice.
+    uint32_t dev = d3d9_proxy(&c, &user_memory_device, D3D9_IDirect3DDevice9);
+    uint32_t out = SCRATCH + 0x100, handle = SCRATCH + 0x200, pixels = SCRATCH + 0x400;
+    W32(handle, pixels);
+
+    user_memory_device_is_ex = 1;
+    memset(&user_memory_seen, 0, sizeof(user_memory_seen));
+    CALL(dev, IDirect3DDevice9, CreateTexture, 512, 512, 1, 0, 21, 2 /* SYSTEMMEM */, out, handle);
+    assert(user_memory_seen.creates == 1 && user_memory_seen.shared && user_memory_seen.pixels == GPTR(pixels));
+    assert(R32(out) == 0 && R32(handle) == pixels);
+    CALL(dev, IDirect3DDevice9, CreateOffscreenPlainSurface, 64, 64, 21, 2, out, handle);
+    assert(user_memory_seen.creates == 2 && user_memory_seen.pixels == GPTR(pixels));
+    W32(handle, 0);   // pointeur nul : transmis tel quel, la bibliothèque décide
+    CALL(dev, IDirect3DDevice9, CreateTexture, 512, 512, 1, 0, 21, 2, out, handle);
+    assert(user_memory_seen.shared && !user_memory_seen.pixels);
+    W32(handle, pixels);
+    CALL(dev, IDirect3DDevice9, CreateTexture, 512, 512, 0, 0, 21, 2, out, handle);   // chaîne complète
+    assert(user_memory_seen.creates == 4 && !user_memory_seen.shared);
+    CALL(dev, IDirect3DDevice9, CreateTexture, 512, 512, 1, 0, 21, 0 /* DEFAULT */, out, handle);
+    assert(!user_memory_seen.shared);
+    CALL(dev, IDirect3DDevice9, CreateTexture, 512, 512, 1, 0, 21, 2, out, 0);
+    assert(user_memory_seen.creates == 6 && !user_memory_seen.shared);
+    user_memory_device_is_ex = 0;   // appareil d3d9 simple
+    CALL(dev, IDirect3DDevice9, CreateTexture, 512, 512, 1, 0, 21, 2, out, handle);
+    assert(user_memory_seen.creates == 7 && !user_memory_seen.shared);
+
+    assert(user_memory_device.refs == 1);
+    assert(CALL0(dev, IUnknown, Release).eax == 0 && rt_d3d9_live_proxies() == live);
+}
+
+// Événement D3D9 (frame sync de Source) : un événement émis avant le dernier
+// Present est annoncé atteint même si la bibliothèque répond encore S_FALSE ;
+// pas avant ce Present, et jamais pour une requête d'un autre type.
+static void *event_query_vtbl[8], *event_device_vtbl[119];
+static struct { unsigned issues, get_data; } event_seen;
+static int32_t event_issue(Fake *self, uint32_t flags) { (void)self; (void)flags; ++event_seen.issues; return 0; }
+static int32_t event_get_data(Fake *self, void *data, uint32_t size, uint32_t flags) {
+    (void)self; (void)flags; ++event_seen.get_data;
+    if (data && size >= 4) memset(data, 0, 4);
+    return 1;   // S_FALSE : jamais atteint côté bibliothèque
+}
+static uint32_t event_issue_during_present;   // mandataire à émettre pendant le Present (verrou relâché)
+static int32_t event_present(Fake *self, const void *a, const void *b, void *w, const void *r) {
+    (void)self; (void)a; (void)b; (void)w; (void)r;
+    if (event_issue_during_present) {
+        uint32_t end = 1;
+        call(event_issue_during_present, slot_of("IDirect3DQuery9", "Issue"), 1, &end);
+    }
+    return 0;
+}
+RT_CHECK(d3d9_event_query_reached_after_present) {
+    fill(event_query_vtbl, 8);
+    event_query_vtbl[1] = (void *)f_addref; event_query_vtbl[2] = (void *)f_release;
+    event_query_vtbl[4] = (void *)f_get_type;
+    event_query_vtbl[slot_of("IDirect3DQuery9", "Issue")] = (void *)event_issue;
+    event_query_vtbl[slot_of("IDirect3DQuery9", "GetData")] = (void *)event_get_data;
+    fill(event_device_vtbl, 119);
+    event_device_vtbl[1] = (void *)f_addref; event_device_vtbl[2] = (void *)f_release;
+    event_device_vtbl[slot_of("IDirect3DDevice9", "Present")] = (void *)event_present;
+    static Fake event = {event_query_vtbl, 1, 8, NULL, NULL}, occlusion = {event_query_vtbl, 1, 9, NULL, NULL};
+    static Fake dev_object = {event_device_vtbl, 1, 0, NULL, NULL};
+    CPU c; rt_cpu_reset(&c); c.esp = STACK;
+    uint32_t q = d3d9_proxy(&c, &event, D3D9_IDirect3DQuery9), o = d3d9_proxy(&c, &occlusion, D3D9_IDirect3DQuery9);
+    uint32_t dev = d3d9_proxy(&c, &dev_object, D3D9_IDirect3DDevice9);
+    uint32_t data = SCRATCH + 0x100;
+    assert(CALL(q, IDirect3DQuery9, Issue, 1 /* END */).eax == 0);
+    assert(CALL(o, IDirect3DQuery9, Issue, 1).eax == 0);
+    W32(data, 0xdead);
+    assert(CALL(q, IDirect3DQuery9, GetData, data, 4, 1).eax == 1 && R32(data) == 0);   // même image : on attend
+    assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0);
+    assert(CALL(q, IDirect3DQuery9, GetData, data, 4, 1).eax == 0 && R32(data) == 1);   // image présentée
+    assert(CALL(q, IDirect3DQuery9, GetData, 0, 0, 1).eax == 0);                       // sans tampon aussi
+    assert(CALL(o, IDirect3DQuery9, GetData, data, 4, 1).eax == 1);                    // occlusion : inchangée
+    assert(CALL(q, IDirect3DQuery9, Issue, 1).eax == 0);                                // nouvel événement
+    assert(CALL(q, IDirect3DQuery9, GetData, data, 4, 1).eax == 1);
+    W32(data, 0xaaaaaaaa);
+    assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0);
+    assert(CALL(q, IDirect3DQuery9, GetData, data, 1, 1).eax == 0 && R32(data) == 0xaaaaaa01u);   // BOOL tronqué
+    event_issue_during_present = q;              // émis pendant ce Present : attend le suivant
+    assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0);
+    event_issue_during_present = 0;
+    assert(CALL(q, IDirect3DQuery9, GetData, data, 4, 1).eax == 1);
+    assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0);
+    assert(CALL(q, IDirect3DQuery9, GetData, data, 4, 1).eax == 0);
+    assert(event_seen.issues == 4 && event_seen.get_data == 8);
+    // Deux événements dont les adresses tombent dans la même case : chacun garde son entrée.
+    static uint8_t arena[64 * 16 + sizeof(Fake)] __attribute__((aligned(16)));
+    Fake *pair[2] = {(Fake *)arena, (Fake *)(arena + 64 * 16)};   // 1 Kio d'écart : même case de départ
+    *pair[0] = *pair[1] = (Fake){event_query_vtbl, 1, 8, NULL, NULL};
+    uint32_t t0 = d3d9_proxy(&c, pair[0], D3D9_IDirect3DQuery9), t1 = d3d9_proxy(&c, pair[1], D3D9_IDirect3DQuery9);
+    assert(CALL(t0, IDirect3DQuery9, Issue, 1).eax == 0 && CALL(t1, IDirect3DQuery9, Issue, 1).eax == 0);
+    assert(CALL(dev, IDirect3DDevice9, Present, 0, 0, 0, 0).eax == 0);
+    assert(CALL(t0, IDirect3DQuery9, GetData, data, 4, 1).eax == 0 && CALL(t1, IDirect3DQuery9, GetData, data, 4, 1).eax == 0);
+    CALL0(t0, IUnknown, Release); CALL0(t1, IUnknown, Release);
+    CALL0(q, IUnknown, Release); CALL0(o, IUnknown, Release); CALL0(dev, IUnknown, Release);
+}
+
+// Rampe gamma (curseur Luminosité de Source). D3D9 ne l'applique qu'en plein
+// écran ; sur Mac le jeu tourne en fenêtre : le pont la reporte sur la
+// fenêtre SDL, comme le fait déjà Portal 2 (SDL_SetWindowGammaRamp).
+static void *gamma_vtbl[119], *gamma_chain_vtbl[10];
+static struct { unsigned library_calls, window_calls; void *window; uint16_t last[768]; } gamma_seen;
+static uint32_t gamma_windowed = 1;
+static void *gamma_window_ptr = &fake_window;
+static void gamma_set(Fake *self, uint32_t chain, uint32_t flags, const uint16_t *ramp) {
+    (void)self; (void)chain; (void)flags; assert(ramp); ++gamma_seen.library_calls;
+}
+static Fake gamma_chain;
+static int32_t gamma_get_chain(Fake *self, uint32_t index, Fake **out) {
+    (void)self; assert(index == 0); ++gamma_chain.refs; *out = &gamma_chain; return 0;
+}
+static int32_t gamma_params(Fake *self, D3d9HostParams *p) {
+    (void)self; memset(p, 0, sizeof(*p)); p->hDeviceWindow = gamma_window_ptr; p->Windowed = gamma_windowed; return 0;
+}
+static int gamma_window(void *window, const uint16_t *ramp) {
+    ++gamma_seen.window_calls; gamma_seen.window = window; memcpy(gamma_seen.last, ramp, sizeof(gamma_seen.last)); return 0;
+}
+static int gamma_reads;
+static int gamma_window_get(void *window, uint16_t *ramp) {   // écran étalonné : rampe d'origine non neutre
+    (void)window; ++gamma_reads;
+    for (unsigned i = 0; i < 768; ++i) ramp[i] = (uint16_t)((i & 255) * 250);
+    return 0;
+}
+static int other_window;
+RT_CHECK(d3d9_gamma_ramp_reaches_the_window_when_windowed) {
+    fill(gamma_vtbl, 119); fill(gamma_chain_vtbl, 10);
+    gamma_vtbl[1] = (void *)f_addref; gamma_vtbl[2] = (void *)f_release;
+    gamma_vtbl[slot_of("IDirect3DDevice9", "SetGammaRamp")] = (void *)gamma_set;
+    gamma_vtbl[slot_of("IDirect3DDevice9", "GetSwapChain")] = (void *)gamma_get_chain;
+    gamma_chain_vtbl[1] = (void *)f_addref; gamma_chain_vtbl[2] = (void *)f_release;
+    gamma_chain_vtbl[slot_of("IDirect3DSwapChain9", "GetPresentParameters")] = (void *)gamma_params;
+    gamma_chain = (Fake){gamma_chain_vtbl, 1, 0, NULL, NULL};
+    static Fake dev_object = {gamma_vtbl, 1, 0, NULL, NULL};
+    int (*saved)(void *, const uint16_t *) = rt_d3d9_window_gamma;
+    int (*saved_get)(void *, uint16_t *) = rt_d3d9_window_gamma_get;
+    rt_d3d9_window_gamma = gamma_window; rt_d3d9_window_gamma_get = gamma_window_get;
+    CPU c; rt_cpu_reset(&c); c.esp = STACK;
+    uint32_t dev = d3d9_proxy(&c, &dev_object, D3D9_IDirect3DDevice9), ramp = SCRATCH + 0x200;
+    // Rampe neutre (mat_monitorgamma 2.2 par défaut) : l'écran n'est pas touché.
+    for (unsigned i = 0; i < 768; ++i) W16(ramp + 2 * i, (uint16_t)((i & 255) * 257));
+    CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);
+    assert(gamma_seen.library_calls == 1 && gamma_seen.window_calls == 0);
+    // Luminosité relevée : la rampe arrive telle quelle sur la fenêtre du jeu.
+    for (unsigned i = 0; i < 768; ++i) W16(ramp + 2 * i, (uint16_t)(i == 300 ? 0x8000 : (i & 255) * 257 / 2 + 0x7fff));
+    CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);
+    assert(gamma_seen.library_calls == 2 && gamma_seen.window_calls == 1 && gamma_seen.window == &fake_window);
+    assert(gamma_seen.last[300] == 0x8000 && gamma_seen.last[0] == 0x7fff);
+    assert(gamma_reads == 1);   // rampe de l'écran lue avant de la remplacer
+    CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);
+    assert(gamma_seen.window_calls == 2 && gamma_reads == 1);   // lue une seule fois
+    // Retour à la rampe neutre : l'écran retrouve sa rampe d'origine (étalonnage).
+    for (unsigned i = 0; i < 768; ++i) W16(ramp + 2 * i, (uint16_t)((i & 255) * 257));
+    CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);
+    assert(gamma_seen.window_calls == 3 && gamma_seen.last[255] == 255 * 250);
+    CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);   // déjà neutre : plus rien
+    assert(gamma_seen.window_calls == 3);
+    // Plein écran : la bibliothèque l'applique elle-même, pas de double rampe.
+    gamma_windowed = 0;
+    for (unsigned i = 0; i < 768; ++i) W16(ramp + 2 * i, (uint16_t)((i & 255) * 200));
+    CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);
+    assert(gamma_seen.library_calls == 6 && gamma_seen.window_calls == 3);
+    // Nouvelle fenêtre (appareil recréé) : son état part de zéro, sa rampe
+    // d'origine est relue, et la rampe neutre la lui rend.
+    gamma_windowed = 1; gamma_window_ptr = &other_window;
+    CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);
+    assert(gamma_seen.window_calls == 4 && gamma_seen.window == &other_window && gamma_reads == 2);
+    for (unsigned i = 0; i < 768; ++i) W16(ramp + 2 * i, (uint16_t)((i & 255) * 257));
+    CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);
+    assert(gamma_seen.window_calls == 5 && gamma_seen.last[255] == 255 * 250);
+    assert(gamma_chain.refs == 1);   // chaîne d'échange rendue à chaque fois
+    gamma_window_ptr = &fake_window; rt_d3d9_window_gamma = saved; rt_d3d9_window_gamma_get = saved_get;
+    CALL0(dev, IUnknown, Release);
+}
+
 // Création et libération en boucle d'objets distincts (requêtes, textures de
 // passage) : la table se réorganise à taille constante au lieu de doubler à
 // chaque fois que les pierres tombales la remplissent.
@@ -897,4 +1116,42 @@ RT_CHECK(fps_overlay_layout_two_lines) {
         if (a[i].y >= 12 + 9 * 4) line2 = 1;   // deuxième ligne sous la première
     }
     assert(line2 && (na != nb || memcmp(a, b, sizeof(FpsRect) * (size_t)na)));
+}
+
+// Direct3DCreate9Ex : Half-Life 2 n'a pas de repli sur Direct3DCreate9.
+static void *ex_vtbl[22];
+static Fake d3d_ex = {ex_vtbl, 1, 0, NULL, NULL};
+static unsigned ex_sdk;
+static int32_t fake_create_ex(unsigned sdk, void **out) { ex_sdk = sdk; d3d_ex.refs = 1; *out = &d3d_ex; return 0; }
+static int32_t ex_luid(Fake *self, uint32_t adapter, uint32_t *luid) {
+    assert(self == &d3d_ex && adapter == 0);
+    luid[0] = 0x1234; luid[1] = 0x5678; return 0;
+}
+static CPU create9ex(uint32_t out) {
+    CPU c; rt_cpu_reset(&c); c.esp = STACK;
+    PUSH(&c, out); PUSH(&c, 32);
+    uint32_t base = c.esp;
+    rt_call(&c, rt_dynamic_import("Direct3DCreate9Ex"), RT_RETURN_SENTINEL);
+    assert(c.esp == base);
+    return c;
+}
+RT_CHECK(d3d9_create9ex_bridges_idirect3d9ex) {
+    assert(create9ex(0).eax == 0x8876086cu);                         // pas de sortie : D3DERR_INVALIDCALL
+    W32(SCRATCH, 0xdeadbeef);
+    assert(create9ex(SCRATCH).eax == 0x8876086au && R32(SCRATCH) == 0);   // pas de bibliothèque : NOTAVAILABLE
+
+    fill(ex_vtbl, 22);
+    ex_vtbl[1] = (void *)f_addref; ex_vtbl[2] = (void *)f_release; ex_vtbl[21] = (void *)ex_luid;
+    use_test_library(fake_init);
+    rt_d3d9_set_library_ex(fake_create_ex);
+    W32(SCRATCH, 0);
+    assert(create9ex(SCRATCH).eax == 0 && ex_sdk == 32);
+    uint32_t proxy = R32(SCRATCH);
+    assert(proxy && R32(proxy + 4) == tag(D3D9_IDirect3D9Ex));
+    assert(slot_of("IDirect3D9Ex", "GetAdapterLUID") == 21 && slot_of("IDirect3D9Ex", "CreateDeviceEx") == 20);
+    assert(CALL(proxy, IDirect3D9Ex, GetAdapterLUID, 0, SCRATCH + 16).eax == 0);
+    assert(R32(SCRATCH + 16) == 0x1234 && R32(SCRATCH + 20) == 0x5678);
+    assert(CALL0(proxy, IUnknown, Release).eax == 0);
+    rt_d3d9_set_library_ex(NULL);
+    drop_test_library();
 }

@@ -157,6 +157,68 @@ static void t_IDirect3D9_GetDeviceCaps(CPU *c, void *self, uint32_t a) {
     c->eax = (uint32_t)hr;
 }
 
+static void t_IDirect3D9Ex_CreateDeviceEx(CPU *c, void *self, uint32_t a) {
+    uint32_t g_Adapter = R32(a + 0);
+    uint32_t g_DeviceType = R32(a + 4);
+    uint32_t g_hFocusWindow = R32(a + 8);
+    uint32_t g_BehaviorFlags = R32(a + 12);
+    uint32_t g_pPresentationParameters = R32(a + 16);
+    uint32_t g_pFullscreenDisplayMode = R32(a + 20);
+    uint32_t g_ppReturnedDeviceInterface = R32(a + 24);
+    uint32_t a_Adapter = g_Adapter;
+    uint32_t a_DeviceType = g_DeviceType;
+    uint32_t a_BehaviorFlags = g_BehaviorFlags;
+    void *a_hFocusWindow = d3d9_hwnd(c, g_hFocusWindow);
+    D3d9HostParams h_pPresentationParameters; void *a_pPresentationParameters = d3d9_params_in(c, g_pPresentationParameters, &h_pPresentationParameters, 1);
+    void *a_pFullscreenDisplayMode = d3d9_in(c, g_pFullscreenDisplayMode, (uint64_t)(24));
+    void *h_ppReturnedDeviceInterface = NULL, **a_ppReturnedDeviceInterface = d3d9_out_slot(c, g_ppReturnedDeviceInterface) ? &h_ppReturnedDeviceInterface : NULL;
+    int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, void *, uint32_t, void *, void *, void **))D3D9_VTBL(self)[20])(self, a_Adapter, a_DeviceType, a_hFocusWindow, a_BehaviorFlags, a_pPresentationParameters, a_pFullscreenDisplayMode, a_ppReturnedDeviceInterface);
+    if (hr >= 0) d3d9_params_out(c, g_pPresentationParameters, &h_pPresentationParameters);
+    d3d9_iface_out(c, g_ppReturnedDeviceInterface, h_ppReturnedDeviceInterface, D3D9_IDirect3DDevice9Ex);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3D9Ex_EnumAdapterModesEx(CPU *c, void *self, uint32_t a) {
+    uint32_t g_Adapter = R32(a + 0);
+    uint32_t g_pFilter = R32(a + 4);
+    uint32_t g_Mode = R32(a + 8);
+    uint32_t g_pMode = R32(a + 12);
+    uint32_t a_Adapter = g_Adapter;
+    uint32_t a_Mode = g_Mode;
+    void *a_pFilter = d3d9_in(c, g_pFilter, (uint64_t)(12));
+    void *a_pMode = d3d9_out(c, g_pMode, (uint64_t)(24));
+    int32_t hr = ((int32_t (*)(void *, uint32_t, void *, uint32_t, void *))D3D9_VTBL(self)[18])(self, a_Adapter, a_pFilter, a_Mode, a_pMode);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3D9Ex_GetAdapterDisplayModeEx(CPU *c, void *self, uint32_t a) {
+    uint32_t g_Adapter = R32(a + 0);
+    uint32_t g_pMode = R32(a + 4);
+    uint32_t g_pRotation = R32(a + 8);
+    uint32_t a_Adapter = g_Adapter;
+    void *a_pMode = d3d9_out(c, g_pMode, (uint64_t)(24));
+    void *a_pRotation = d3d9_out(c, g_pRotation, (uint64_t)(4));
+    int32_t hr = ((int32_t (*)(void *, uint32_t, void *, void *))D3D9_VTBL(self)[19])(self, a_Adapter, a_pMode, a_pRotation);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3D9Ex_GetAdapterLUID(CPU *c, void *self, uint32_t a) {
+    uint32_t g_Adapter = R32(a + 0);
+    uint32_t g_pLUID = R32(a + 4);
+    uint32_t a_Adapter = g_Adapter;
+    void *a_pLUID = d3d9_out(c, g_pLUID, (uint64_t)(8));
+    int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[21])(self, a_Adapter, a_pLUID);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3D9Ex_GetAdapterModeCountEx(CPU *c, void *self, uint32_t a) {
+    uint32_t g_Adapter = R32(a + 0);
+    uint32_t g_pFilter = R32(a + 4);
+    uint32_t a_Adapter = g_Adapter;
+    void *a_pFilter = d3d9_in(c, g_pFilter, (uint64_t)(12));
+    c->eax = ((uint32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[17])(self, a_Adapter, a_pFilter);
+}
+
 static void t_IDirect3DBaseTexture9_GenerateMipSubLevels(CPU *c, void *self, uint32_t a) {
     ((void (*)(void *))D3D9_VTBL(self)[16])(self);
     (void)c; (void)a;
@@ -310,7 +372,7 @@ static void t_IDirect3DDevice9_CreateCubeTexture(CPU *c, void *self, uint32_t a)
     uint32_t a_Format = g_Format;
     uint32_t a_Pool = g_Pool;
     void *h_ppCubeTexture = NULL, **a_ppCubeTexture = d3d9_out_slot(c, g_ppCubeTexture) ? &h_ppCubeTexture : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[25])(self, a_EdgeLength, a_Levels, a_Usage, a_Format, a_Pool, a_ppCubeTexture, a_pSharedHandle);
     d3d9_iface_out(c, g_ppCubeTexture, h_ppCubeTexture, D3D9_IDirect3DCubeTexture9);
     c->eax = (uint32_t)hr;
@@ -332,7 +394,7 @@ static void t_IDirect3DDevice9_CreateDepthStencilSurface(CPU *c, void *self, uin
     uint32_t a_MultisampleQuality = g_MultisampleQuality;
     uint32_t a_Discard = g_Discard;
     void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[29])(self, a_Width, a_Height, a_Format, a_MultiSample, a_MultisampleQuality, a_Discard, a_ppSurface, a_pSharedHandle);
     d3d9_iface_out(c, g_ppSurface, h_ppSurface, D3D9_IDirect3DSurface9);
     c->eax = (uint32_t)hr;
@@ -350,7 +412,7 @@ static void t_IDirect3DDevice9_CreateIndexBuffer(CPU *c, void *self, uint32_t a)
     uint32_t a_Format = g_Format;
     uint32_t a_Pool = g_Pool;
     void *h_ppIndexBuffer = NULL, **a_ppIndexBuffer = d3d9_out_slot(c, g_ppIndexBuffer) ? &h_ppIndexBuffer : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[27])(self, a_Length, a_Usage, a_Format, a_Pool, a_ppIndexBuffer, a_pSharedHandle);
     d3d9_iface_out(c, g_ppIndexBuffer, h_ppIndexBuffer, D3D9_IDirect3DIndexBuffer9);
     c->eax = (uint32_t)hr;
@@ -368,7 +430,7 @@ static void t_IDirect3DDevice9_CreateOffscreenPlainSurface(CPU *c, void *self, u
     uint32_t a_Format = g_Format;
     uint32_t a_Pool = g_Pool;
     void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, (a_Pool == 2), &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[36])(self, a_Width, a_Height, a_Format, a_Pool, a_ppSurface, a_pSharedHandle);
     d3d9_iface_out(c, g_ppSurface, h_ppSurface, D3D9_IDirect3DSurface9);
     c->eax = (uint32_t)hr;
@@ -410,7 +472,7 @@ static void t_IDirect3DDevice9_CreateRenderTarget(CPU *c, void *self, uint32_t a
     uint32_t a_MultisampleQuality = g_MultisampleQuality;
     uint32_t a_Lockable = g_Lockable;
     void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[28])(self, a_Width, a_Height, a_Format, a_MultiSample, a_MultisampleQuality, a_Lockable, a_ppSurface, a_pSharedHandle);
     d3d9_iface_out(c, g_ppSurface, h_ppSurface, D3D9_IDirect3DSurface9);
     c->eax = (uint32_t)hr;
@@ -442,7 +504,7 @@ static void t_IDirect3DDevice9_CreateTexture(CPU *c, void *self, uint32_t a) {
     uint32_t a_Format = g_Format;
     uint32_t a_Pool = g_Pool;
     void *h_ppTexture = NULL, **a_ppTexture = d3d9_out_slot(c, g_ppTexture) ? &h_ppTexture : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, (a_Pool == 2 && a_Levels == 1), &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[23])(self, a_Width, a_Height, a_Levels, a_Usage, a_Format, a_Pool, a_ppTexture, a_pSharedHandle);
     d3d9_iface_out(c, g_ppTexture, h_ppTexture, D3D9_IDirect3DTexture9);
     c->eax = (uint32_t)hr;
@@ -460,7 +522,7 @@ static void t_IDirect3DDevice9_CreateVertexBuffer(CPU *c, void *self, uint32_t a
     uint32_t a_FVF = g_FVF;
     uint32_t a_Pool = g_Pool;
     void *h_ppVertexBuffer = NULL, **a_ppVertexBuffer = d3d9_out_slot(c, g_ppVertexBuffer) ? &h_ppVertexBuffer : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[26])(self, a_Length, a_Usage, a_FVF, a_Pool, a_ppVertexBuffer, a_pSharedHandle);
     d3d9_iface_out(c, g_ppVertexBuffer, h_ppVertexBuffer, D3D9_IDirect3DVertexBuffer9);
     c->eax = (uint32_t)hr;
@@ -504,7 +566,7 @@ static void t_IDirect3DDevice9_CreateVolumeTexture(CPU *c, void *self, uint32_t 
     uint32_t a_Format = g_Format;
     uint32_t a_Pool = g_Pool;
     void *h_ppVolumeTexture = NULL, **a_ppVolumeTexture = d3d9_out_slot(c, g_ppVolumeTexture) ? &h_ppVolumeTexture : NULL;
-    void *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle);
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[24])(self, a_Width, a_Height, a_Depth, a_Levels, a_Usage, a_Format, a_Pool, a_ppVolumeTexture, a_pSharedHandle);
     d3d9_iface_out(c, g_ppVolumeTexture, h_ppVolumeTexture, D3D9_IDirect3DVolumeTexture9);
     c->eax = (uint32_t)hr;
@@ -1100,17 +1162,6 @@ static void t_IDirect3DDevice9_SetFVF(CPU *c, void *self, uint32_t a) {
     c->eax = (uint32_t)hr;
 }
 
-static void t_IDirect3DDevice9_SetGammaRamp(CPU *c, void *self, uint32_t a) {
-    uint32_t g_iSwapChain = R32(a + 0);
-    uint32_t g_Flags = R32(a + 4);
-    uint32_t g_pRamp = R32(a + 8);
-    uint32_t a_iSwapChain = g_iSwapChain;
-    uint32_t a_Flags = g_Flags;
-    void *a_pRamp = d3d9_in(c, g_pRamp, (uint64_t)(1536));
-    ((void (*)(void *, uint32_t, uint32_t, void *))D3D9_VTBL(self)[21])(self, a_iSwapChain, a_Flags, a_pRamp);
-    (void)c;
-}
-
 static void t_IDirect3DDevice9_SetIndices(CPU *c, void *self, uint32_t a) {
     uint32_t g_pIndexData = R32(a + 0);
     void *a_pIndexData = d3d9_iface_in(c, g_pIndexData, 0x400u);
@@ -1394,6 +1445,186 @@ static void t_IDirect3DDevice9_ValidateDevice(CPU *c, void *self, uint32_t a) {
     c->eax = (uint32_t)hr;
 }
 
+static void t_IDirect3DDevice9Ex_CheckDeviceState(CPU *c, void *self, uint32_t a) {
+    uint32_t g_hDestinationWindow = R32(a + 0);
+    void *a_hDestinationWindow = d3d9_hwnd(c, g_hDestinationWindow);
+    int32_t hr = ((int32_t (*)(void *, void *))D3D9_VTBL(self)[128])(self, a_hDestinationWindow);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3DDevice9Ex_ComposeRects(CPU *c, void *self, uint32_t a) {
+    uint32_t g_pSrc = R32(a + 0);
+    uint32_t g_pDst = R32(a + 4);
+    uint32_t g_pSrcRectDescs = R32(a + 8);
+    uint32_t g_NumRects = R32(a + 12);
+    uint32_t g_pDstRectDescs = R32(a + 16);
+    uint32_t g_Operation = R32(a + 20);
+    uint32_t g_Xoffset = R32(a + 24);
+    uint32_t g_Yoffset = R32(a + 28);
+    uint32_t a_NumRects = g_NumRects;
+    uint32_t a_Operation = g_Operation;
+    int32_t a_Xoffset = (int32_t)g_Xoffset;
+    int32_t a_Yoffset = (int32_t)g_Yoffset;
+    void *a_pSrc = d3d9_iface_in(c, g_pSrc, 0x800u);
+    void *a_pDst = d3d9_iface_in(c, g_pDst, 0x800u);
+    void *a_pSrcRectDescs = d3d9_iface_in(c, g_pSrcRectDescs, 0x200u);
+    void *a_pDstRectDescs = d3d9_iface_in(c, g_pDstRectDescs, 0x200u);
+    int32_t hr = ((int32_t (*)(void *, void *, void *, void *, uint32_t, void *, uint32_t, int32_t, int32_t))D3D9_VTBL(self)[120])(self, a_pSrc, a_pDst, a_pSrcRectDescs, a_NumRects, a_pDstRectDescs, a_Operation, a_Xoffset, a_Yoffset);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3DDevice9Ex_CreateDepthStencilSurfaceEx(CPU *c, void *self, uint32_t a) {
+    uint32_t g_Width = R32(a + 0);
+    uint32_t g_Height = R32(a + 4);
+    uint32_t g_Format = R32(a + 8);
+    uint32_t g_MultiSample = R32(a + 12);
+    uint32_t g_MultisampleQuality = R32(a + 16);
+    uint32_t g_Discard = R32(a + 20);
+    uint32_t g_ppSurface = R32(a + 24);
+    uint32_t g_pSharedHandle = R32(a + 28);
+    uint32_t g_Usage = R32(a + 32);
+    uint32_t a_Width = g_Width;
+    uint32_t a_Height = g_Height;
+    uint32_t a_Format = g_Format;
+    uint32_t a_MultiSample = g_MultiSample;
+    uint32_t a_MultisampleQuality = g_MultisampleQuality;
+    uint32_t a_Discard = g_Discard;
+    uint32_t a_Usage = g_Usage;
+    void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
+    int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *, uint32_t))D3D9_VTBL(self)[131])(self, a_Width, a_Height, a_Format, a_MultiSample, a_MultisampleQuality, a_Discard, a_ppSurface, a_pSharedHandle, a_Usage);
+    d3d9_iface_out(c, g_ppSurface, h_ppSurface, D3D9_IDirect3DSurface9);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3DDevice9Ex_CreateOffscreenPlainSurfaceEx(CPU *c, void *self, uint32_t a) {
+    uint32_t g_Width = R32(a + 0);
+    uint32_t g_Height = R32(a + 4);
+    uint32_t g_Format = R32(a + 8);
+    uint32_t g_Pool = R32(a + 12);
+    uint32_t g_ppSurface = R32(a + 16);
+    uint32_t g_pSharedHandle = R32(a + 20);
+    uint32_t g_Usage = R32(a + 24);
+    uint32_t a_Width = g_Width;
+    uint32_t a_Height = g_Height;
+    uint32_t a_Format = g_Format;
+    uint32_t a_Pool = g_Pool;
+    uint32_t a_Usage = g_Usage;
+    void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, (a_Pool == 2), &h_pSharedHandle);
+    int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *, uint32_t))D3D9_VTBL(self)[130])(self, a_Width, a_Height, a_Format, a_Pool, a_ppSurface, a_pSharedHandle, a_Usage);
+    d3d9_iface_out(c, g_ppSurface, h_ppSurface, D3D9_IDirect3DSurface9);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3DDevice9Ex_CreateRenderTargetEx(CPU *c, void *self, uint32_t a) {
+    uint32_t g_Width = R32(a + 0);
+    uint32_t g_Height = R32(a + 4);
+    uint32_t g_Format = R32(a + 8);
+    uint32_t g_MultiSample = R32(a + 12);
+    uint32_t g_MultisampleQuality = R32(a + 16);
+    uint32_t g_Lockable = R32(a + 20);
+    uint32_t g_ppSurface = R32(a + 24);
+    uint32_t g_pSharedHandle = R32(a + 28);
+    uint32_t g_Usage = R32(a + 32);
+    uint32_t a_Width = g_Width;
+    uint32_t a_Height = g_Height;
+    uint32_t a_Format = g_Format;
+    uint32_t a_MultiSample = g_MultiSample;
+    uint32_t a_MultisampleQuality = g_MultisampleQuality;
+    uint32_t a_Lockable = g_Lockable;
+    uint32_t a_Usage = g_Usage;
+    void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
+    void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
+    int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *, uint32_t))D3D9_VTBL(self)[129])(self, a_Width, a_Height, a_Format, a_MultiSample, a_MultisampleQuality, a_Lockable, a_ppSurface, a_pSharedHandle, a_Usage);
+    d3d9_iface_out(c, g_ppSurface, h_ppSurface, D3D9_IDirect3DSurface9);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3DDevice9Ex_GetDisplayModeEx(CPU *c, void *self, uint32_t a) {
+    uint32_t g_iSwapChain = R32(a + 0);
+    uint32_t g_pMode = R32(a + 4);
+    uint32_t g_pRotation = R32(a + 8);
+    uint32_t a_iSwapChain = g_iSwapChain;
+    void *a_pMode = d3d9_out(c, g_pMode, (uint64_t)(24));
+    void *a_pRotation = d3d9_out(c, g_pRotation, (uint64_t)(4));
+    int32_t hr = ((int32_t (*)(void *, uint32_t, void *, void *))D3D9_VTBL(self)[133])(self, a_iSwapChain, a_pMode, a_pRotation);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3DDevice9Ex_GetGPUThreadPriority(CPU *c, void *self, uint32_t a) {
+    uint32_t g_pPriority = R32(a + 0);
+    void *a_pPriority = d3d9_out(c, g_pPriority, (uint64_t)(4));
+    int32_t hr = ((int32_t (*)(void *, void *))D3D9_VTBL(self)[122])(self, a_pPriority);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3DDevice9Ex_GetMaximumFrameLatency(CPU *c, void *self, uint32_t a) {
+    uint32_t g_pMaxLatency = R32(a + 0);
+    void *a_pMaxLatency = d3d9_out(c, g_pMaxLatency, (uint64_t)(4));
+    int32_t hr = ((int32_t (*)(void *, void *))D3D9_VTBL(self)[127])(self, a_pMaxLatency);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3DDevice9Ex_PresentEx(CPU *c, void *self, uint32_t a) {
+    uint32_t g_pSourceRect = R32(a + 0);
+    uint32_t g_pDestRect = R32(a + 4);
+    uint32_t g_hDestWindowOverride = R32(a + 8);
+    uint32_t g_pDirtyRegion = R32(a + 12);
+    uint32_t g_dwFlags = R32(a + 16);
+    uint32_t a_dwFlags = g_dwFlags;
+    void *a_pSourceRect = d3d9_in(c, g_pSourceRect, (uint64_t)(16));
+    void *a_pDestRect = d3d9_in(c, g_pDestRect, (uint64_t)(16));
+    void *a_hDestWindowOverride = d3d9_hwnd(c, g_hDestWindowOverride);
+    const void *a_pDirtyRegion = d3d9_rgndata(c, g_pDirtyRegion);
+    int32_t hr = ((int32_t (*)(void *, void *, void *, void *, const void *, uint32_t))D3D9_VTBL(self)[121])(self, a_pSourceRect, a_pDestRect, a_hDestWindowOverride, a_pDirtyRegion, a_dwFlags);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3DDevice9Ex_ResetEx(CPU *c, void *self, uint32_t a) {
+    uint32_t g_pPresentationParameters = R32(a + 0);
+    uint32_t g_pFullscreenDisplayMode = R32(a + 4);
+    D3d9HostParams h_pPresentationParameters; void *a_pPresentationParameters = d3d9_params_in(c, g_pPresentationParameters, &h_pPresentationParameters, 1);
+    void *a_pFullscreenDisplayMode = d3d9_in(c, g_pFullscreenDisplayMode, (uint64_t)(24));
+    int32_t hr = ((int32_t (*)(void *, void *, void *))D3D9_VTBL(self)[132])(self, a_pPresentationParameters, a_pFullscreenDisplayMode);
+    if (hr >= 0) d3d9_params_out(c, g_pPresentationParameters, &h_pPresentationParameters);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3DDevice9Ex_SetConvolutionMonoKernel(CPU *c, void *self, uint32_t a) {
+    uint32_t g_width = R32(a + 0);
+    uint32_t g_height = R32(a + 4);
+    uint32_t g_rows = R32(a + 8);
+    uint32_t g_columns = R32(a + 12);
+    uint32_t a_width = g_width;
+    uint32_t a_height = g_height;
+    void *a_rows = d3d9_in(c, g_rows, (uint64_t)(4*a_width));
+    void *a_columns = d3d9_in(c, g_columns, (uint64_t)(4*a_height));
+    int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, void *, void *))D3D9_VTBL(self)[119])(self, a_width, a_height, a_rows, a_columns);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3DDevice9Ex_SetGPUThreadPriority(CPU *c, void *self, uint32_t a) {
+    uint32_t g_Priority = R32(a + 0);
+    int32_t a_Priority = (int32_t)g_Priority;
+    int32_t hr = ((int32_t (*)(void *, int32_t))D3D9_VTBL(self)[123])(self, a_Priority);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3DDevice9Ex_SetMaximumFrameLatency(CPU *c, void *self, uint32_t a) {
+    uint32_t g_MaxLatency = R32(a + 0);
+    uint32_t a_MaxLatency = g_MaxLatency;
+    int32_t hr = ((int32_t (*)(void *, uint32_t))D3D9_VTBL(self)[126])(self, a_MaxLatency);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3DDevice9Ex_WaitForVBlank(CPU *c, void *self, uint32_t a) {
+    uint32_t g_iSwapChain = R32(a + 0);
+    uint32_t a_iSwapChain = g_iSwapChain;
+    int32_t hr = ((int32_t (*)(void *, uint32_t))D3D9_VTBL(self)[124])(self, a_iSwapChain);
+    c->eax = (uint32_t)hr;
+}
+
 static void t_IDirect3DIndexBuffer9_GetDesc(CPU *c, void *self, uint32_t a) {
     uint32_t g_pDesc = R32(a + 0);
     void *a_pDesc = d3d9_out(c, g_pDesc, (uint64_t)(20));
@@ -1438,17 +1669,6 @@ static void t_IDirect3DPixelShader9_GetFunction(CPU *c, void *self, uint32_t a) 
     c->eax = (uint32_t)hr;
 }
 
-static void t_IDirect3DQuery9_GetData(CPU *c, void *self, uint32_t a) {
-    uint32_t g_pData = R32(a + 0);
-    uint32_t g_dwSize = R32(a + 4);
-    uint32_t g_dwGetDataFlags = R32(a + 8);
-    uint32_t a_dwSize = g_dwSize;
-    uint32_t a_dwGetDataFlags = g_dwGetDataFlags;
-    void *a_pData = d3d9_out(c, g_pData, (uint64_t)(a_dwSize));
-    int32_t hr = ((int32_t (*)(void *, void *, uint32_t, uint32_t))D3D9_VTBL(self)[7])(self, a_pData, a_dwSize, a_dwGetDataFlags);
-    c->eax = (uint32_t)hr;
-}
-
 static void t_IDirect3DQuery9_GetDataSize(CPU *c, void *self, uint32_t a) {
     c->eax = ((uint32_t (*)(void *))D3D9_VTBL(self)[5])(self);
     (void)a;
@@ -1465,13 +1685,6 @@ static void t_IDirect3DQuery9_GetDevice(CPU *c, void *self, uint32_t a) {
 static void t_IDirect3DQuery9_GetType(CPU *c, void *self, uint32_t a) {
     c->eax = ((uint32_t (*)(void *))D3D9_VTBL(self)[4])(self);
     (void)a;
-}
-
-static void t_IDirect3DQuery9_Issue(CPU *c, void *self, uint32_t a) {
-    uint32_t g_dwIssueFlags = R32(a + 0);
-    uint32_t a_dwIssueFlags = g_dwIssueFlags;
-    int32_t hr = ((int32_t (*)(void *, uint32_t))D3D9_VTBL(self)[6])(self, a_dwIssueFlags);
-    c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DResource9_FreePrivateData(CPU *c, void *self, uint32_t a) {
@@ -1627,6 +1840,22 @@ static void t_IDirect3DSwapChain9_Present(CPU *c, void *self, uint32_t a) {
     void *a_hDestWindowOverride = d3d9_hwnd(c, g_hDestWindowOverride);
     const void *a_pDirtyRegion = d3d9_rgndata(c, g_pDirtyRegion);
     int32_t hr = ((int32_t (*)(void *, void *, void *, void *, const void *, uint32_t))D3D9_VTBL(self)[3])(self, a_pSourceRect, a_pDestRect, a_hDestWindowOverride, a_pDirtyRegion, a_dwFlags);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3DSwapChain9Ex_GetDisplayModeEx(CPU *c, void *self, uint32_t a) {
+    uint32_t g_pMode = R32(a + 0);
+    uint32_t g_pRotation = R32(a + 4);
+    void *a_pMode = d3d9_out(c, g_pMode, (uint64_t)(24));
+    void *a_pRotation = d3d9_out(c, g_pRotation, (uint64_t)(4));
+    int32_t hr = ((int32_t (*)(void *, void *, void *))D3D9_VTBL(self)[12])(self, a_pMode, a_pRotation);
+    c->eax = (uint32_t)hr;
+}
+
+static void t_IDirect3DSwapChain9Ex_GetLastPresentCount(CPU *c, void *self, uint32_t a) {
+    uint32_t g_pLastPresentCount = R32(a + 0);
+    void *a_pLastPresentCount = d3d9_out(c, g_pLastPresentCount, (uint64_t)(4));
+    int32_t hr = ((int32_t (*)(void *, void *))D3D9_VTBL(self)[10])(self, a_pLastPresentCount);
     c->eax = (uint32_t)hr;
 }
 
@@ -1834,20 +2063,25 @@ static void t_IUnknown_AddRef(CPU *c, void *self, uint32_t a) {
 
 // Trié par nom (bsearch) ; slot : rang dans la vtable de l’interface qui définit la méthode.
 const D3d9Method rt_d3d9_methods[] = {
-    {"IDirect3D9::CheckDepthStencilMatch", t_IDirect3D9_CheckDepthStencilMatch, 0x2u, 12, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3D9::CheckDeviceFormat", t_IDirect3D9_CheckDeviceFormat, 0x2u, 10, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3D9::CheckDeviceFormatConversion", t_IDirect3D9_CheckDeviceFormatConversion, 0x2u, 13, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3D9::CheckDeviceMultiSampleType", t_IDirect3D9_CheckDeviceMultiSampleType, 0x2u, 11, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3D9::CheckDeviceType", t_IDirect3D9_CheckDeviceType, 0x2u, 9, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3D9::CreateDevice", t_IDirect3D9_CreateDevice, 0x2u, 16, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3D9::EnumAdapterModes", t_IDirect3D9_EnumAdapterModes, 0x2u, 7, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3D9::GetAdapterCount", t_IDirect3D9_GetAdapterCount, 0x2u, 4, D3D9_GENERATED, D3D9_RET_U32},
-    {"IDirect3D9::GetAdapterDisplayMode", t_IDirect3D9_GetAdapterDisplayMode, 0x2u, 8, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3D9::GetAdapterIdentifier", t_IDirect3D9_GetAdapterIdentifier, 0x2u, 5, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3D9::GetAdapterModeCount", t_IDirect3D9_GetAdapterModeCount, 0x2u, 6, D3D9_GENERATED, D3D9_RET_U32},
-    {"IDirect3D9::GetAdapterMonitor", NULL, 0x2u, 15, D3D9_STUB, D3D9_RET_U32},
-    {"IDirect3D9::GetDeviceCaps", t_IDirect3D9_GetDeviceCaps, 0x2u, 14, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3D9::RegisterSoftwareDevice", NULL, 0x2u, 3, D3D9_STUB, D3D9_RET_HRESULT},
+    {"IDirect3D9::CheckDepthStencilMatch", t_IDirect3D9_CheckDepthStencilMatch, 0x40002u, 12, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3D9::CheckDeviceFormat", t_IDirect3D9_CheckDeviceFormat, 0x40002u, 10, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3D9::CheckDeviceFormatConversion", t_IDirect3D9_CheckDeviceFormatConversion, 0x40002u, 13, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3D9::CheckDeviceMultiSampleType", t_IDirect3D9_CheckDeviceMultiSampleType, 0x40002u, 11, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3D9::CheckDeviceType", t_IDirect3D9_CheckDeviceType, 0x40002u, 9, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3D9::CreateDevice", t_IDirect3D9_CreateDevice, 0x40002u, 16, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3D9::EnumAdapterModes", t_IDirect3D9_EnumAdapterModes, 0x40002u, 7, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3D9::GetAdapterCount", t_IDirect3D9_GetAdapterCount, 0x40002u, 4, D3D9_GENERATED, D3D9_RET_U32},
+    {"IDirect3D9::GetAdapterDisplayMode", t_IDirect3D9_GetAdapterDisplayMode, 0x40002u, 8, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3D9::GetAdapterIdentifier", t_IDirect3D9_GetAdapterIdentifier, 0x40002u, 5, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3D9::GetAdapterModeCount", t_IDirect3D9_GetAdapterModeCount, 0x40002u, 6, D3D9_GENERATED, D3D9_RET_U32},
+    {"IDirect3D9::GetAdapterMonitor", NULL, 0x40002u, 15, D3D9_STUB, D3D9_RET_U32},
+    {"IDirect3D9::GetDeviceCaps", t_IDirect3D9_GetDeviceCaps, 0x40002u, 14, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3D9::RegisterSoftwareDevice", NULL, 0x40002u, 3, D3D9_STUB, D3D9_RET_HRESULT},
+    {"IDirect3D9Ex::CreateDeviceEx", t_IDirect3D9Ex_CreateDeviceEx, 0x40000u, 20, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3D9Ex::EnumAdapterModesEx", t_IDirect3D9Ex_EnumAdapterModesEx, 0x40000u, 18, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3D9Ex::GetAdapterDisplayModeEx", t_IDirect3D9Ex_GetAdapterDisplayModeEx, 0x40000u, 19, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3D9Ex::GetAdapterLUID", t_IDirect3D9Ex_GetAdapterLUID, 0x40000u, 21, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3D9Ex::GetAdapterModeCountEx", t_IDirect3D9Ex_GetAdapterModeCountEx, 0x40000u, 17, D3D9_GENERATED, D3D9_RET_U32},
     {"IDirect3DBaseTexture9::GenerateMipSubLevels", t_IDirect3DBaseTexture9_GenerateMipSubLevels, 0x1c0u, 16, D3D9_GENERATED, D3D9_RET_VOID},
     {"IDirect3DBaseTexture9::GetAutoGenFilterType", t_IDirect3DBaseTexture9_GetAutoGenFilterType, 0x1c0u, 15, D3D9_GENERATED, D3D9_RET_U32},
     {"IDirect3DBaseTexture9::GetLOD", t_IDirect3DBaseTexture9_GetLOD, 0x1c0u, 12, D3D9_GENERATED, D3D9_RET_U32},
@@ -1859,132 +2093,147 @@ const D3d9Method rt_d3d9_methods[] = {
     {"IDirect3DCubeTexture9::GetLevelDesc", t_IDirect3DCubeTexture9_GetLevelDesc, 0x100u, 17, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DCubeTexture9::LockRect", t_IDirect3DCubeTexture9_LockRect, 0x100u, 19, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DCubeTexture9::UnlockRect", t_IDirect3DCubeTexture9_UnlockRect, 0x100u, 20, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::BeginScene", t_IDirect3DDevice9_BeginScene, 0x4u, 41, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::BeginStateBlock", t_IDirect3DDevice9_BeginStateBlock, 0x4u, 60, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::Clear", t_IDirect3DDevice9_Clear, 0x4u, 43, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::ColorFill", t_IDirect3DDevice9_ColorFill, 0x4u, 35, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::CreateAdditionalSwapChain", t_IDirect3DDevice9_CreateAdditionalSwapChain, 0x4u, 13, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::CreateCubeTexture", t_IDirect3DDevice9_CreateCubeTexture, 0x4u, 25, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::CreateDepthStencilSurface", t_IDirect3DDevice9_CreateDepthStencilSurface, 0x4u, 29, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::CreateIndexBuffer", t_IDirect3DDevice9_CreateIndexBuffer, 0x4u, 27, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::CreateOffscreenPlainSurface", t_IDirect3DDevice9_CreateOffscreenPlainSurface, 0x4u, 36, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::CreatePixelShader", t_IDirect3DDevice9_CreatePixelShader, 0x4u, 106, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::CreateQuery", t_IDirect3DDevice9_CreateQuery, 0x4u, 118, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::CreateRenderTarget", t_IDirect3DDevice9_CreateRenderTarget, 0x4u, 28, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::CreateStateBlock", t_IDirect3DDevice9_CreateStateBlock, 0x4u, 59, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::CreateTexture", t_IDirect3DDevice9_CreateTexture, 0x4u, 23, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::CreateVertexBuffer", t_IDirect3DDevice9_CreateVertexBuffer, 0x4u, 26, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::CreateVertexDeclaration", t_IDirect3DDevice9_CreateVertexDeclaration, 0x4u, 86, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::CreateVertexShader", t_IDirect3DDevice9_CreateVertexShader, 0x4u, 91, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::CreateVolumeTexture", t_IDirect3DDevice9_CreateVolumeTexture, 0x4u, 24, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::DeletePatch", t_IDirect3DDevice9_DeletePatch, 0x4u, 117, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::DrawIndexedPrimitive", t_IDirect3DDevice9_DrawIndexedPrimitive, 0x4u, 82, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::DrawIndexedPrimitiveUP", t_IDirect3DDevice9_DrawIndexedPrimitiveUP, 0x4u, 84, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::DrawPrimitive", t_IDirect3DDevice9_DrawPrimitive, 0x4u, 81, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::DrawPrimitiveUP", t_IDirect3DDevice9_DrawPrimitiveUP, 0x4u, 83, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::DrawRectPatch", NULL, 0x4u, 115, D3D9_STUB, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::DrawTriPatch", NULL, 0x4u, 116, D3D9_STUB, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::EndScene", t_IDirect3DDevice9_EndScene, 0x4u, 42, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::EndStateBlock", t_IDirect3DDevice9_EndStateBlock, 0x4u, 61, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::EvictManagedResources", t_IDirect3DDevice9_EvictManagedResources, 0x4u, 5, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetAvailableTextureMem", t_IDirect3DDevice9_GetAvailableTextureMem, 0x4u, 4, D3D9_GENERATED, D3D9_RET_U32},
-    {"IDirect3DDevice9::GetBackBuffer", t_IDirect3DDevice9_GetBackBuffer, 0x4u, 18, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetClipPlane", t_IDirect3DDevice9_GetClipPlane, 0x4u, 56, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetClipStatus", t_IDirect3DDevice9_GetClipStatus, 0x4u, 63, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetCreationParameters", t_IDirect3DDevice9_GetCreationParameters, 0x4u, 9, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetCurrentTexturePalette", t_IDirect3DDevice9_GetCurrentTexturePalette, 0x4u, 74, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetDepthStencilSurface", t_IDirect3DDevice9_GetDepthStencilSurface, 0x4u, 40, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetDeviceCaps", t_IDirect3DDevice9_GetDeviceCaps, 0x4u, 7, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetDirect3D", t_IDirect3DDevice9_GetDirect3D, 0x4u, 6, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetDisplayMode", t_IDirect3DDevice9_GetDisplayMode, 0x4u, 8, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetFVF", t_IDirect3DDevice9_GetFVF, 0x4u, 90, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetFrontBufferData", t_IDirect3DDevice9_GetFrontBufferData, 0x4u, 33, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetGammaRamp", t_IDirect3DDevice9_GetGammaRamp, 0x4u, 22, D3D9_GENERATED, D3D9_RET_VOID},
-    {"IDirect3DDevice9::GetIndices", t_IDirect3DDevice9_GetIndices, 0x4u, 105, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetLight", t_IDirect3DDevice9_GetLight, 0x4u, 52, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetLightEnable", t_IDirect3DDevice9_GetLightEnable, 0x4u, 54, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetMaterial", t_IDirect3DDevice9_GetMaterial, 0x4u, 50, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetNPatchMode", t_IDirect3DDevice9_GetNPatchMode, 0x4u, 80, D3D9_GENERATED, D3D9_RET_FLOAT},
-    {"IDirect3DDevice9::GetNumberOfSwapChains", t_IDirect3DDevice9_GetNumberOfSwapChains, 0x4u, 15, D3D9_GENERATED, D3D9_RET_U32},
-    {"IDirect3DDevice9::GetPaletteEntries", t_IDirect3DDevice9_GetPaletteEntries, 0x4u, 72, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetPixelShader", t_IDirect3DDevice9_GetPixelShader, 0x4u, 108, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetPixelShaderConstantB", t_IDirect3DDevice9_GetPixelShaderConstantB, 0x4u, 114, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetPixelShaderConstantF", t_IDirect3DDevice9_GetPixelShaderConstantF, 0x4u, 110, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetPixelShaderConstantI", t_IDirect3DDevice9_GetPixelShaderConstantI, 0x4u, 112, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetRasterStatus", t_IDirect3DDevice9_GetRasterStatus, 0x4u, 19, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetRenderState", t_IDirect3DDevice9_GetRenderState, 0x4u, 58, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetRenderTarget", t_IDirect3DDevice9_GetRenderTarget, 0x4u, 38, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetRenderTargetData", t_IDirect3DDevice9_GetRenderTargetData, 0x4u, 32, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetSamplerState", t_IDirect3DDevice9_GetSamplerState, 0x4u, 68, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetScissorRect", t_IDirect3DDevice9_GetScissorRect, 0x4u, 76, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetSoftwareVertexProcessing", t_IDirect3DDevice9_GetSoftwareVertexProcessing, 0x4u, 78, D3D9_GENERATED, D3D9_RET_U32},
-    {"IDirect3DDevice9::GetStreamSource", t_IDirect3DDevice9_GetStreamSource, 0x4u, 101, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetStreamSourceFreq", t_IDirect3DDevice9_GetStreamSourceFreq, 0x4u, 103, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetSwapChain", t_IDirect3DDevice9_GetSwapChain, 0x4u, 14, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetTexture", t_IDirect3DDevice9_GetTexture, 0x4u, 64, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetTextureStageState", t_IDirect3DDevice9_GetTextureStageState, 0x4u, 66, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetTransform", t_IDirect3DDevice9_GetTransform, 0x4u, 45, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetVertexDeclaration", t_IDirect3DDevice9_GetVertexDeclaration, 0x4u, 88, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetVertexShader", t_IDirect3DDevice9_GetVertexShader, 0x4u, 93, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetVertexShaderConstantB", t_IDirect3DDevice9_GetVertexShaderConstantB, 0x4u, 99, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetVertexShaderConstantF", t_IDirect3DDevice9_GetVertexShaderConstantF, 0x4u, 95, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetVertexShaderConstantI", t_IDirect3DDevice9_GetVertexShaderConstantI, 0x4u, 97, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::GetViewport", t_IDirect3DDevice9_GetViewport, 0x4u, 48, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::LightEnable", t_IDirect3DDevice9_LightEnable, 0x4u, 53, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::MultiplyTransform", t_IDirect3DDevice9_MultiplyTransform, 0x4u, 46, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::Present", t_IDirect3DDevice9_Present, 0x4u, 17, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::ProcessVertices", t_IDirect3DDevice9_ProcessVertices, 0x4u, 85, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::Reset", t_IDirect3DDevice9_Reset, 0x4u, 16, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetClipPlane", t_IDirect3DDevice9_SetClipPlane, 0x4u, 55, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetClipStatus", t_IDirect3DDevice9_SetClipStatus, 0x4u, 62, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetCurrentTexturePalette", t_IDirect3DDevice9_SetCurrentTexturePalette, 0x4u, 73, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetCursorPosition", t_IDirect3DDevice9_SetCursorPosition, 0x4u, 11, D3D9_GENERATED, D3D9_RET_VOID},
-    {"IDirect3DDevice9::SetCursorProperties", t_IDirect3DDevice9_SetCursorProperties, 0x4u, 10, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetDepthStencilSurface", t_IDirect3DDevice9_SetDepthStencilSurface, 0x4u, 39, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetDialogBoxMode", t_IDirect3DDevice9_SetDialogBoxMode, 0x4u, 20, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetFVF", t_IDirect3DDevice9_SetFVF, 0x4u, 89, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetGammaRamp", t_IDirect3DDevice9_SetGammaRamp, 0x4u, 21, D3D9_GENERATED, D3D9_RET_VOID},
-    {"IDirect3DDevice9::SetIndices", t_IDirect3DDevice9_SetIndices, 0x4u, 104, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetLight", t_IDirect3DDevice9_SetLight, 0x4u, 51, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetMaterial", t_IDirect3DDevice9_SetMaterial, 0x4u, 49, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetNPatchMode", t_IDirect3DDevice9_SetNPatchMode, 0x4u, 79, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetPaletteEntries", t_IDirect3DDevice9_SetPaletteEntries, 0x4u, 71, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetPixelShader", t_IDirect3DDevice9_SetPixelShader, 0x4u, 107, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetPixelShaderConstantB", t_IDirect3DDevice9_SetPixelShaderConstantB, 0x4u, 113, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetPixelShaderConstantF", t_IDirect3DDevice9_SetPixelShaderConstantF, 0x4u, 109, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetPixelShaderConstantI", t_IDirect3DDevice9_SetPixelShaderConstantI, 0x4u, 111, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetRenderState", t_IDirect3DDevice9_SetRenderState, 0x4u, 57, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetRenderTarget", t_IDirect3DDevice9_SetRenderTarget, 0x4u, 37, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetSamplerState", t_IDirect3DDevice9_SetSamplerState, 0x4u, 69, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetScissorRect", t_IDirect3DDevice9_SetScissorRect, 0x4u, 75, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetSoftwareVertexProcessing", t_IDirect3DDevice9_SetSoftwareVertexProcessing, 0x4u, 77, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetStreamSource", t_IDirect3DDevice9_SetStreamSource, 0x4u, 100, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetStreamSourceFreq", t_IDirect3DDevice9_SetStreamSourceFreq, 0x4u, 102, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetTexture", t_IDirect3DDevice9_SetTexture, 0x4u, 65, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetTextureStageState", t_IDirect3DDevice9_SetTextureStageState, 0x4u, 67, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetTransform", t_IDirect3DDevice9_SetTransform, 0x4u, 44, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetVertexDeclaration", t_IDirect3DDevice9_SetVertexDeclaration, 0x4u, 87, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetVertexShader", t_IDirect3DDevice9_SetVertexShader, 0x4u, 92, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetVertexShaderConstantB", t_IDirect3DDevice9_SetVertexShaderConstantB, 0x4u, 98, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetVertexShaderConstantF", t_IDirect3DDevice9_SetVertexShaderConstantF, 0x4u, 94, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetVertexShaderConstantI", t_IDirect3DDevice9_SetVertexShaderConstantI, 0x4u, 96, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetViewport", t_IDirect3DDevice9_SetViewport, 0x4u, 47, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::ShowCursor", t_IDirect3DDevice9_ShowCursor, 0x4u, 12, D3D9_GENERATED, D3D9_RET_U32},
-    {"IDirect3DDevice9::StretchRect", t_IDirect3DDevice9_StretchRect, 0x4u, 34, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::TestCooperativeLevel", t_IDirect3DDevice9_TestCooperativeLevel, 0x4u, 3, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::UpdateSurface", t_IDirect3DDevice9_UpdateSurface, 0x4u, 30, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::UpdateTexture", t_IDirect3DDevice9_UpdateTexture, 0x4u, 31, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::ValidateDevice", t_IDirect3DDevice9_ValidateDevice, 0x4u, 70, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::BeginScene", t_IDirect3DDevice9_BeginScene, 0x80004u, 41, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::BeginStateBlock", t_IDirect3DDevice9_BeginStateBlock, 0x80004u, 60, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::Clear", t_IDirect3DDevice9_Clear, 0x80004u, 43, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::ColorFill", t_IDirect3DDevice9_ColorFill, 0x80004u, 35, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::CreateAdditionalSwapChain", t_IDirect3DDevice9_CreateAdditionalSwapChain, 0x80004u, 13, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::CreateCubeTexture", t_IDirect3DDevice9_CreateCubeTexture, 0x80004u, 25, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::CreateDepthStencilSurface", t_IDirect3DDevice9_CreateDepthStencilSurface, 0x80004u, 29, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::CreateIndexBuffer", t_IDirect3DDevice9_CreateIndexBuffer, 0x80004u, 27, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::CreateOffscreenPlainSurface", t_IDirect3DDevice9_CreateOffscreenPlainSurface, 0x80004u, 36, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::CreatePixelShader", t_IDirect3DDevice9_CreatePixelShader, 0x80004u, 106, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::CreateQuery", t_IDirect3DDevice9_CreateQuery, 0x80004u, 118, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::CreateRenderTarget", t_IDirect3DDevice9_CreateRenderTarget, 0x80004u, 28, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::CreateStateBlock", t_IDirect3DDevice9_CreateStateBlock, 0x80004u, 59, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::CreateTexture", t_IDirect3DDevice9_CreateTexture, 0x80004u, 23, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::CreateVertexBuffer", t_IDirect3DDevice9_CreateVertexBuffer, 0x80004u, 26, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::CreateVertexDeclaration", t_IDirect3DDevice9_CreateVertexDeclaration, 0x80004u, 86, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::CreateVertexShader", t_IDirect3DDevice9_CreateVertexShader, 0x80004u, 91, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::CreateVolumeTexture", t_IDirect3DDevice9_CreateVolumeTexture, 0x80004u, 24, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::DeletePatch", t_IDirect3DDevice9_DeletePatch, 0x80004u, 117, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::DrawIndexedPrimitive", t_IDirect3DDevice9_DrawIndexedPrimitive, 0x80004u, 82, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::DrawIndexedPrimitiveUP", t_IDirect3DDevice9_DrawIndexedPrimitiveUP, 0x80004u, 84, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::DrawPrimitive", t_IDirect3DDevice9_DrawPrimitive, 0x80004u, 81, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::DrawPrimitiveUP", t_IDirect3DDevice9_DrawPrimitiveUP, 0x80004u, 83, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::DrawRectPatch", NULL, 0x80004u, 115, D3D9_STUB, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::DrawTriPatch", NULL, 0x80004u, 116, D3D9_STUB, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::EndScene", t_IDirect3DDevice9_EndScene, 0x80004u, 42, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::EndStateBlock", t_IDirect3DDevice9_EndStateBlock, 0x80004u, 61, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::EvictManagedResources", t_IDirect3DDevice9_EvictManagedResources, 0x80004u, 5, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetAvailableTextureMem", t_IDirect3DDevice9_GetAvailableTextureMem, 0x80004u, 4, D3D9_GENERATED, D3D9_RET_U32},
+    {"IDirect3DDevice9::GetBackBuffer", t_IDirect3DDevice9_GetBackBuffer, 0x80004u, 18, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetClipPlane", t_IDirect3DDevice9_GetClipPlane, 0x80004u, 56, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetClipStatus", t_IDirect3DDevice9_GetClipStatus, 0x80004u, 63, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetCreationParameters", t_IDirect3DDevice9_GetCreationParameters, 0x80004u, 9, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetCurrentTexturePalette", t_IDirect3DDevice9_GetCurrentTexturePalette, 0x80004u, 74, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetDepthStencilSurface", t_IDirect3DDevice9_GetDepthStencilSurface, 0x80004u, 40, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetDeviceCaps", t_IDirect3DDevice9_GetDeviceCaps, 0x80004u, 7, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetDirect3D", t_IDirect3DDevice9_GetDirect3D, 0x80004u, 6, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetDisplayMode", t_IDirect3DDevice9_GetDisplayMode, 0x80004u, 8, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetFVF", t_IDirect3DDevice9_GetFVF, 0x80004u, 90, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetFrontBufferData", t_IDirect3DDevice9_GetFrontBufferData, 0x80004u, 33, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetGammaRamp", t_IDirect3DDevice9_GetGammaRamp, 0x80004u, 22, D3D9_GENERATED, D3D9_RET_VOID},
+    {"IDirect3DDevice9::GetIndices", t_IDirect3DDevice9_GetIndices, 0x80004u, 105, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetLight", t_IDirect3DDevice9_GetLight, 0x80004u, 52, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetLightEnable", t_IDirect3DDevice9_GetLightEnable, 0x80004u, 54, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetMaterial", t_IDirect3DDevice9_GetMaterial, 0x80004u, 50, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetNPatchMode", t_IDirect3DDevice9_GetNPatchMode, 0x80004u, 80, D3D9_GENERATED, D3D9_RET_FLOAT},
+    {"IDirect3DDevice9::GetNumberOfSwapChains", t_IDirect3DDevice9_GetNumberOfSwapChains, 0x80004u, 15, D3D9_GENERATED, D3D9_RET_U32},
+    {"IDirect3DDevice9::GetPaletteEntries", t_IDirect3DDevice9_GetPaletteEntries, 0x80004u, 72, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetPixelShader", t_IDirect3DDevice9_GetPixelShader, 0x80004u, 108, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetPixelShaderConstantB", t_IDirect3DDevice9_GetPixelShaderConstantB, 0x80004u, 114, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetPixelShaderConstantF", t_IDirect3DDevice9_GetPixelShaderConstantF, 0x80004u, 110, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetPixelShaderConstantI", t_IDirect3DDevice9_GetPixelShaderConstantI, 0x80004u, 112, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetRasterStatus", t_IDirect3DDevice9_GetRasterStatus, 0x80004u, 19, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetRenderState", t_IDirect3DDevice9_GetRenderState, 0x80004u, 58, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetRenderTarget", t_IDirect3DDevice9_GetRenderTarget, 0x80004u, 38, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetRenderTargetData", t_IDirect3DDevice9_GetRenderTargetData, 0x80004u, 32, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetSamplerState", t_IDirect3DDevice9_GetSamplerState, 0x80004u, 68, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetScissorRect", t_IDirect3DDevice9_GetScissorRect, 0x80004u, 76, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetSoftwareVertexProcessing", t_IDirect3DDevice9_GetSoftwareVertexProcessing, 0x80004u, 78, D3D9_GENERATED, D3D9_RET_U32},
+    {"IDirect3DDevice9::GetStreamSource", t_IDirect3DDevice9_GetStreamSource, 0x80004u, 101, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetStreamSourceFreq", t_IDirect3DDevice9_GetStreamSourceFreq, 0x80004u, 103, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetSwapChain", t_IDirect3DDevice9_GetSwapChain, 0x80004u, 14, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetTexture", t_IDirect3DDevice9_GetTexture, 0x80004u, 64, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetTextureStageState", t_IDirect3DDevice9_GetTextureStageState, 0x80004u, 66, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetTransform", t_IDirect3DDevice9_GetTransform, 0x80004u, 45, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetVertexDeclaration", t_IDirect3DDevice9_GetVertexDeclaration, 0x80004u, 88, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetVertexShader", t_IDirect3DDevice9_GetVertexShader, 0x80004u, 93, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetVertexShaderConstantB", t_IDirect3DDevice9_GetVertexShaderConstantB, 0x80004u, 99, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetVertexShaderConstantF", t_IDirect3DDevice9_GetVertexShaderConstantF, 0x80004u, 95, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetVertexShaderConstantI", t_IDirect3DDevice9_GetVertexShaderConstantI, 0x80004u, 97, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::GetViewport", t_IDirect3DDevice9_GetViewport, 0x80004u, 48, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::LightEnable", t_IDirect3DDevice9_LightEnable, 0x80004u, 53, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::MultiplyTransform", t_IDirect3DDevice9_MultiplyTransform, 0x80004u, 46, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::Present", t_IDirect3DDevice9_Present, 0x80004u, 17, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::ProcessVertices", t_IDirect3DDevice9_ProcessVertices, 0x80004u, 85, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::Reset", t_IDirect3DDevice9_Reset, 0x80004u, 16, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetClipPlane", t_IDirect3DDevice9_SetClipPlane, 0x80004u, 55, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetClipStatus", t_IDirect3DDevice9_SetClipStatus, 0x80004u, 62, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetCurrentTexturePalette", t_IDirect3DDevice9_SetCurrentTexturePalette, 0x80004u, 73, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetCursorPosition", t_IDirect3DDevice9_SetCursorPosition, 0x80004u, 11, D3D9_GENERATED, D3D9_RET_VOID},
+    {"IDirect3DDevice9::SetCursorProperties", t_IDirect3DDevice9_SetCursorProperties, 0x80004u, 10, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetDepthStencilSurface", t_IDirect3DDevice9_SetDepthStencilSurface, 0x80004u, 39, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetDialogBoxMode", t_IDirect3DDevice9_SetDialogBoxMode, 0x80004u, 20, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetFVF", t_IDirect3DDevice9_SetFVF, 0x80004u, 89, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetGammaRamp", d3d9_manual_IDirect3DDevice9_SetGammaRamp, 0x80004u, 21, D3D9_MANUAL, D3D9_RET_VOID},
+    {"IDirect3DDevice9::SetIndices", t_IDirect3DDevice9_SetIndices, 0x80004u, 104, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetLight", t_IDirect3DDevice9_SetLight, 0x80004u, 51, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetMaterial", t_IDirect3DDevice9_SetMaterial, 0x80004u, 49, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetNPatchMode", t_IDirect3DDevice9_SetNPatchMode, 0x80004u, 79, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetPaletteEntries", t_IDirect3DDevice9_SetPaletteEntries, 0x80004u, 71, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetPixelShader", t_IDirect3DDevice9_SetPixelShader, 0x80004u, 107, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetPixelShaderConstantB", t_IDirect3DDevice9_SetPixelShaderConstantB, 0x80004u, 113, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetPixelShaderConstantF", t_IDirect3DDevice9_SetPixelShaderConstantF, 0x80004u, 109, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetPixelShaderConstantI", t_IDirect3DDevice9_SetPixelShaderConstantI, 0x80004u, 111, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetRenderState", t_IDirect3DDevice9_SetRenderState, 0x80004u, 57, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetRenderTarget", t_IDirect3DDevice9_SetRenderTarget, 0x80004u, 37, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetSamplerState", t_IDirect3DDevice9_SetSamplerState, 0x80004u, 69, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetScissorRect", t_IDirect3DDevice9_SetScissorRect, 0x80004u, 75, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetSoftwareVertexProcessing", t_IDirect3DDevice9_SetSoftwareVertexProcessing, 0x80004u, 77, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetStreamSource", t_IDirect3DDevice9_SetStreamSource, 0x80004u, 100, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetStreamSourceFreq", t_IDirect3DDevice9_SetStreamSourceFreq, 0x80004u, 102, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetTexture", t_IDirect3DDevice9_SetTexture, 0x80004u, 65, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetTextureStageState", t_IDirect3DDevice9_SetTextureStageState, 0x80004u, 67, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetTransform", t_IDirect3DDevice9_SetTransform, 0x80004u, 44, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetVertexDeclaration", t_IDirect3DDevice9_SetVertexDeclaration, 0x80004u, 87, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetVertexShader", t_IDirect3DDevice9_SetVertexShader, 0x80004u, 92, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetVertexShaderConstantB", t_IDirect3DDevice9_SetVertexShaderConstantB, 0x80004u, 98, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetVertexShaderConstantF", t_IDirect3DDevice9_SetVertexShaderConstantF, 0x80004u, 94, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetVertexShaderConstantI", t_IDirect3DDevice9_SetVertexShaderConstantI, 0x80004u, 96, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::SetViewport", t_IDirect3DDevice9_SetViewport, 0x80004u, 47, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::ShowCursor", t_IDirect3DDevice9_ShowCursor, 0x80004u, 12, D3D9_GENERATED, D3D9_RET_U32},
+    {"IDirect3DDevice9::StretchRect", t_IDirect3DDevice9_StretchRect, 0x80004u, 34, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::TestCooperativeLevel", t_IDirect3DDevice9_TestCooperativeLevel, 0x80004u, 3, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::UpdateSurface", t_IDirect3DDevice9_UpdateSurface, 0x80004u, 30, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::UpdateTexture", t_IDirect3DDevice9_UpdateTexture, 0x80004u, 31, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9::ValidateDevice", t_IDirect3DDevice9_ValidateDevice, 0x80004u, 70, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9Ex::CheckDeviceState", t_IDirect3DDevice9Ex_CheckDeviceState, 0x80000u, 128, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9Ex::CheckResourceResidency", NULL, 0x80000u, 125, D3D9_STUB, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9Ex::ComposeRects", t_IDirect3DDevice9Ex_ComposeRects, 0x80000u, 120, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9Ex::CreateDepthStencilSurfaceEx", t_IDirect3DDevice9Ex_CreateDepthStencilSurfaceEx, 0x80000u, 131, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9Ex::CreateOffscreenPlainSurfaceEx", t_IDirect3DDevice9Ex_CreateOffscreenPlainSurfaceEx, 0x80000u, 130, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9Ex::CreateRenderTargetEx", t_IDirect3DDevice9Ex_CreateRenderTargetEx, 0x80000u, 129, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9Ex::GetDisplayModeEx", t_IDirect3DDevice9Ex_GetDisplayModeEx, 0x80000u, 133, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9Ex::GetGPUThreadPriority", t_IDirect3DDevice9Ex_GetGPUThreadPriority, 0x80000u, 122, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9Ex::GetMaximumFrameLatency", t_IDirect3DDevice9Ex_GetMaximumFrameLatency, 0x80000u, 127, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9Ex::PresentEx", t_IDirect3DDevice9Ex_PresentEx, 0x80000u, 121, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9Ex::ResetEx", t_IDirect3DDevice9Ex_ResetEx, 0x80000u, 132, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9Ex::SetConvolutionMonoKernel", t_IDirect3DDevice9Ex_SetConvolutionMonoKernel, 0x80000u, 119, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9Ex::SetGPUThreadPriority", t_IDirect3DDevice9Ex_SetGPUThreadPriority, 0x80000u, 123, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9Ex::SetMaximumFrameLatency", t_IDirect3DDevice9Ex_SetMaximumFrameLatency, 0x80000u, 126, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DDevice9Ex::WaitForVBlank", t_IDirect3DDevice9Ex_WaitForVBlank, 0x80000u, 124, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DIndexBuffer9::GetDesc", t_IDirect3DIndexBuffer9_GetDesc, 0x400u, 13, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DIndexBuffer9::Lock", t_IDirect3DIndexBuffer9_Lock, 0x400u, 11, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DIndexBuffer9::Unlock", t_IDirect3DIndexBuffer9_Unlock, 0x400u, 12, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DPixelShader9::GetDevice", t_IDirect3DPixelShader9_GetDevice, 0x8000u, 3, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DPixelShader9::GetFunction", t_IDirect3DPixelShader9_GetFunction, 0x8000u, 4, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DQuery9::GetData", t_IDirect3DQuery9_GetData, 0x20000u, 7, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DQuery9::GetData", d3d9_manual_IDirect3DQuery9_GetData, 0x20000u, 7, D3D9_MANUAL, D3D9_RET_HRESULT},
     {"IDirect3DQuery9::GetDataSize", t_IDirect3DQuery9_GetDataSize, 0x20000u, 5, D3D9_GENERATED, D3D9_RET_U32},
     {"IDirect3DQuery9::GetDevice", t_IDirect3DQuery9_GetDevice, 0x20000u, 3, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DQuery9::GetType", t_IDirect3DQuery9_GetType, 0x20000u, 4, D3D9_GENERATED, D3D9_RET_U32},
-    {"IDirect3DQuery9::Issue", t_IDirect3DQuery9_Issue, 0x20000u, 6, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DQuery9::Issue", d3d9_manual_IDirect3DQuery9_Issue, 0x20000u, 6, D3D9_MANUAL, D3D9_RET_HRESULT},
     {"IDirect3DResource9::FreePrivateData", t_IDirect3DResource9_FreePrivateData, 0xfc0u, 6, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DResource9::GetDevice", t_IDirect3DResource9_GetDevice, 0xfc0u, 3, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DResource9::GetPriority", t_IDirect3DResource9_GetPriority, 0xfc0u, 8, D3D9_GENERATED, D3D9_RET_U32},
@@ -2002,13 +2251,16 @@ const D3d9Method rt_d3d9_methods[] = {
     {"IDirect3DSurface9::LockRect", t_IDirect3DSurface9_LockRect, 0x800u, 13, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DSurface9::ReleaseDC", NULL, 0x800u, 16, D3D9_STUB, D3D9_RET_HRESULT},
     {"IDirect3DSurface9::UnlockRect", t_IDirect3DSurface9_UnlockRect, 0x800u, 14, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DSwapChain9::GetBackBuffer", t_IDirect3DSwapChain9_GetBackBuffer, 0x8u, 5, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DSwapChain9::GetDevice", t_IDirect3DSwapChain9_GetDevice, 0x8u, 8, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DSwapChain9::GetDisplayMode", t_IDirect3DSwapChain9_GetDisplayMode, 0x8u, 7, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DSwapChain9::GetFrontBufferData", t_IDirect3DSwapChain9_GetFrontBufferData, 0x8u, 4, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DSwapChain9::GetPresentParameters", t_IDirect3DSwapChain9_GetPresentParameters, 0x8u, 9, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DSwapChain9::GetRasterStatus", t_IDirect3DSwapChain9_GetRasterStatus, 0x8u, 6, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DSwapChain9::Present", t_IDirect3DSwapChain9_Present, 0x8u, 3, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DSwapChain9::GetBackBuffer", t_IDirect3DSwapChain9_GetBackBuffer, 0x100008u, 5, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DSwapChain9::GetDevice", t_IDirect3DSwapChain9_GetDevice, 0x100008u, 8, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DSwapChain9::GetDisplayMode", t_IDirect3DSwapChain9_GetDisplayMode, 0x100008u, 7, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DSwapChain9::GetFrontBufferData", t_IDirect3DSwapChain9_GetFrontBufferData, 0x100008u, 4, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DSwapChain9::GetPresentParameters", t_IDirect3DSwapChain9_GetPresentParameters, 0x100008u, 9, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DSwapChain9::GetRasterStatus", t_IDirect3DSwapChain9_GetRasterStatus, 0x100008u, 6, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DSwapChain9::Present", t_IDirect3DSwapChain9_Present, 0x100008u, 3, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DSwapChain9Ex::GetDisplayModeEx", t_IDirect3DSwapChain9Ex_GetDisplayModeEx, 0x100000u, 12, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DSwapChain9Ex::GetLastPresentCount", t_IDirect3DSwapChain9Ex_GetLastPresentCount, 0x100000u, 10, D3D9_GENERATED, D3D9_RET_HRESULT},
+    {"IDirect3DSwapChain9Ex::GetPresentStats", NULL, 0x100000u, 11, D3D9_STUB, D3D9_RET_HRESULT},
     {"IDirect3DTexture9::AddDirtyRect", t_IDirect3DTexture9_AddDirtyRect, 0x40u, 21, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DTexture9::GetLevelDesc", t_IDirect3DTexture9_GetLevelDesc, 0x40u, 17, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DTexture9::GetSurfaceLevel", t_IDirect3DTexture9_GetSurfaceLevel, 0x40u, 18, D3D9_GENERATED, D3D9_RET_HRESULT},
@@ -2034,33 +2286,36 @@ const D3d9Method rt_d3d9_methods[] = {
     {"IDirect3DVolumeTexture9::GetVolumeLevel", t_IDirect3DVolumeTexture9_GetVolumeLevel, 0x80u, 18, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DVolumeTexture9::LockBox", t_IDirect3DVolumeTexture9_LockBox, 0x80u, 19, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DVolumeTexture9::UnlockBox", t_IDirect3DVolumeTexture9_UnlockBox, 0x80u, 20, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IUnknown::AddRef", t_IUnknown_AddRef, 0x3ffceu, 1, D3D9_GENERATED, D3D9_RET_U32},
-    {"IUnknown::QueryInterface", d3d9_manual_IUnknown_QueryInterface, 0x3ffceu, 0, D3D9_MANUAL, D3D9_RET_HRESULT},
-    {"IUnknown::Release", d3d9_manual_IUnknown_Release, 0x3ffceu, 2, D3D9_MANUAL, D3D9_RET_U32},
+    {"IUnknown::AddRef", t_IUnknown_AddRef, 0x1fffceu, 1, D3D9_GENERATED, D3D9_RET_U32},
+    {"IUnknown::QueryInterface", d3d9_manual_IUnknown_QueryInterface, 0x1fffceu, 0, D3D9_MANUAL, D3D9_RET_HRESULT},
+    {"IUnknown::Release", d3d9_manual_IUnknown_Release, 0x1fffceu, 2, D3D9_MANUAL, D3D9_RET_U32},
 };
-const unsigned rt_d3d9_method_count = 203;
+const unsigned rt_d3d9_method_count = 226;
 
-static const uint16_t slots_IDirect3D9[] = {201, 200, 202, 13, 7, 9, 10, 6, 8, 4, 1, 3, 0, 2, 12, 11, 5};
-static const uint16_t slots_IDirect3DDevice9[] = {201, 200, 202, 137, 53, 52, 61, 60, 62, 57, 105, 104, 135, 29, 86, 71, 100, 98, 54, 77, 107, 109, 65, 38, 42, 30, 39, 32, 36, 31, 138, 139, 80, 64, 136, 28, 33, 120, 79, 106, 59, 25, 50, 27, 128, 89, 97, 134, 95, 112, 69, 111, 67, 96, 68, 101, 55, 119, 78, 37, 26, 51, 102, 56, 87, 126, 88, 127, 81, 121, 140, 114, 72, 103, 58, 122, 82, 123, 83, 113, 70, 46, 44, 47, 45, 99, 40, 129, 90, 108, 63, 41, 130, 91, 132, 93, 133, 94, 131, 92, 124, 84, 125, 85, 110, 66, 34, 115, 73, 117, 75, 118, 76, 116, 74, 48, 49, 43, 35};
-static const uint16_t slots_IDirect3DSwapChain9[] = {201, 200, 202, 174, 171, 168, 173, 170, 169, 172};
-static const uint16_t slots_IDirect3DTexture9[] = {201, 200, 202, 152, 158, 154, 151, 157, 153, 156, 155, 19, 16, 17, 18, 15, 14, 176, 177, 178, 179, 175};
-static const uint16_t slots_IDirect3DVolumeTexture9[] = {201, 200, 202, 152, 158, 154, 151, 157, 153, 156, 155, 19, 16, 17, 18, 15, 14, 196, 197, 198, 199, 195};
-static const uint16_t slots_IDirect3DCubeTexture9[] = {201, 200, 202, 152, 158, 154, 151, 157, 153, 156, 155, 19, 16, 17, 18, 15, 14, 22, 21, 23, 24, 20};
-static const uint16_t slots_IDirect3DVertexBuffer9[] = {201, 200, 202, 152, 158, 154, 151, 157, 153, 156, 155, 181, 182, 180};
-static const uint16_t slots_IDirect3DIndexBuffer9[] = {201, 200, 202, 152, 158, 154, 151, 157, 153, 156, 155, 142, 143, 141};
-static const uint16_t slots_IDirect3DSurface9[] = {201, 200, 202, 152, 158, 154, 151, 157, 153, 156, 155, 162, 164, 165, 167, 163, 166};
-static const uint16_t slots_IDirect3DVolume9[] = {201, 200, 202, 190, 193, 191, 187, 188, 189, 192, 194};
-static const uint16_t slots_IDirect3DVertexDeclaration9[] = {201, 200, 202, 184, 183};
-static const uint16_t slots_IDirect3DVertexShader9[] = {201, 200, 202, 185, 186};
-static const uint16_t slots_IDirect3DPixelShader9[] = {201, 200, 202, 144, 145};
-static const uint16_t slots_IDirect3DStateBlock9[] = {201, 200, 202, 161, 160, 159};
-static const uint16_t slots_IDirect3DQuery9[] = {201, 200, 202, 148, 149, 147, 150, 146};
+static const uint16_t slots_IDirect3D9[] = {224, 223, 225, 13, 7, 9, 10, 6, 8, 4, 1, 3, 0, 2, 12, 11, 5};
+static const uint16_t slots_IDirect3DDevice9[] = {224, 223, 225, 142, 58, 57, 66, 65, 67, 62, 110, 109, 140, 34, 91, 76, 105, 103, 59, 82, 112, 114, 70, 43, 47, 35, 44, 37, 41, 36, 143, 144, 85, 69, 141, 33, 38, 125, 84, 111, 64, 30, 55, 32, 133, 94, 102, 139, 100, 117, 74, 116, 72, 101, 73, 106, 60, 124, 83, 42, 31, 56, 107, 61, 92, 131, 93, 132, 86, 126, 145, 119, 77, 108, 63, 127, 87, 128, 88, 118, 75, 51, 49, 52, 50, 104, 45, 134, 95, 113, 68, 46, 135, 96, 137, 98, 138, 99, 136, 97, 129, 89, 130, 90, 115, 71, 39, 120, 78, 122, 80, 123, 81, 121, 79, 53, 54, 48, 40};
+static const uint16_t slots_IDirect3DSwapChain9[] = {224, 223, 225, 194, 191, 188, 193, 190, 189, 192};
+static const uint16_t slots_IDirect3DTexture9[] = {224, 223, 225, 172, 178, 174, 171, 177, 173, 176, 175, 24, 21, 22, 23, 20, 19, 199, 200, 201, 202, 198};
+static const uint16_t slots_IDirect3DVolumeTexture9[] = {224, 223, 225, 172, 178, 174, 171, 177, 173, 176, 175, 24, 21, 22, 23, 20, 19, 219, 220, 221, 222, 218};
+static const uint16_t slots_IDirect3DCubeTexture9[] = {224, 223, 225, 172, 178, 174, 171, 177, 173, 176, 175, 24, 21, 22, 23, 20, 19, 27, 26, 28, 29, 25};
+static const uint16_t slots_IDirect3DVertexBuffer9[] = {224, 223, 225, 172, 178, 174, 171, 177, 173, 176, 175, 204, 205, 203};
+static const uint16_t slots_IDirect3DIndexBuffer9[] = {224, 223, 225, 172, 178, 174, 171, 177, 173, 176, 175, 162, 163, 161};
+static const uint16_t slots_IDirect3DSurface9[] = {224, 223, 225, 172, 178, 174, 171, 177, 173, 176, 175, 182, 184, 185, 187, 183, 186};
+static const uint16_t slots_IDirect3DVolume9[] = {224, 223, 225, 213, 216, 214, 210, 211, 212, 215, 217};
+static const uint16_t slots_IDirect3DVertexDeclaration9[] = {224, 223, 225, 207, 206};
+static const uint16_t slots_IDirect3DVertexShader9[] = {224, 223, 225, 208, 209};
+static const uint16_t slots_IDirect3DPixelShader9[] = {224, 223, 225, 164, 165};
+static const uint16_t slots_IDirect3DStateBlock9[] = {224, 223, 225, 181, 180, 179};
+static const uint16_t slots_IDirect3DQuery9[] = {224, 223, 225, 168, 169, 167, 170, 166};
+static const uint16_t slots_IDirect3D9Ex[] = {224, 223, 225, 13, 7, 9, 10, 6, 8, 4, 1, 3, 0, 2, 12, 11, 5, 18, 15, 16, 14, 17};
+static const uint16_t slots_IDirect3DDevice9Ex[] = {224, 223, 225, 142, 58, 57, 66, 65, 67, 62, 110, 109, 140, 34, 91, 76, 105, 103, 59, 82, 112, 114, 70, 43, 47, 35, 44, 37, 41, 36, 143, 144, 85, 69, 141, 33, 38, 125, 84, 111, 64, 30, 55, 32, 133, 94, 102, 139, 100, 117, 74, 116, 72, 101, 73, 106, 60, 124, 83, 42, 31, 56, 107, 61, 92, 131, 93, 132, 86, 126, 145, 119, 77, 108, 63, 127, 87, 128, 88, 118, 75, 51, 49, 52, 50, 104, 45, 134, 95, 113, 68, 46, 135, 96, 137, 98, 138, 99, 136, 97, 129, 89, 130, 90, 115, 71, 39, 120, 78, 122, 80, 123, 81, 121, 79, 53, 54, 48, 40, 157, 148, 155, 153, 158, 160, 147, 159, 154, 146, 151, 150, 149, 156, 152};
+static const uint16_t slots_IDirect3DSwapChain9Ex[] = {224, 223, 225, 194, 191, 188, 193, 190, 189, 192, 196, 197, 195};
 
 const D3d9Interface rt_d3d9_interfaces[] = {
-    {"IUnknown", -1, 1, 0x3ffceu, {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46}, NULL, 0},
-    {"IDirect3D9", D3D9_IUnknown, 0, 0x2u, {0xca, 0xcb, 0xbd, 0x81, 0xd4, 0x64, 0x6d, 0x42, 0xae, 0x8d, 0xad, 0x01, 0x47, 0xf4, 0x27, 0x5c}, slots_IDirect3D9, 17},
-    {"IDirect3DDevice9", D3D9_IUnknown, 0, 0x4u, {0x96, 0x3b, 0x22, 0xd0, 0x7a, 0xbf, 0xfd, 0x43, 0x92, 0xbd, 0xa4, 0x3b, 0x0d, 0x82, 0xb9, 0xeb}, slots_IDirect3DDevice9, 119},
-    {"IDirect3DSwapChain9", D3D9_IUnknown, 0, 0x8u, {0xf2, 0x50, 0x49, 0x79, 0xfc, 0xad, 0x8a, 0x45, 0x90, 0x5e, 0x10, 0xa1, 0x0b, 0x0b, 0x50, 0x3b}, slots_IDirect3DSwapChain9, 10},
+    {"IUnknown", -1, 1, 0x1fffceu, {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46}, NULL, 0},
+    {"IDirect3D9", D3D9_IUnknown, 0, 0x40002u, {0xca, 0xcb, 0xbd, 0x81, 0xd4, 0x64, 0x6d, 0x42, 0xae, 0x8d, 0xad, 0x01, 0x47, 0xf4, 0x27, 0x5c}, slots_IDirect3D9, 17},
+    {"IDirect3DDevice9", D3D9_IUnknown, 0, 0x80004u, {0x96, 0x3b, 0x22, 0xd0, 0x7a, 0xbf, 0xfd, 0x43, 0x92, 0xbd, 0xa4, 0x3b, 0x0d, 0x82, 0xb9, 0xeb}, slots_IDirect3DDevice9, 119},
+    {"IDirect3DSwapChain9", D3D9_IUnknown, 0, 0x100008u, {0xf2, 0x50, 0x49, 0x79, 0xfc, 0xad, 0x8a, 0x45, 0x90, 0x5e, 0x10, 0xa1, 0x0b, 0x0b, 0x50, 0x3b}, slots_IDirect3DSwapChain9, 10},
     {"IDirect3DResource9", D3D9_IUnknown, 1, 0xfc0u, {0x5d, 0xc0, 0xee, 0x05, 0x7d, 0x8f, 0x62, 0x43, 0xb9, 0x99, 0xd1, 0xba, 0xf3, 0x57, 0xc7, 0x04}, NULL, 0},
     {"IDirect3DBaseTexture9", D3D9_IDirect3DResource9, 1, 0x1c0u, {0x7e, 0xa8, 0x0c, 0x58, 0x3c, 0x1d, 0x54, 0x4d, 0x99, 0x1d, 0xb7, 0xd3, 0xe3, 0xc2, 0x98, 0xce}, NULL, 0},
     {"IDirect3DTexture9", D3D9_IDirect3DBaseTexture9, 0, 0x40u, {0x27, 0x12, 0xc3, 0x85, 0xe5, 0x3d, 0x00, 0x4f, 0x9b, 0x3a, 0xf1, 0x1a, 0xc3, 0x8c, 0x18, 0xb5}, slots_IDirect3DTexture9, 22},
@@ -2075,5 +2330,8 @@ const D3d9Interface rt_d3d9_interfaces[] = {
     {"IDirect3DPixelShader9", D3D9_IUnknown, 0, 0x8000u, {0xdc, 0xdb, 0x3b, 0x6d, 0x02, 0x5b, 0x15, 0x44, 0xb8, 0x52, 0xce, 0x5e, 0x8b, 0xcc, 0xb2, 0x89}, slots_IDirect3DPixelShader9, 5},
     {"IDirect3DStateBlock9", D3D9_IUnknown, 0, 0x10000u, {0xe5, 0x4f, 0x7c, 0xb0, 0x0d, 0x31, 0xa8, 0x4b, 0xa2, 0x3c, 0x4f, 0x0f, 0x20, 0x6f, 0x21, 0x8b}, slots_IDirect3DStateBlock9, 6},
     {"IDirect3DQuery9", D3D9_IUnknown, 0, 0x20000u, {0x60, 0x14, 0x77, 0xd9, 0x95, 0xa6, 0x26, 0x4f, 0xbb, 0xd3, 0x27, 0xb8, 0x40, 0xb5, 0x41, 0xcc}, slots_IDirect3DQuery9, 8},
+    {"IDirect3D9Ex", D3D9_IDirect3D9, 0, 0x40000u, {0x41, 0x72, 0x17, 0x02, 0xfc, 0x69, 0x0c, 0x40, 0x8f, 0xf1, 0x93, 0xa4, 0x4d, 0xf6, 0x86, 0x1d}, slots_IDirect3D9Ex, 22},
+    {"IDirect3DDevice9Ex", D3D9_IDirect3DDevice9, 0, 0x80000u, {0xce, 0x10, 0x8b, 0xb1, 0x49, 0x26, 0x5a, 0x40, 0x87, 0x0f, 0x95, 0xf7, 0x77, 0xd4, 0x31, 0x3a}, slots_IDirect3DDevice9Ex, 134},
+    {"IDirect3DSwapChain9Ex", D3D9_IDirect3DSwapChain9, 0, 0x100000u, {0xaf, 0x6c, 0x88, 0x91, 0x3d, 0x1c, 0x2e, 0x4d, 0xa0, 0xab, 0x3e, 0x4c, 0x7d, 0x8d, 0x33, 0x03}, slots_IDirect3DSwapChain9Ex, 13},
 };
-const unsigned rt_d3d9_interface_count = 18;
+const unsigned rt_d3d9_interface_count = 21;

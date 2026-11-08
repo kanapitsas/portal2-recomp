@@ -22,6 +22,7 @@ extern const size_t steam_method_count;
 
 // Aides du code généré (steam.c).
 void *steam_flat(CPU *c, const char *symbol);                // symbole de la dylib, piège s'il manque
+void *steam_slot(CPU *c, void *self, uint32_t slot);         // emplacement de la vtable d'un objet hôte
 const char *steam_in_string(CPU *c, uint32_t address);       // NULL si 0
 void *steam_out(CPU *c, uint32_t address, uint32_t size);    // NULL si 0
 // Tampons de count éléments : lus par Steam (contrôle de lecture) ou écrits (contrôle d'écriture).
@@ -34,6 +35,8 @@ uint32_t steam_proxy(CPU *c, void *host, const char *version);
 
 // Introspection pour les tests.
 const char *steam_dylib_path(void);
+// Valeur d'une clé de premier niveau d'un texte JSON (config/local.json) ; 0 si absente.
+int steam_config_text_value(const char *text, const char *key, char *out, size_t size);
 int steam_dylib_available(void);
 uint32_t steam_vtable(CPU *c, const char *version);
 void *steam_proxy_host(uint32_t proxy);

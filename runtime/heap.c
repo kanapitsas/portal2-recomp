@@ -189,6 +189,62 @@ static int free_locked(uint32_t ptr) {
     return large_free(ptr, size);
 }
 
+// Bloc aligné sur une page (valloc) : une zone libre déjà alignée, sinon le sommet
+// du tas aligné ; les quelques octets de bourrage devant le bloc restent perdus
+// (valloc est rare : libMiles). Taille > SMALL_MAX pour que free le traite en grand bloc.
+uint32_t rt_alloc_page_aligned(uint32_t size) {
+    if (size > HEAP_END - HEAP_BEGIN - 2 * LARGE_ALIGN) return 0;
+    uint32_t rounded = (size + LARGE_ALIGN - 1) & ~(LARGE_ALIGN - 1), addr = 0;
+    if (rounded <= SMALL_MAX) rounded = SMALL_MAX + LARGE_ALIGN;
+    pthread_mutex_lock(&lock);
+    for (size_t i = 0; i < large_count && !addr; ++i) {
+        if ((free_large[i].addr & (LARGE_ALIGN - 1)) || free_large[i].size < rounded) continue;
+        addr = free_large[i].addr;
+        if (free_large[i].size == rounded) {
+            memmove(&free_large[i], &free_large[i + 1], (large_count - i - 1) * sizeof(*free_large));
+            --large_count;
+        } else { free_large[i].addr += rounded; free_large[i].size -= rounded; }
+    }
+    if (!addr) {
+        uint32_t pad = (0u - top) & (LARGE_ALIGN - 1);
+        if (!pad || bump(pad)) addr = bump(rounded);
+    }
+    if (addr && table_put(addr, rounded)) addr = 0;
+    if (addr) live_bytes += rounded;
+    pthread_mutex_unlock(&lock);
+    return addr;
+}
+
+// Tout bloc du tas est aligné sur 16 octets (classes multiples de 16, grands blocs
+// multiples de 4 Kio) ; au-delà et jusqu'à 4 Kio, bloc aligné sur une page.
+static uint32_t aligned_block(CPU *c, uint32_t alignment, uint32_t size) {
+    if (alignment > LARGE_ALIGN) rt_trap(c, c->eip, "guest allocation aligned beyond 4 KiB is not supported");
+    return alignment <= 16 ? rt_alloc(size) : rt_alloc_page_aligned(size);
+}
+
+// SHIMS: valloc memalign posix_memalign aligned_alloc
+static int heap_shim(CPU *c, const char *name) {
+    if (strcmp(name, "valloc") && strcmp(name, "memalign") && strcmp(name, "aligned_alloc") && strcmp(name, "posix_memalign"))
+        return 0;   // le routeur interroge chaque fournisseur : ne rien lire avant
+    uint32_t a = R32(c->esp + 4), b = R32(c->esp + 8), d = R32(c->esp + 12);
+    if (!strcmp(name, "valloc")) {
+        c->eax = rt_alloc_page_aligned(a);
+    } else if (!strcmp(name, "memalign") || !strcmp(name, "aligned_alloc")) {   // (alignment, size)
+        if (!a || (a & (a - 1))) { rt_set_errno(c, 22); c->eax = 0; return 1; }           // EINVAL
+        c->eax = aligned_block(c, a, b);
+    } else if (!strcmp(name, "posix_memalign")) {                             // (void **out, alignment, size)
+        if (!b || (b & (b - 1)) || b % 4) { c->eax = 22; return 1; }        // renvoie EINVAL, errno intact
+        uint32_t block = aligned_block(c, b, d);
+        if (!block) { c->eax = 12; return 1; }
+        rt_write_span(c, a, 4); W32(a, block);
+        c->eax = 0;
+        return 1;
+    } else return 0;
+    if (!c->eax) rt_set_errno(c, 12);   // ENOMEM
+    return 1;
+}
+RT_SHIM_PROVIDER(heap_shim)
+
 uint32_t rt_alloc(uint32_t size) {
     pthread_mutex_lock(&lock);
     uint32_t addr = alloc_locked(size);

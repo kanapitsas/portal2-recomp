@@ -1,5 +1,6 @@
 // i386 pthread_t is a guest TCB address; Darwin pthread_t never crosses the ABI.
 // SHIMS: pthread_detach pthread_kill pthread_yield pthread_setaffinity_np pthread_timedjoin_np pthread_tryjoin_np sched_yield
+// SHIMS: pthread_setname_np
 // pthread_cancel is deliberately not declared: it traps with an explicit reason
 // (asynchronous cancellation of AOT code cannot be honoured). Only weak
 // references exist in the game (libstdc++'s __gthread_active_p probe).
@@ -146,6 +147,13 @@ int rt_thread_shim(CPU *c,const char *name) {
         rt_trap(c,c->eip,"pthread_cancel: asynchronous cancellation of recompiled code is not supported");
     } else if(!strcmp(name,"pthread_yield")) {
         unsigned saved=rt_guest_suspend();sched_yield();rt_guest_resume(saved);c->eax=0;
+    } else if(!strcmp(name,"pthread_setname_np")) {
+        // Linux : 15 octets au plus (ERANGE). Darwin ne nomme que le thread courant ; le nom
+        // d'un autre thread ne sert qu'aux outils de débogage et n'est pas appliqué.
+        uint32_t length=rt_string_length(c,argument(c,1));
+        if(length>15){c->eax=34;return 1;}
+        if(address==rt_thread_pointer(c))pthread_setname_np((const char *)GPTR(argument(c,1)));
+        c->eax=0;
     } else if(!strcmp(name,"pthread_setaffinity_np")) {
         // Darwin has no CPU pinning on Apple silicon. The mask is validated as
         // Linux would (ESRCH, EINVAL for no online CPU), then left as a hint.

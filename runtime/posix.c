@@ -8,7 +8,8 @@
 // SHIMS: scandir scandir64 alphasort alphasort64 readdir64 statfs statfs64 statvfs statvfs64
 // SHIMS: ftruncate fdopen freopen tmpfile tmpnam mkstemp mkfifo creat dup dup2 pipe
 // SHIMS: pathconf faccessat futimes utimes flock __xmknod setvbuf ungetc getwc ungetwc
-// SHIMS: putwc putchar writev ioctl
+// SHIMS: putwc putchar writev ioctl fcntl fcntl64
+// SHIMS: __assert_fail ctermid isatty setbuf freopen64 shm_open
 #include "posix.h"
 int rt_trace_files(const char *path);   // libc.c
 #include "modules.h"
@@ -16,6 +17,7 @@ int rt_trace_files(const char *path);   // libc.c
 #include <fcntl.h>
 #include <stdlib.h>
 #include <sys/file.h>
+#include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
@@ -458,6 +460,95 @@ static int posix_shim(CPU *c, const char *name) {
             iov[i].iov_base = length ? rt_span(c, base, length) : NULL; iov[i].iov_len = length;
         }
         finish(c, (int)writev(fd, iov, count));
+    } else if (!strcmp(name, "__assert_fail")) {   // (assertion, file, line, function)
+        char message[512];
+        snprintf(message, sizeof(message), "guest assertion failed: %s (%s:%u, %s)", string(c, arg(c, 0)),
+                 string(c, arg(c, 1)), arg(c, 2), arg(c, 3) ? string(c, arg(c, 3)) : "?");
+        rt_trap(c, c->eip, message);
+    } else if (!strcmp(name, "ctermid")) {
+        static uint32_t name_buffer;   // L_ctermid = 9 ; tampon statique si s est NULL, comme glibc
+        uint32_t out = arg(c, 0);
+        if (!out) { if (!name_buffer && !(name_buffer = rt_alloc(16))) { fail(c, 12); c->eax = 0; return 1; } out = name_buffer; }
+        memcpy(rt_write_span(c, out, 9), "/dev/tty", 9);
+        c->eax = out;
+    } else if (!strcmp(name, "isatty")) {
+        int result = isatty((int32_t)arg(c, 0));
+        if (!result) rt_save_errno(c);
+        c->eax = (uint32_t)result;
+    } else if (!strcmp(name, "setbuf")) {   // setvbuf(fp, buf, buf ? _IOFBF : _IONBF, BUFSIZ = 8192)
+        FILE *file = rt_stream_file(c, arg(c, 0));
+        uint32_t buffer = arg(c, 1);
+        setvbuf(file, buffer ? rt_write_span(c, buffer, 8192) : NULL, buffer ? _IOFBF : _IONBF, 8192);
+    } else if (!strcmp(name, "freopen64")) {
+        return rt_shim(c, "freopen");
+    } else if (!strcmp(name, "shm_open")) {
+        // (name, oflag, mode) ; drapeaux Linux O_RDONLY/O_RDWR 0/2, O_CREAT 0x40, O_EXCL 0x80, O_TRUNC 0x200.
+        const char *object = string(c, arg(c, 0)); uint32_t flags = arg(c, 1);
+        if (flags & ~(3u | 0x40u | 0x80u | 0x200u | 0x80000u)) { fail(c, 22); return 1; }
+        int native = (int)(flags & 3);
+        if (flags & 0x40) native |= O_CREAT;
+        if (flags & 0x80) native |= O_EXCL;
+        if (flags & 0x200) native |= O_TRUNC;
+        int fd = shm_open(object, native, (mode_t)arg(c, 2));
+        if (fd >= 0 && (flags & 0x80000)) fcntl(fd, F_SETFD, FD_CLOEXEC);   // glibc ajoute O_CLOEXEC
+        finish(c, fd);
+    } else if (!strcmp(name, "fcntl") || !strcmp(name, "fcntl64")) {
+        // Commandes Linux i386 : F_DUPFD 0, F_GETFD 1, F_SETFD 2, F_GETFL 3, F_SETFL 4,
+        // F_DUPFD_CLOEXEC 1030. FD_CLOEXEC vaut 1 des deux côtés. Les verrous (F_*LK) et
+        // les autres commandes ne sont pas traduits : EINVAL plutôt qu'un faux succès.
+        int fd = (int32_t)arg(c, 0); uint32_t command = arg(c, 1), value = arg(c, 2);
+        if (command == 0 || command == 1030) {
+            finish(c, fcntl(fd, command == 0 ? F_DUPFD : F_DUPFD_CLOEXEC, (int32_t)value));
+        } else if (command == 1) {
+            finish(c, fcntl(fd, F_GETFD));
+        } else if (command == 2) {
+            finish(c, fcntl(fd, F_SETFD, value & 1 ? FD_CLOEXEC : 0));
+        } else if (command == 3) {
+            int native = fcntl(fd, F_GETFL);
+            if (native < 0) { finish(c, native); return 1; }
+            uint32_t flags = (uint32_t)(native & O_ACCMODE);
+            if (native & O_APPEND) flags |= 0x400;
+            if (native & O_NONBLOCK) flags |= 0x800;
+            if (native & O_SYNC) flags |= 0x101000;
+            c->eax = flags;
+        } else if (command == 4) {
+            if (value & ~(3u | 0x400u | 0x800u | 0x8000u)) { fail(c, 22); return 1; }  // O_ASYNC, O_DIRECT...
+            int native = fcntl(fd, F_GETFL);
+            if (native < 0) { finish(c, native); return 1; }
+            native &= ~(O_APPEND | O_NONBLOCK);
+            if (value & 0x400) native |= O_APPEND;
+            if (value & 0x800) native |= O_NONBLOCK;
+            finish(c, fcntl(fd, F_SETFL, native));
+        } else if ((command >= 5 && command <= 7) || (command >= 12 && command <= 14)) {
+            // Verrous POSIX. struct flock i386 : l_type@0 et l_whence@2 (short), l_start@4,
+            // l_len@8, l_pid@12 (32 bits) ; flock64 (12-14) : l_start@4, l_len@12 (64 bits),
+            // l_pid@20. Types Linux RDLCK 0, WRLCK 1, UNLCK 2 (Darwin : 1, 3, 2).
+            int wide = command >= 12, get = command == 5 || command == 12, wait = command == 7 || command == 14;
+            uint32_t size = wide ? 24 : 16;
+            const uint8_t *raw = rt_span(c, value, size);
+            int16_t type, whence; memcpy(&type, raw, 2); memcpy(&whence, raw + 2, 2);
+            struct flock lock; memset(&lock, 0, sizeof(lock));
+            if (type < 0 || type > 2 || whence < 0 || whence > 2) { fail(c, 22); return 1; }
+            lock.l_type = (short)(type == 0 ? F_RDLCK : type == 1 ? F_WRLCK : F_UNLCK);
+            lock.l_whence = whence;   // SEEK_SET/CUR/END identiques
+            if (wide) { int64_t start, length; memcpy(&start, raw + 4, 8); memcpy(&length, raw + 12, 8); lock.l_start = start; lock.l_len = length; }
+            else { int32_t start, length; memcpy(&start, raw + 4, 4); memcpy(&length, raw + 8, 4); lock.l_start = start; lock.l_len = length; }
+            int result;
+            if (wait) { unsigned saved = rt_guest_suspend(); result = fcntl(fd, F_SETLKW, &lock); int e = errno; rt_guest_resume(saved); errno = e; }
+            else result = fcntl(fd, get ? F_GETLK : F_SETLK, &lock);
+            if (result < 0) { if (errno == EAGAIN || errno == EACCES) errno = EAGAIN; finish(c, result); return 1; }
+            if (get) {
+                uint8_t *out = rt_write_span(c, value, size);
+                int16_t linux_type = (int16_t)(lock.l_type == F_RDLCK ? 0 : lock.l_type == F_WRLCK ? 1 : 2), linux_whence = (int16_t)lock.l_whence;
+                memcpy(out, &linux_type, 2); memcpy(out + 2, &linux_whence, 2);
+                int32_t pid = lock.l_pid;
+                if (wide) { int64_t start = lock.l_start, length = lock.l_len; memcpy(out + 4, &start, 8); memcpy(out + 12, &length, 8); memcpy(out + 20, &pid, 4); }
+                else { int32_t start = (int32_t)lock.l_start, length = (int32_t)lock.l_len; memcpy(out + 4, &start, 4); memcpy(out + 8, &length, 4); memcpy(out + 12, &pid, 4); }
+            }
+            c->eax = 0;
+        } else {
+            fail(c, 22);
+        }
     } else if (!strcmp(name, "ioctl")) {
         finish(c, linux_ioctl(c, (int32_t)arg(c, 0), arg(c, 1), arg(c, 2)));
     } else if (!strcmp(name, "fdopen")) {

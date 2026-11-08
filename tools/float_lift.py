@@ -419,6 +419,53 @@ def _lower_extended(op, args, Operand, Unsupported, here='c->eip'):
                    else f'count >= {bits} ? 0 : ({unsigned})(v.{field}[i] {"<<" if left else ">>"} count)')
         return (f'{{ XMM v = {vread(parts[0])}, out = v; uint64_t count = {count}; '
                 f'for (unsigned i = 0; i < {64 // bits}u; ++i) out.{field}[i] = {shifted}; {vwrite(parts[0], "out")} }}')
+    # --- SSE3 / SSSE3 (vectorised loops of the Half-Life 2 binaries) --------
+    if op == 'pshufb' and two and is_vec(parts[0]):
+        count = vwidth(parts[0]) // 8
+        return binary(parts[0], parts[1],
+                      f'for (unsigned i = 0; i < {count}u; ++i) out.b[i] = (rhs.b[i] & 0x80) ? 0 : lhs.b[rhs.b[i] & {count - 1}u];')
+    if op == 'palignr' and len(parts) == 3 and is_vec(parts[0]):
+        dst, src, imm = parts; count = vwidth(dst) // 8; shift = int(imm, 0) & 0xff
+        # dst:src (dst en poids fort) décalé de `shift` octets vers la droite.
+        return binary(dst, src,
+                      f'for (unsigned i = 0; i < {count}u; ++i) {{ unsigned k = i + {shift}u; '
+                      f'out.b[i] = k < {count}u ? rhs.b[k] : k < {2 * count}u ? lhs.b[k - {count}u] : 0; }}')
+    if op == 'pmaddubsw' and two and is_vec(parts[0]):
+        count = vwidth(parts[0]) // 16
+        return binary(parts[0], parts[1],
+                      f'for (unsigned i = 0; i < {count}u; ++i) {{ int v = (int)lhs.b[2*i] * (int8_t)rhs.b[2*i] + '
+                      f'(int)lhs.b[2*i+1] * (int8_t)rhs.b[2*i+1]; out.w[i] = (uint16_t)(v < -32768 ? -32768 : v > 32767 ? 32767 : v); }}')
+    m = re.fullmatch(r'pabs([bwd])', op)
+    if m and two and is_vec(parts[0]):
+        bits = SUFFIX_BITS[m[1]]; _, unsigned, signed = LANE[bits]
+        return binary(parts[0], parts[1], lanes(parts[0], bits, f'({signed})y < 0 ? ({unsigned})(0 - y) : y'))
+    if op == 'movddup' and two:
+        dst = xmm_dst(parts[0])
+        return f'{{ XMM v = {vread(parts[1], 64)}; c->xmm[{dst}] = (XMM){{.q={{v.q[0], v.q[0]}}}}; }}'
+    if op == 'lddqu' and two:
+        return f'c->xmm[{xmm_dst(parts[0])}] = {vread(parts[1], 128)};'
+    if op in ('addsubpd', 'addsubps') and two:
+        if op == 'addsubpd':
+            body = 'out.g[0] = lhs.g[0] - rhs.g[0]; out.g[1] = lhs.g[1] + rhs.g[1];'
+        else:
+            body = 'for (unsigned i = 0; i < 4u; ++i) out.f[i] = (i & 1) ? lhs.f[i] + rhs.f[i] : lhs.f[i] - rhs.f[i];'
+        return binary(parts[0], parts[1], body)
+    # --- SSE / SSE2 integer manquants ----------------------------------------
+    if op == 'psadbw' and two and is_vec(parts[0]):
+        halves = vwidth(parts[0]) // 64
+        return binary(parts[0], parts[1],
+                      f'for (unsigned h = 0; h < {halves}u; ++h) {{ unsigned sum = 0; for (unsigned i = 0; i < 8u; ++i) '
+                      f'{{ int d = (int)lhs.b[8*h+i] - (int)rhs.b[8*h+i]; sum += (unsigned)(d < 0 ? -d : d); }} out.q[h] = sum; }}')
+    if op == 'movntq' and two and reg(parts[1], 'mm') is not None:
+        return Operand(parts[0]).write(f'c->mm[{reg(parts[1], "mm")}]') + mmx_state(parts[1])
+    if op in ('pextrw', 'pextrd') and len(parts) == 3 and is_vec(parts[1]):
+        bits = 16 if op == 'pextrw' else 32; field = LANE[bits][0]
+        index = int(parts[2], 0) & (vwidth(parts[1]) // bits - 1)
+        return f'{{ XMM v = {vread(parts[1])}; {Operand(parts[0]).write(f"(uint32_t)v.{field}[{index}]")} }}' + mmx_state(parts[1])
+    if op == 'pinsrw' and len(parts) == 3 and is_vec(parts[0]):
+        index = int(parts[2], 0) & (vwidth(parts[0]) // 16 - 1)
+        value = f'(uint16_t){Operand(parts[1]).read()}'
+        return f'{{ XMM v = {vread(parts[0])}; v.w[{index}] = {value}; {vwrite(parts[0], "v")} }}'
     if op in ('pmovmskb', 'movmskps', 'movmskpd') and two and is_vec(parts[1]):
         bits = {'pmovmskb': 8, 'movmskps': 32, 'movmskpd': 64}[op]; field = LANE[bits][0]
         count = vwidth(parts[1]) // bits

@@ -363,6 +363,19 @@ float rt_gl_f32(CPU *c, unsigned slot) { return RF(c->esp + 4 + 4 * slot); }
 double rt_gl_f64(CPU *c, unsigned slot) { return RD(c->esp + 4 + 4 * slot); }
 uint64_t rt_gl_u64(CPU *c, unsigned slot) { return R64(c->esp + 4 + 4 * slot); }
 uint64_t rt_gl_n(int64_t n) { return n < 0 ? 0 : (uint64_t)n; }
+// Le contexte OpenGL 2.1 legacy de macOS n'expose pas GL_ARB_sampler_objects :
+// glGenSamplers/glBindSampler ont bien une adresse (comme avec SDL sur un vrai
+// Mac) mais répondent GL_INVALID_OPERATION. Le togl de Half-Life 2 les active
+// pourtant sans consulter la liste d'extensions, et tout le filtrage (mipmaps,
+// anisotropie) est alors perdu : textures bruitées, aliasing. Sauf choix
+// explicite du joueur, on lui demande donc l'état de filtrage par texture
+// (-gl_disablesamplerobjects, option de togl ; ignorée par les autres jeux).
+const char *rt_gl_sampler_argument(int count, char *const *args) {
+    for (int i = 0; i < count; ++i)
+        if (!strcmp(args[i], "-gl_disablesamplerobjects") || !strcmp(args[i], "-gl_enablesamplerobjects")) return NULL;
+    return "-gl_disablesamplerobjects";
+}
+
 void *rt_gl_handle_arg(uint32_t handle) { return (void *)(uintptr_t)handle; }
 uint32_t rt_gl_handle_ret(CPU *c, void *handle) {
     // GLhandleARB vaut void * sur macOS, unsigned int sur Linux.

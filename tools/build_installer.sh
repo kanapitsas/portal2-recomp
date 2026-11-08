@@ -1,8 +1,11 @@
 #!/bin/bash
-# Builds "Portal 2 Installer.app" (installer/Installer.swift) with a snapshot of
-# the committed repository inside, and a zip for a GitHub release:
-#   build/installer/Portal 2 Installer.app
-#   build/installer/Portal-2-Installer-<version>.zip
+# Builds "Natif Installer.app" (installer/Installer.swift; Portal 2 and
+# Half-Life 2) with a snapshot of the committed repository inside, and a zip
+# for a GitHub release:
+#   build/installer/Natif Installer.app
+#   build/installer/Natif-Installer-<version>.zip
+# The name is set once here (INSTALLER_NAME); the bundle identifier stays the
+# first release's.
 # usage: tools/build_installer.sh [version]   (default: git describe)
 # Needs only the Xcode command line tools. The snapshot is `git archive HEAD`:
 # uncommitted changes are not in it.
@@ -26,7 +29,8 @@ IDENTITY="${P2_SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/
 IDENTITY="${IDENTITY:--}"
 PROFILE="${P2_NOTARY_PROFILE:-p2-notary}"
 OUT="$REPO/build/installer"
-APP="$OUT/Portal 2 Installer.app"
+INSTALLER_NAME="Natif Installer"
+APP="$OUT/$INSTALLER_NAME.app"
 git diff --quiet HEAD -- || echo "warning: uncommitted changes are not in the installer's snapshot" >&2
 
 rm -rf "$APP" && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -38,8 +42,8 @@ cat >"$APP/Contents/Info.plist" <<EOF
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Portal 2 Installer</string>
-  <key>CFBundleDisplayName</key><string>Portal 2 Installer</string>
+  <key>CFBundleName</key><string>$INSTALLER_NAME</string>
+  <key>CFBundleDisplayName</key><string>$INSTALLER_NAME</string>
   <key>CFBundleIdentifier</key><string>io.github.kanapitsas.portal2-recomp.installer</string>
   <key>CFBundleExecutable</key><string>installer</string>
   <key>CFBundlePackageType</key><string>APPL</string>
@@ -52,8 +56,8 @@ cat >"$APP/Contents/Info.plist" <<EOF
 </dict>
 </plist>
 EOF
-ZIP="$OUT/Portal-2-Installer-$VERSION.zip"
-pack() { rm -f "$ZIP" && (cd "$OUT" && ditto -c -k --keepParent "Portal 2 Installer.app" "$ZIP"); }
+ZIP="$OUT/${INSTALLER_NAME// /-}-$VERSION.zip"
+pack() { rm -f "$ZIP" && (cd "$OUT" && ditto -c -k --keepParent "$INSTALLER_NAME.app" "$ZIP"); }
 if [ "$IDENTITY" = - ]; then
     echo "signing: ad hoc (no Developer ID Application certificate): users will need Open Anyway"
     codesign --force -s - "$APP"

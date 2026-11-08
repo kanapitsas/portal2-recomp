@@ -84,8 +84,11 @@ RT_CHECK(steam_generated_table_is_consistent) {
         assert(!strncmp(m->name, steam_interfaces[m->iface].version, length) && !strncmp(m->name + length, "::", 2));
         for (size_t j = 0; j < i; ++j) assert(steam_methods[j].iface != m->iface || steam_methods[j].slot != m->slot);
     }
-    // Les 25 versions servies par la dylib, parmi les 27 demandées par Portal 2.
-    assert(steam_interface_count == 25);
+    // Les 25 versions servies par la dylib parmi les 27 demandées par Portal 2, plus les 11
+    // de Half-Life 2 (SDK 1.60, et ISteamTimeline V004 du SDK 1.61).
+    assert(steam_interface_count == 36);
+    assert(method("SteamUser023::GetSteamID")->slot == 2 && method("SteamUser023::GetSteamID")->sret);
+    assert(method("STEAMTIMELINE_INTERFACE_V004::SetTimelineTooltip") && method("STEAMUGC_INTERFACE_VERSION020::CreateItem"));
     assert(method("SteamUser021::GetSteamID")->slot == 2 && method("SteamUser021::GetSteamID")->sret);
     assert(!method("SteamUser021::BLoggedOn")->sret && method("SteamUser021::BLoggedOn")->slot == 1);
 }
@@ -467,4 +470,18 @@ RT_CHECK(steam_callback_tail_padding_table) {
     assert(steam_callback_guest_size(2002, 16) == 12);   // GameStatsSessionClosed_t
     assert(steam_callback_guest_size(2002, 20) == 20);   // taille inattendue : inchangée (piégera)
     assert(steam_callback_guest_size(1101, 16) == 16);   // autres callbacks inchangés
+}
+
+// config/local.json à deux jeux : seules les clés de premier niveau (Portal 2 et
+// partagées) comptent, même quand la section "games" vient avant elles.
+RT_CHECK(steam_config_reads_top_level_keys_only) {
+    char out[256];
+    const char *text = "{\"games\": {\"hl2\": {\"steam_appid\": 220, \"steam_api_dylib\": \"/sw2024/x.dylib\"}},\n"
+                       " \"note\": \"steam_appid\", \"list\": [{\"steam_appid\": 1}],\n"
+                       " \"steam_api_dylib\": \"/sw20\\\"1/x.dylib\", \"steam_appid\": 620}";
+    assert(steam_config_text_value(text, "steam_appid", out, sizeof(out)) && !strcmp(out, "620"));
+    assert(steam_config_text_value(text, "steam_api_dylib", out, sizeof(out)) && !strcmp(out, "/sw20\"1/x.dylib"));
+    assert(!steam_config_text_value("{\"games\": {\"hl2\": {\"steam_appid\": 220}}}", "steam_appid", out, sizeof(out)));
+    assert(!steam_config_text_value("{\"steam_appid\": ", "steam_appid", out, sizeof(out)));
+    assert(!steam_config_text_value("", "steam_appid", out, sizeof(out)));
 }

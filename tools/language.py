@@ -11,10 +11,12 @@ Order of choice (the first that gives a language present in the data):
   1. `-language` already passed to the launcher: nothing is added;
   2. P2_LANGUAGE environment variable;
   3. "language" key of config/local.json;
-  4. game language in steamapps/appmanifest_620.acf (UserConfig);
+  4. game language in steamapps/appmanifest_<steam_appid>.acf (UserConfig);
   5. system language (macOS);
   6. english.
-A language whose files (gameui_<language>.txt) are missing falls back to english.
+A language whose files (gameui_<language>.txt, in portal2/resource or, for
+Half-Life 2 ("game": "hl2" in the config the tools and the app pass), in
+hl2/resource) are missing falls back to english.
 Steam only downloads the voices of the language chosen there: without them the
 text is translated and the voices stay in English.
 
@@ -79,18 +81,24 @@ def system_language():
     return None
 
 
-def acf_candidates(game_root):
-    """Where Steam keeps appmanifest_620.acf: next to the game (steamapps/common/<game>), then native Steam."""
+# Folder of gameui_<language>.txt per game (tools/games.py names); this script
+# is copied into the apps, so it stays standalone.
+RESOURCES = {'portal2': 'portal2/resource', 'hl2': 'hl2/resource'}
+
+
+def acf_candidates(game_root, appid=620):
+    """Where Steam keeps appmanifest_<appid>.acf: next to the game (steamapps/common/<game>), then native Steam."""
     candidates = []
-    if game_root: candidates.append(Path(game_root).parent.parent / 'appmanifest_620.acf')
-    candidates.append(Path.home() / 'Library/Application Support/Steam/steamapps/appmanifest_620.acf')
+    if game_root: candidates.append(Path(game_root).parent.parent / f'appmanifest_{appid}.acf')
+    candidates.append(Path.home() / f'Library/Application Support/Steam/steamapps/appmanifest_{appid}.acf')
     return candidates
 
 
-def installed(language, game_root):
+def installed(language, game_root, game='portal2'):
     """True when the game holds this language's text (English is always there)."""
     if language == 'english': return True
-    return bool(game_root) and (Path(game_root) / 'portal2/resource' / f'gameui_{language}.txt').is_file()
+    folder = RESOURCES.get(game, RESOURCES['portal2'])
+    return bool(game_root) and (Path(game_root) / folder / f'gameui_{language}.txt').is_file()
 
 
 def explicit_language(arguments):
@@ -105,17 +113,19 @@ def choose(env=None, config=None, game_root=None, acf_texts=(), system=None):
     env = os.environ if env is None else env
     config = config or {}
     game_root = game_root or config.get('game_root')
+    game = config.get('game') or 'portal2'
+    acf = f'appmanifest_{config.get("steam_appid") or 620}.acf'
     for origin, value in (('P2_LANGUAGE', env.get('P2_LANGUAGE')), ('config/local.json', config.get('language'))):
         if not value: continue
         language = normalize(value)
-        if language and installed(language, game_root): return language, origin
+        if language and installed(language, game_root, game): return language, origin
         return 'english', f'{origin}: "{value}" inconnue ou absente des données du jeu'
     for text in acf_texts:
         language = acf_language(text)
-        if language and installed(language, game_root): return language, 'appmanifest_620.acf'
-        if language: return 'english', 'appmanifest_620.acf: langue absente des données du jeu'
+        if language and installed(language, game_root, game): return language, acf
+        if language: return 'english', f'{acf}: langue absente des données du jeu'
     language = system() if callable(system) else system
-    if language and installed(language, game_root): return language, 'système'
+    if language and installed(language, game_root, game): return language, 'système'
     return 'english', 'défaut'
 
 
@@ -126,17 +136,24 @@ def main():
     parser.add_argument('arguments', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     launcher_args = args.arguments[1:] if args.arguments[:1] == ['--'] else args.arguments
-    if explicit_language(launcher_args) is not None: return 0
     try: config = json.loads(args.config.read_text())
     except (OSError, ValueError): config = {}
+    words = language_args(config, launcher_args, explain=args.explain)
+    if words: print(*words)
+    return 0
+
+
+def language_args(config, launcher_args=(), explain=False):
+    """['-language', <name>] for `config` (one game's: "game", "game_root",
+    "steam_appid"), [] when the launcher arguments already name one."""
+    if explicit_language(list(launcher_args)) is not None: return []
     texts = []
-    for path in acf_candidates(config.get('game_root')):
+    for path in acf_candidates(config.get('game_root'), config.get('steam_appid') or 620):
         try: texts.append(path.read_text(errors='replace'))
         except OSError: pass
     language, origin = choose(config=config, acf_texts=texts, system=system_language)
-    if args.explain: print(f'language: {language} ({origin})', file=sys.stderr)
-    print('-language', language)
-    return 0
+    if explain: print(f'language: {language} ({origin})', file=sys.stderr)
+    return ['-language', language]
 
 
 if __name__ == '__main__':

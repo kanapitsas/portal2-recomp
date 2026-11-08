@@ -151,9 +151,32 @@ free Apple developer accounts cannot sign: it would need a paid account.
   "d3d9metal_ios": {"device": "/path/to/libd3d9metal.a"},
   "ios_bundle_id": "com.yourname.portal2",
   "host_prefix": "/path/to/deps/p2-host-deps-1-macos-arm64",
-  "depot_id": 661
+  "depot_id": 661,
+  "games": {
+    "hl2": {
+      "game_root": "/path/to/Half-Life 2",
+      "linux_root": "/path/to/depot_224",
+      "steam_appid": 220,
+      "steam_api_dylib": "/path/to/steamworks-2024.8.0/libsteam_api.dylib"
+    }
+  }
 }
 ```
+
+- One file for both games. The top-level keys are shared (`language`,
+  `d3d9metal_dylib`, `d3d9metal_ios`, `host_prefix`) or Portal 2's own
+  (`game_root`, `linux_root`, `steam_appid`, `depot_id`, `manifest`,
+  `steam_api_dylib`, `user_dir`, `ios_bundle_id`), as in older single-game
+  configs; Half-Life 2's own keys go in `games.hl2`
+  (`localconfig.game_config` merges them). An older Half-Life 2 checkout's
+  config (`"game": "hl2"` with its keys at the top level) is still read, and
+  `setup.sh` moves those keys into `games.hl2`.
+- Which game a tool works on: `--game portal2|hl2` (`GAME=` for `make
+  game`), else `P2_GAME`, else `"game"` in this file, else the only game set
+  up, else Portal 2. Portal 2 builds in `build/game` (binary
+  `build/portal2-native`, iPhone builds in `build/ios`), Half-Life 2 in
+  `build/hl2` (binary `build/hl2/hl2-native`, iPhone builds in
+  `build/hl2/ios`).
 
 - `language`, `d3d9metal_dylib` and `d3d9metal_ios` are optional:
   [game language](#game-language), [Metal renderer](d3d9-bridge.md#using-it),
@@ -161,7 +184,8 @@ free Apple developer accounts cannot sign: it would need a paid account.
 - `ios_bundle_id` must be unique to your Apple account (free accounts cannot
   share identifiers); it can also be given with `P2_BUNDLE_ID`.
 - Without `user_dir`, the game keeps saves in
-  `~/Library/Application Support/Portal 2 Natif/userdata` (`tools/localconfig.py`,
+  `~/Library/Application Support/Portal 2 Natif/userdata` (`Half-Life 2 Natif`
+  for Half-Life 2; `tools/localconfig.py`,
   the same default for `run_game.py`, `make_app.py` and `bench_renderer.py`);
   `tools/make_app.py` copies the older default `../work/portal2-userdata`
   there once if it exists (the original stays).
@@ -181,6 +205,8 @@ python3 tools/run_game.py --show --timeout 3600
 python3 tools/make_app.py                 # optional: an app for the Dock / Finder (re-run after a rebuild)
 ```
 
+The same with `--game hl2` for Half-Life 2.
+
 iPhone: see [Building and running](ios.md#building-and-running) in ios.md.
 
 ## Run
@@ -193,10 +219,13 @@ python3 tools/build_game.py            # diagnostics: -O1, checked memory (~20 m
 python3 tools/run_game.py --show --timeout 3600
 ```
 
-`SteamAppId` is set from `steam_appid` in `config/local.json` when it is not
-in the environment. Without `--show`, the window is hidden
-(`P2_HIDDEN_WINDOWS=1`), vsync is disabled and the game runs on a copy of the
-user data (`<user_dir>/../portal2-userdata-diag`).
+`run_game.py` sets `SteamAppId` and `P2_STEAM_API_DYLIB` from the game's
+`steam_appid` and `steam_api_dylib` when they are not in the environment
+(the runtime itself only reads the top-level, Portal 2 keys). Without
+`--show`, the window is hidden (`P2_HIDDEN_WINDOWS=1`), vsync is disabled and
+the game runs on a copy of the user data
+(`<user_dir>/../portal2-userdata-diag`, `hl2-userdata-diag` for Half-Life 2).
+Add `--game hl2` to each command for Half-Life 2.
 
 The binary itself (`build/portal2-native`, what `run_game.py` and the app
 launch) takes `--images <prep dir> --game-dir <game> [--linux-root <depot>]
@@ -279,7 +308,8 @@ Maintainer steps; users never need them.
    `xcrun notarytool store-credentials p2-notary --apple-id <Apple ID> --team-id <team ID>`.
 3. **Installer**: tag the release, run `tools/build_installer.sh` (the app
    embeds `git archive HEAD`, so commit first) and upload
-   `build/installer/Portal-2-Installer-<tag>.zip`. With the certificate and
+   `build/installer/Natif-Installer-<tag>.zip` (the name is
+   `INSTALLER_NAME` in the script). With the certificate and
    the profile, the script signs with the hardened runtime, notarizes, staples
    and checks the result with `spctl`; it prints which of these it did.
    Without the certificate the app is ad hoc signed and users go through

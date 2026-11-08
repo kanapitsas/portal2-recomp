@@ -66,11 +66,14 @@ clean:
 	rm -rf build
 
 .PHONY: progress sanitize game
-# Jeu complet : toutes les fonctions connues, C réparti et compilé en parallèle
-# avec cache d'objets (build/game/obj). GAME_OPT=0 pour un binaire de diagnostic.
+# Whole game: every known function, C split and compiled in parallel with an
+# object cache (build/game/obj; build/hl2/obj for GAME=hl2). GAME_OPT=0 for a
+# diagnostic binary. GAME=portal2|hl2 (default: P2_GAME, then "game" of
+# config/local.json, then portal2; tools/games.py).
 GAME_OPT ?= 1
+GAME ?=
 game:
-	$(PYTHON) tools/build_game.py --opt $(GAME_OPT)
+	$(PYTHON) tools/build_game.py --opt $(GAME_OPT) $(if $(GAME),--game $(GAME))
 
 progress: $(PREP)/layout.json
 	$(PYTHON) tools/progress.py --layout $(PREP)/layout.json --out build/progress.json

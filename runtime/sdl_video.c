@@ -23,7 +23,9 @@
 // SHIMS: SDL_LoadBMP_RW SDL_RWFromFile SDL_FreeSurface
 // SHIMS: SDL_CreateColorCursor SDL_CreateSystemCursor SDL_SetCursor SDL_FreeCursor SDL_ShowCursor
 // SHIMS: SDL_GetClipboardText SDL_SetClipboardText SDL_HasClipboardText
+// SHIMS: SDL_setenv SDL_ShowSimpleMessageBox SDL_ShowMessageBox SDL_GetWindowWMInfo
 #include "rt.h"
+#include "posix.h"   // rt_environ_sync : environ invité recopié après setenv
 #include "host_gl.h"   // OpenGL.framework (macOS) ou gl4es (iOS)
 #include "frame_times.h"
 #include <mach/mach_time.h>
@@ -368,6 +370,12 @@ int rt_sdl_display_scale(void) {
 }
 // Pixels par point de la fenêtre du jeu (1 ou l'échelle de l'écran).
 int rt_sdl_window_scale(void) { return window_scale_value; }
+int rt_sdl_window_gamma(void *window, const uint16_t *ramp) {
+    return SDL_SetWindowGammaRamp(window, ramp, ramp + 256, ramp + 512);
+}
+int rt_sdl_window_gamma_get(void *window, uint16_t *ramp) {
+    return SDL_GetWindowGammaRamp(window, ramp, ramp + 256, ramp + 512);
+}
 // Tests : impose les échelles sans fenêtre de mesure ni vue Cocoa (0 = recalculer).
 void rt_sdl_force_scales(int display, int window) {
     display_scale_value = display; display_scale_forced = display != 0; window_scale_value = window ? window : 1;
@@ -638,6 +646,43 @@ unsigned rt_sdl_game_modes(uint32_t (*modes)[3], unsigned capacity) {
     return count;
 }
 
+// --- Boîtes de message -------------------------------------------------------
+// Écrites sur stderr, jamais affichées : une boîte modale bloquerait une
+// exécution diagnostique (P2_HIDDEN_WINDOWS, tests), et le jeu ne s'en sert
+// que pour annoncer une erreur avant de quitter. Rendre 0 sans montrer de
+// boîte reproduit ce que voit l'utilisateur qui la ferme aussitôt ;
+// SDL_ShowMessageBox rend le bouton par défaut (touche Entrée), sinon le premier.
+static void report_message_box(CPU *c, uint32_t flags, uint32_t title, uint32_t message) {
+    const char *kind = flags & SDL_MESSAGEBOX_ERROR ? "error" : flags & SDL_MESSAGEBOX_WARNING ? "warning" : "information";
+    const char *t = guest_string(c, title), *m = guest_string(c, message);
+    fprintf(stderr, "[sdl] message box (%s): %s\n%s\n", kind, t ? t : "", m ? m : "");
+}
+_Static_assert(SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT == 1, "SDL2 message box button flags");
+// SDL_MessageBoxData i386 : flags, window, title, message, numbuttons, buttons,
+// colorScheme (28 octets) ; SDL_MessageBoxButtonData : flags, buttonid, text (12).
+static int message_box(CPU *c, uint32_t data, uint32_t buttonid) {
+    if (!data) return SDL_SetError("Parameter '%s' is invalid", "messageboxdata");
+    rt_span(c, data, 28);
+    int32_t count = (int32_t)R32(data + 16);
+    uint32_t buttons = R32(data + 20);
+    if (count < 0 || (count && !buttons)) return SDL_SetError("Invalid number of buttons");
+    if (count) rt_span(c, buttons, 12 * (uint64_t)count);
+    report_message_box(c, R32(data), R32(data + 8), R32(data + 12));
+    int32_t chosen = -1;   // aucun bouton : SDL rend -1 (boîte fermée)
+    for (int32_t i = 0; i < count; ++i) {
+        uint32_t button = buttons + 12 * (uint32_t)i;
+        if (i == 0) chosen = (int32_t)R32(button + 4);
+        if (R32(button) & SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT) { chosen = (int32_t)R32(button + 4); break; }
+    }
+    for (int32_t i = 0; i < count; ++i) {
+        const char *text = guest_string(c, R32(buttons + 12 * (uint32_t)i + 8));
+        fprintf(stderr, "[sdl]   button %d \"%s\"%s\n", (int)R32(buttons + 12 * (uint32_t)i + 4), text ? text : "",
+                (int32_t)R32(buttons + 12 * (uint32_t)i + 4) == chosen ? " (chosen)" : "");
+    }
+    if (buttonid) { rt_write_span(c, buttonid, 4); W32(buttonid, (uint32_t)chosen); }
+    return 0;
+}
+
 static int sdl_video(CPU *c, const char *name) {
     if (strncmp(name, "SDL_", 4)) return 0;
     const char *n = name + 4;
@@ -650,6 +695,28 @@ static int sdl_video(CPU *c, const char *name) {
     else if (!strcmp(n, "WasInit")) r = SDL_WasInit(arg(c, 0));
     else if (!strcmp(n, "SetHint")) r = (uint32_t)SDL_SetHint(guest_string(c, arg(c, 0)), guest_string(c, arg(c, 1)));
     else if (!strcmp(n, "GetError")) r = const_string(c, SDL_GetError());
+    else if (!strcmp(n, "setenv")) {
+        // Même environnement que getenv/setenv invités (process.c) : celui de
+        // l'hôte, recopié dans environ invité. Contrôles de SDL_setenv (SDL2).
+        const char *key = guest_string(c, arg(c, 0)), *value = guest_string(c, arg(c, 1));
+        int overwrite = (int)arg(c, 2), result = -1;
+        if (key && *key && !strchr(key, '=') && value) {
+            result = setenv(key, value, overwrite);
+            if (!result && rt_environ_sync()) result = -1;
+        }
+        r = (uint32_t)result;
+    }
+    else if (!strcmp(n, "ShowSimpleMessageBox")) { report_message_box(c, arg(c, 0), arg(c, 1), arg(c, 2)); r = 0; }
+    else if (!strcmp(n, "ShowMessageBox")) r = (uint32_t)message_box(c, arg(c, 0), arg(c, 1));
+    else if (!strcmp(n, "GetWindowWMInfo")) {
+        // Le jeu Linux y lirait des handles X11 : il n'y en a pas (fenêtre
+        // Cocoa), échec explicite plutôt qu'une structure inventée.
+        SDL_Window *w = WINDOW(0); uint32_t info = arg(c, 1);
+        (void)w;
+        if (info) { rt_write_span(c, info, 8); W32(info + 4, SDL_SYSWM_UNKNOWN); }   // SDL_version (3 octets), subsystem
+        SDL_SetError("SDL bridge: no X11 window system information on macOS");
+        r = SDL_FALSE;
+    }
     else if (!strcmp(n, "free")) {
         uint32_t address = arg(c, 0);
         if (address && (is_const_string(address) || rt_free(address)))

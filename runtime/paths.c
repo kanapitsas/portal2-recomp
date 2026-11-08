@@ -286,8 +286,11 @@ static int translated_plugin(const char *relative) {
     if(!*name || strchr(name,'/'))return 0;
     const RtPeImage *image=rt_pe_image_named(name);
     char host[PATH_MAX];
-    if(!image || !game_root[0] || join(host,game_root,relative))return 0;
-    return rt_pe_file_matches(image,host);
+    if(!image)return 0;
+    // Portal 2 : greffons de la copie du jeu ; Half-Life 2 : ceux du dépôt Linux.
+    if(game_root[0] && !join(host,game_root,relative) && !access(host,F_OK))return rt_pe_file_matches(image,host);
+    if(linux_root[0] && !join(host,linux_root,relative))return rt_pe_file_matches(image,host);
+    return 0;
 }
 // La copie du jeu est l'installation Windows : ses binaires (DLL, EXE, greffons
 // Miles .asi/.flt) n'existent pas dans une installation Linux et ne doivent pas
@@ -305,7 +308,7 @@ int rt_path_windows_binary(const char *relative) {
     if(!strcasecmp(base,"client.dll") && base-relative>=4 && !strncasecmp(base-4,"bin/",4))return 0;
     const char *dot=strrchr(base,'.');
     if(!dot)return 0;
-    static const char *const ext[]={".dll",".exe",".asi",".flt",".pdb",".sys"};
+    static const char *const ext[]={".dll",".exe",".asi",".flt",".mix",".pdb",".sys"};
     for(size_t i=0;i<sizeof(ext)/sizeof(*ext);++i)
         if(!strcasecmp(dot,ext[i]))return !translated_plugin(relative);
     return 0;
@@ -449,6 +452,9 @@ static const char *write_path(const char *path,int preserve_existing,int follow_
     }
     return result;
 }
+// Nom du programme du jeu (tools/games.py), fixé par main.c avant le premier lancement.
+static char program_name[64]="portal2_linux";
+void rt_paths_set_program(const char *name) { snprintf(program_name,sizeof(program_name),"%s",name); }
 const char *rt_program_path(void) {
-    char *result=buffer();snprintf(result,PATH_MAX,"%s/portal2_linux",game_root);return result;
+    char *result=buffer();snprintf(result,PATH_MAX,"%s/%s",game_root,program_name);return result;
 }

@@ -240,6 +240,7 @@ RT_CHECK(sdl_input_joysticks_and_struct_return) {
         float strength = 0.5f; memcpy(&ha[1], &strength, 4);
         (void)call(c, "SDL_HapticRumbleInit", ha, 1);
         (void)call(c, "SDL_HapticRumblePlay", ha, 3);
+        (void)call(c, "SDL_HapticRumbleStop", ha, 1);
         call(c, "SDL_HapticClose", ha, 1);
         assert(!rt_handle_get(h, 'SDLH'));
     }
@@ -317,4 +318,13 @@ RT_CHECK(sdl_input_touch_clicks_wait_one_frame) {
     SDL_Event mouse = {.type = SDL_MOUSEBUTTONDOWN};
     mouse.button.which = 0;
     assert(!rt_touch_shaper_hold(&t, &mouse, 2000));
+}
+
+// SDL_HapticRumbleStop : NULL est refusé par SDL lui-même (-1, SDL_GetError).
+RT_CHECK(sdl_input_haptic_rumble_stop_null) {
+    CPU cpu, *c = &cpu; rt_cpu_reset(c);
+    uint32_t none[] = {0};
+    SDL_ClearError();
+    assert((int32_t)call(c, "SDL_HapticRumbleStop", none, 1) == -1);
+    assert(*SDL_GetError());
 }

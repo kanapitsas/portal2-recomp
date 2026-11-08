@@ -18,7 +18,8 @@ CPU time per frame of the presenting thread and of the whole process
 time; GPU time with --gpu-timing (perturbs the run, see STATUS.md).
 
 Results: build/bench/<date>/results.md and results.json, and per run the
-game log, frame log and console log.
+game log, frame log and console log. Portal 2 only (its maps, load marker
+and folders); tools/bench_game.py --game hl2 measures Half-Life 2.
 
     python3 tools/bench_renderer.py --dry-run        # prints the plan, launches nothing
     python3 tools/bench_renderer.py                  # Steam client open, machine idle
