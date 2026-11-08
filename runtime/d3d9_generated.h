@@ -50,6 +50,8 @@ enum {
 #define D3D9_MASK_IDirect3DDevice9Ex 0x80000u
 #define D3D9_MASK_IDirect3DSwapChain9Ex 0x100000u
 
+#define D3D9_SLOT_IDirect3DDevice9_SetGammaRamp 21
+void d3d9_manual_IDirect3DDevice9_SetGammaRamp(CPU *c, void *self, uint32_t a);
 #define D3D9_SLOT_IDirect3DQuery9_GetData 7
 void d3d9_manual_IDirect3DQuery9_GetData(CPU *c, void *self, uint32_t a);
 #define D3D9_SLOT_IDirect3DQuery9_Issue 6

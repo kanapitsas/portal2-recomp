@@ -93,7 +93,7 @@ interface IDirect3DDevice9 : IUnknown {D0223B96-BF7A-43FD-92BD-A43B0D82B9EB}
     HRESULT GetBackBuffer(u iSwapChain, u iBackBuffer, u Type, owned:IDirect3DSurface9 ppBackBuffer)
     HRESULT GetRasterStatus(u iSwapChain, out:8 pRasterStatus)
     HRESULT SetDialogBoxMode(u bEnableDialogs)
-    void SetGammaRamp(u iSwapChain, u Flags, in:1536 pRamp)
+    void SetGammaRamp(u iSwapChain, u Flags, in:1536 pRamp) !manual
     void GetGammaRamp(u iSwapChain, out:1536 pRamp)
     HRESULT CreateTexture(u Width, u Height, u Levels, u Usage, u Format, u Pool, pp:IDirect3DTexture9 ppTexture, shared:(Pool == 2 && Levels == 1) pSharedHandle)
     HRESULT CreateVolumeTexture(u Width, u Height, u Depth, u Levels, u Usage, u Format, u Pool, pp:IDirect3DVolumeTexture9 ppVolumeTexture, shared pSharedHandle)

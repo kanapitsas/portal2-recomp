@@ -766,6 +766,63 @@ RT_CHECK(d3d9_event_query_reached_after_present) {
     CALL0(q, IUnknown, Release); CALL0(o, IUnknown, Release); CALL0(dev, IUnknown, Release);
 }
 
+// Rampe gamma (curseur Luminosité de Source). D3D9 ne l'applique qu'en plein
+// écran ; sur Mac le jeu tourne en fenêtre : le pont la reporte sur la
+// fenêtre SDL, comme le fait déjà Portal 2 (SDL_SetWindowGammaRamp).
+static void *gamma_vtbl[119], *gamma_chain_vtbl[10];
+static struct { unsigned library_calls, window_calls; void *window; uint16_t last[768]; } gamma_seen;
+static uint32_t gamma_windowed = 1;
+static void gamma_set(Fake *self, uint32_t chain, uint32_t flags, const uint16_t *ramp) {
+    (void)self; (void)chain; (void)flags; assert(ramp); ++gamma_seen.library_calls;
+}
+static Fake gamma_chain;
+static int32_t gamma_get_chain(Fake *self, uint32_t index, Fake **out) {
+    (void)self; assert(index == 0); ++gamma_chain.refs; *out = &gamma_chain; return 0;
+}
+static int32_t gamma_params(Fake *self, D3d9HostParams *p) {
+    (void)self; memset(p, 0, sizeof(*p)); p->hDeviceWindow = &fake_window; p->Windowed = gamma_windowed; return 0;
+}
+static int gamma_window(void *window, const uint16_t *ramp) {
+    ++gamma_seen.window_calls; gamma_seen.window = window; memcpy(gamma_seen.last, ramp, sizeof(gamma_seen.last)); return 0;
+}
+RT_CHECK(d3d9_gamma_ramp_reaches_the_window_when_windowed) {
+    fill(gamma_vtbl, 119); fill(gamma_chain_vtbl, 10);
+    gamma_vtbl[1] = (void *)f_addref; gamma_vtbl[2] = (void *)f_release;
+    gamma_vtbl[slot_of("IDirect3DDevice9", "SetGammaRamp")] = (void *)gamma_set;
+    gamma_vtbl[slot_of("IDirect3DDevice9", "GetSwapChain")] = (void *)gamma_get_chain;
+    gamma_chain_vtbl[1] = (void *)f_addref; gamma_chain_vtbl[2] = (void *)f_release;
+    gamma_chain_vtbl[slot_of("IDirect3DSwapChain9", "GetPresentParameters")] = (void *)gamma_params;
+    gamma_chain = (Fake){gamma_chain_vtbl, 1, 0, NULL, NULL};
+    static Fake dev_object = {gamma_vtbl, 1, 0, NULL, NULL};
+    int (*saved)(void *, const uint16_t *) = rt_d3d9_window_gamma;
+    rt_d3d9_window_gamma = gamma_window;
+    CPU c; rt_cpu_reset(&c); c.esp = STACK;
+    uint32_t dev = d3d9_proxy(&c, &dev_object, D3D9_IDirect3DDevice9), ramp = SCRATCH + 0x200;
+    // Rampe neutre (mat_monitorgamma 2.2 par défaut) : l'écran n'est pas touché.
+    for (unsigned i = 0; i < 768; ++i) W16(ramp + 2 * i, (uint16_t)((i & 255) * 257));
+    CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);
+    assert(gamma_seen.library_calls == 1 && gamma_seen.window_calls == 0);
+    // Luminosité relevée : la rampe arrive telle quelle sur la fenêtre du jeu.
+    for (unsigned i = 0; i < 768; ++i) W16(ramp + 2 * i, (uint16_t)(i == 300 ? 0x8000 : (i & 255) * 257 / 2 + 0x7fff));
+    CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);
+    assert(gamma_seen.library_calls == 2 && gamma_seen.window_calls == 1 && gamma_seen.window == &fake_window);
+    assert(gamma_seen.last[300] == 0x8000 && gamma_seen.last[0] == 0x7fff);
+    // Retour à la rampe neutre : reporté aussi, pour rendre l'écran.
+    for (unsigned i = 0; i < 768; ++i) W16(ramp + 2 * i, (uint16_t)((i & 255) * 257));
+    CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);
+    assert(gamma_seen.window_calls == 2 && gamma_seen.last[255] == 0xffff);
+    CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);   // déjà neutre : plus rien
+    assert(gamma_seen.window_calls == 2);
+    // Plein écran : la bibliothèque l'applique elle-même, pas de double rampe.
+    gamma_windowed = 0;
+    for (unsigned i = 0; i < 768; ++i) W16(ramp + 2 * i, (uint16_t)((i & 255) * 200));
+    CALL(dev, IDirect3DDevice9, SetGammaRamp, 0, 0, ramp);
+    assert(gamma_seen.library_calls == 5 && gamma_seen.window_calls == 2);
+    assert(gamma_chain.refs == 1);   // chaîne d'échange rendue à chaque fois
+    gamma_windowed = 1; rt_d3d9_window_gamma = saved;
+    CALL0(dev, IUnknown, Release);
+}
+
 // Création et libération en boucle d'objets distincts (requêtes, textures de
 // passage) : la table se réorganise à taille constante au lieu de doubler à
 // chaque fois que les pierres tombales la remplissent.

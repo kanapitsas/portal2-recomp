@@ -370,6 +370,9 @@ int rt_sdl_display_scale(void) {
 }
 // Pixels par point de la fenêtre du jeu (1 ou l'échelle de l'écran).
 int rt_sdl_window_scale(void) { return window_scale_value; }
+int rt_sdl_window_gamma(void *window, const uint16_t *ramp) {
+    return SDL_SetWindowGammaRamp(window, ramp, ramp + 256, ramp + 512);
+}
 // Tests : impose les échelles sans fenêtre de mesure ni vue Cocoa (0 = recalculer).
 void rt_sdl_force_scales(int display, int window) {
     display_scale_value = display; display_scale_forced = display != 0; window_scale_value = window ? window : 1;

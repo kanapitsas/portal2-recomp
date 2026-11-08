@@ -1162,17 +1162,6 @@ static void t_IDirect3DDevice9_SetFVF(CPU *c, void *self, uint32_t a) {
     c->eax = (uint32_t)hr;
 }
 
-static void t_IDirect3DDevice9_SetGammaRamp(CPU *c, void *self, uint32_t a) {
-    uint32_t g_iSwapChain = R32(a + 0);
-    uint32_t g_Flags = R32(a + 4);
-    uint32_t g_pRamp = R32(a + 8);
-    uint32_t a_iSwapChain = g_iSwapChain;
-    uint32_t a_Flags = g_Flags;
-    void *a_pRamp = d3d9_in(c, g_pRamp, (uint64_t)(1536));
-    ((void (*)(void *, uint32_t, uint32_t, void *))D3D9_VTBL(self)[21])(self, a_iSwapChain, a_Flags, a_pRamp);
-    (void)c;
-}
-
 static void t_IDirect3DDevice9_SetIndices(CPU *c, void *self, uint32_t a) {
     uint32_t g_pIndexData = R32(a + 0);
     void *a_pIndexData = d3d9_iface_in(c, g_pIndexData, 0x400u);
@@ -2188,7 +2177,7 @@ const D3d9Method rt_d3d9_methods[] = {
     {"IDirect3DDevice9::SetDepthStencilSurface", t_IDirect3DDevice9_SetDepthStencilSurface, 0x80004u, 39, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DDevice9::SetDialogBoxMode", t_IDirect3DDevice9_SetDialogBoxMode, 0x80004u, 20, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DDevice9::SetFVF", t_IDirect3DDevice9_SetFVF, 0x80004u, 89, D3D9_GENERATED, D3D9_RET_HRESULT},
-    {"IDirect3DDevice9::SetGammaRamp", t_IDirect3DDevice9_SetGammaRamp, 0x80004u, 21, D3D9_GENERATED, D3D9_RET_VOID},
+    {"IDirect3DDevice9::SetGammaRamp", d3d9_manual_IDirect3DDevice9_SetGammaRamp, 0x80004u, 21, D3D9_MANUAL, D3D9_RET_VOID},
     {"IDirect3DDevice9::SetIndices", t_IDirect3DDevice9_SetIndices, 0x80004u, 104, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DDevice9::SetLight", t_IDirect3DDevice9_SetLight, 0x80004u, 51, D3D9_GENERATED, D3D9_RET_HRESULT},
     {"IDirect3DDevice9::SetMaterial", t_IDirect3DDevice9_SetMaterial, 0x80004u, 49, D3D9_GENERATED, D3D9_RET_HRESULT},

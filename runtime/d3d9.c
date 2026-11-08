@@ -1009,6 +1009,42 @@ void d3d9_manual_IDirect3DQuery9_GetData(CPU *c, void *self, uint32_t a) {
     }
     c->eax = (uint32_t)hr;
 }
+// Rampe gamma (curseur Luminosité de Source, mat_monitorgamma). Direct3D 9
+// ne l'applique qu'à un appareil plein écran, et libd3d9metal fait de même ;
+// sur Mac le jeu tourne en fenêtre (ou plein écran du bureau) : le curseur ne
+// faisait rien dans Half-Life 2. Pour un appareil fenêtré, la rampe est
+// reportée sur sa fenêtre SDL, comme le fait déjà Portal 2 par
+// SDL_SetWindowGammaRamp (SDL la retire quand la fenêtre perd le focus et la
+// remet ensuite). La rampe neutre (réglage par défaut) ne touche pas l'écran,
+// sauf pour défaire une rampe reportée auparavant.
+int (*rt_d3d9_window_gamma)(void *window, const uint16_t *ramp) = rt_sdl_window_gamma;
+enum { D3D9_SLOT_DEVICE_GET_SWAP_CHAIN = 14, D3D9_SLOT_SWAP_CHAIN_GET_PARAMS = 9, GAMMA_ENTRIES = 768 };
+static int gamma_on_window;   // une rampe non neutre est en place sur une fenêtre
+static int gamma_identity(const uint16_t *ramp) {
+    for (unsigned i = 0; i < GAMMA_ENTRIES; ++i) if (ramp[i] >> 8 != (i & 255)) return 0;
+    return 1;
+}
+static void *windowed_device_window(void *device) {   // fenêtre SDL de la chaîne 0 si fenêtrée, sinon NULL
+    void *chain = NULL;
+    if (((int32_t (*)(void *, uint32_t, void **))D3D9_VTBL(device)[D3D9_SLOT_DEVICE_GET_SWAP_CHAIN])(device, 0, &chain) < 0 || !chain)
+        return NULL;
+    D3d9HostParams params; memset(&params, 0, sizeof(params));
+    int ok = ((int32_t (*)(void *, D3d9HostParams *))D3D9_VTBL(chain)[D3D9_SLOT_SWAP_CHAIN_GET_PARAMS])(chain, &params) >= 0;
+    ((uint32_t (*)(void *))D3D9_VTBL(chain)[D3D9_SLOT_IUnknown_Release])(chain);
+    return ok && params.Windowed ? params.hDeviceWindow : NULL;
+}
+void d3d9_manual_IDirect3DDevice9_SetGammaRamp(CPU *c, void *self, uint32_t a) {
+    uint32_t chain = R32(a), flags = R32(a + 4), guest_ramp = R32(a + 8);
+    const uint16_t *ramp = d3d9_in(c, guest_ramp, GAMMA_ENTRIES * 2);
+    ((void (*)(void *, uint32_t, uint32_t, const void *))D3D9_VTBL(self)[D3D9_SLOT_IDirect3DDevice9_SetGammaRamp])(
+        self, chain, flags, ramp);
+    if (!ramp || chain || !rt_d3d9_window_gamma) return;
+    int identity = gamma_identity(ramp);
+    if (identity && !gamma_on_window) return;
+    void *window = windowed_device_window(self);
+    if (window && rt_d3d9_window_gamma(window, ramp) == 0) gamma_on_window = !identity;
+}
+
 // Une requête libérée puis réallouée à la même adresse peut retrouver une
 // entrée périmée : seul un événement en profite, et un événement jamais émis
 // n'a rien à attendre.
