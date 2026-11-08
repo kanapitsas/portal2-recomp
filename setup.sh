@@ -168,7 +168,9 @@ locate() {  # game id [game folder [Linux folder]] -> FOUND_GAME FOUND_LINUX (em
         fi
         if [ -z "$FOUND_LINUX" ]; then
             for c in "$(config_get portal2 linux_root)" "$(find_depot 620 661)"; do
-                [ -n "$c" ] && [ -f "$c/bin/linux32/engine.so" ] && { FOUND_LINUX="$c"; break; }
+                # Complete depots only, as check_game wants them: a partial one must not stop another game.
+                [ -n "$c" ] && [ -f "$c/bin/linux32/engine.so" ] && [ -f "$c/portal2/bin/linux32/server.so" ] \
+                    && { FOUND_LINUX="$c"; break; }
             done
         fi
     else   # hl2: the Mac game from Steam, the Linux binaries from depot 224
@@ -179,7 +181,8 @@ locate() {  # game id [game folder [Linux folder]] -> FOUND_GAME FOUND_LINUX (em
         fi
         if [ -z "$FOUND_LINUX" ]; then
             for c in "$(config_get hl2 linux_root)" "$(find_depot 220 224)"; do
-                [ -n "$c" ] && [ -f "$c/hl2_linux" ] && { FOUND_LINUX="$c"; break; }
+                [ -n "$c" ] && [ -f "$c/hl2_linux" ] && [ -f "$c/bin/engine.so" ] && [ -f "$c/hl2_complete/bin/server.so" ] \
+                    && { FOUND_LINUX="$c"; break; }
             done
         fi
     fi

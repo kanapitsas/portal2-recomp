@@ -133,6 +133,15 @@ class GameDetectionTests(unittest.TestCase):
         self.install_hl2()
         self.assert_builds(self.detect(), 'hl2')
 
+    def test_partial_depot_does_not_stop_the_other_game(self):
+        game = self.install_portal2(depot=False)
+        self.touch(self.steam / 'steamapps/content/app_620/depot_661/bin/linux32/engine.so')   # interrupted download
+        self.install_hl2()
+        result = self.detect()
+        self.assert_builds(result, 'hl2')
+        self.assertIn('download_depot 620 661', result.stderr)
+        self.assertTrue(game.is_dir())
+
     def test_nothing_found(self):
         result = self.detect()
         self.assertEqual(result.returncode, 1)
