@@ -87,7 +87,7 @@ MTLD3D_REV="101f37d3d45c760e95e20176f758b9d309c23885"   # feat/native-host, pinn
 # Prebuilt host libraries and libd3d9metal (built from MTLD3D_REV); see
 # tools/build_host_deps.sh, whose BUNDLE_VERSION this matches.
 HOST_DEPS_NAME="p2-host-deps-1-macos-arm64"
-HOST_DEPS_URL="${P2_HOST_DEPS_URL:-https://github.com/kanapitsas/portal2-recomp/releases/download/host-deps-1/$HOST_DEPS_NAME.tar.xz}"
+HOST_DEPS_URL="${P2_HOST_DEPS_URL:-https://github.com/kanapitsas/source-recomp/releases/download/host-deps-1/$HOST_DEPS_NAME.tar.xz}"
 HOST_DEPS_SHA256="f5454da33fce938b70df1b7523df0a6884eba4249d5c9092898079964bb75b61"
 
 step() { printf '\n==> %s\n' "$*"; }

@@ -35,7 +35,7 @@ share them.
   on the same Mac joins. Connection and map load are checked; a full co-op
   course has not been played yet.
 - **Install**: the Natif Installer app from the
-  [releases](https://github.com/kanapitsas/portal2-recomp/releases), or one
+  [releases](https://github.com/kanapitsas/source-recomp/releases), or one
   command, `setup.sh`, for either game or both. Only the Xcode command line
   tools are required.
 - **Half-Life 2** (experimental), with Episode One, Episode Two and Lost
@@ -97,7 +97,7 @@ share them.
 ## Install on Mac
 
 **Without Terminal**: download `Natif-Installer-<version>.zip` from the
-[latest release](https://github.com/kanapitsas/portal2-recomp/releases/latest),
+[latest release](https://github.com/kanapitsas/source-recomp/releases/latest),
 unzip it and open **Natif Installer**. It is signed; if macOS refuses to
 open it, go to System Settings > Privacy & Security and click **Open
 Anyway**. The installer checks the Xcode command
@@ -112,8 +112,8 @@ Portal 2 installer, so an update rebuilds only what changed; its log is
 **With Terminal**:
 
 ```sh
-git clone https://github.com/kanapitsas/portal2-recomp.git
-cd portal2-recomp
+git clone https://github.com/kanapitsas/source-recomp.git
+cd source-recomp
 ./setup.sh                    # every game found: Portal 2, Half-Life 2 or both
 ./setup.sh --game hl2         # one game (portal2, hl2), or --game all for both
 ./setup.sh "/path/to/Portal 2" "/path/to/depot_661"   # folders Steam did not put in the usual place
