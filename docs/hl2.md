@@ -248,3 +248,21 @@ controller hides the overlay, as for Portal 2.
   Metal; they have not been played through. To reach one without the menu:
   launch with `-gamepadui` and run `gamepadui_switchexpansion episodic`
   (or `ep2`, `lostcoast`), then `map <name>`.
+
+## Dark interiors
+
+Indoors, Half-Life 2 is meant to be dark: its maps cap the automatic
+exposure at 2× (`env_tonemap_controller`, `SetAutoExposureMax 2` on map
+spawn), and the canals and later areas expect the suit flashlight (`F`).
+Measured on 8 November 2026 at the start of `d1_trainstation_03`: the Metal
+and OpenGL renderers give the same image, the exposure logic computes the
+same values as the Source SDK 2013 code (target 10×, clamped to 2×), and the
+default gamma ramp is the identity, so the default picture matches Windows.
+
+**Options > Video > Brightness** brightens it. Source applies that setting as
+a Direct3D 9 gamma ramp, which Direct3D 9 (and libd3d9metal) only applies to
+a fullscreen device; on the Mac the game runs windowed or in desktop
+fullscreen, so the runtime forwards the ramp to the game window
+(`SDL_SetWindowGammaRamp`, as Portal 2's OpenGL path does). macOS applies it
+to the whole display while the game has focus, and SDL removes it when the
+game loses focus or quits.
