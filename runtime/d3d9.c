@@ -598,7 +598,7 @@ uint64_t d3d9_image_bytes(uint32_t width, uint32_t height, uint32_t format) {
     case 61: case 70: case 73: case 80: case 81: case 111: case 117: bytes = 2; break;   // L6V5U5, D16*, L16, R16F, CxV8U8
     case 20: bytes = 3; break;                                                        // R8G8B8
     case 21: case 22: case 31: case 32: case 33: case 34: case 35: case 62: case 63: case 64: case 67:
-    case 71: case 75: case 77: case 79: case 82: case 83: case 112: case 114: case 118: case 119: bytes = 4; break;
+    case 71: case 75: case 77: case 79: case 82: case 83: case 112: case 114: case 119: bytes = 4; break;   // D3DFMT_A1 (118) : 1 bit/pixel, taille inconnue
     case 36: case 110: case 113: case 115: bytes = 8; break;                         // A16B16G16R16(F), Q16W16V16U16, G32R32F
     case 116: bytes = 16; break;                                                     // A32B32G32R32F
     default: return 0;

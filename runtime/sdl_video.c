@@ -830,13 +830,13 @@ static int sdl_video(CPU *c, const char *name) {
             if (rw && !(r = rt_handle_new(rw, RT_SDL_RWOPS))) { SDL_RWclose(rw); rt_trap(c, c->eip, "SDL: handle table full"); }
         }
     } else if (!strcmp(n, "LoadBMP_RW")) {
-        // SDL_RWclose n'est pas ponté : sans freesrc, la source ne pourrait
-        // jamais être libérée (aucun appelant connu ne le fait).
+        // SDL_RWclose n'est pas ponté : avec freesrc=0 la source reste
+        // ouverte (fuite, aucun appelant connu ne le fait) ; avec freesrc=1
+        // le handle est rendu ici.
         uint32_t source = rt_arg32(c, 0), free_source = rt_arg32(c, 1);
-        if (!free_source) rt_trap(c, c->eip, "SDL_LoadBMP_RW with freesrc=0 is not bridged (SDL_RWclose is not bridged)");
         SDL_RWops *rw = rt_handle_require(c, source, RT_SDL_RWOPS, "SDL_RWops");
-        if (rw) rt_handle_free(source, RT_SDL_RWOPS);
-        r = export_surface(c, SDL_LoadBMP_RW(rw, 1));
+        if (rw && free_source) rt_handle_free(source, RT_SDL_RWOPS);
+        r = export_surface(c, SDL_LoadBMP_RW(rw, (int)(free_source != 0)));
     }
     else if (!strcmp(n, "FreeSurface")) free_surface(c, rt_arg32(c, 0));
     // Curseurs

@@ -107,7 +107,7 @@ __attribute__((noreturn, format(printf, 2, 3))) void rt_trapf(CPU *c, const char
 }
 int rt_env_flag(const char *name) {
     const char *value = getenv(name);
-    return value != NULL && strcmp(value, "0") != 0;
+    return value != NULL && *value && strcmp(value, "0") != 0;
 }
 // strcmp sans lire les deux chaînes en entier : morceaux bornés par la fin de
 // page de chacune, comparés jusqu'au premier écart ou NUL. Résultat de

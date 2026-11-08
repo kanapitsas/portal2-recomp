@@ -10,7 +10,7 @@ LOCAL := $(shell $(PYTHON) tools/localconfig.py --make host_prefix linux_root --
 local_value = $(subst %20, ,$(patsubst $(1)=%,%,$(filter $(1)=%,$(LOCAL))))
 # Bibliothèques hôtes ARM64 des ponts natifs ; partagées avec tools/build_game.py
 # (localconfig.host_flags).
-HOST_PREFIX := $(or $(call local_value,host_prefix),/opt/homebrew)
+HOST_PREFIX := $(or $(P2_HOST_PREFIX),$(call local_value,host_prefix),/opt/homebrew)
 HOST_CFLAGS = -I"$(HOST_PREFIX)/include" -I"$(HOST_PREFIX)/include/freetype2" -DGL_SILENCE_DEPRECATION -DOPENAL_DEPRECATED= -DAL_SILENCE_DEPRECATION
 HOST_LIBS = -L"$(HOST_PREFIX)/lib" -Wl,-rpath,"$(HOST_PREFIX)/lib" -lSDL2 -lfreetype -lfontconfig -liconv -framework OpenGL -framework OpenAL -lobjc
 CFLAGS += $(HOST_CFLAGS)
@@ -42,10 +42,15 @@ TIER0_OBJECTS_UBSAN := $(patsubst %.c,$(OBJ_UBSAN)/%.o,$(TIER0_SOURCES))
 .PHONY: all test check clean
 all: build/tier0-smoke
 
-$(OBJ)/%.o: %.c
+# build/obj/flags holds the compiler flags of the current build: a change of
+# HOST_PREFIX or CFLAGS (setup.sh switching to the prebuilt bundle) recompiles
+# every object, which -MMD alone would not notice.
+FLAGS_STAMP := $(OBJ)/flags
+$(shell mkdir -p $(OBJ); [ "$$(cat $(FLAGS_STAMP) 2>/dev/null)" = "$(CC) $(CFLAGS) $(UBSAN_FLAGS)" ] || echo "$(CC) $(CFLAGS) $(UBSAN_FLAGS)" > $(FLAGS_STAMP))
+$(OBJ)/%.o: %.c $(FLAGS_STAMP)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -Iruntime -Itests -MMD -MP -c $< -o $@
-$(OBJ_UBSAN)/%.o: %.c
+$(OBJ_UBSAN)/%.o: %.c $(FLAGS_STAMP)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(UBSAN_FLAGS) -Iruntime -Itests -MMD -MP -c $< -o $@
 -include $(ABI_OBJECTS:.o=.d) $(TIER0_OBJECTS:.o=.d) $(ABI_OBJECTS_UBSAN:.o=.d) $(TIER0_OBJECTS_UBSAN:.o=.d)
