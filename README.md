@@ -42,8 +42,8 @@ share them.
   tools are required.
 - **Half-Life 2** (experimental), with Episode One, Episode Two and Lost
   Coast: plays on Mac at 120 fps with Metal (M3 Pro, 720p, the display's
-  limit), from the same installer or checkout; runs in the iOS Simulator
-  with its own touch controls, untested on an iPhone; see
+  limit), from the same installer or checkout; runs on iPhone with its
+  own touch controls (first short test on an iPhone 15 Pro Max); see
   [below](#half-life-2-experimental).
 
 ## How it works
@@ -227,8 +227,8 @@ checkout as Portal 2: each game has its own build folder. It creates
 - **Tested**: a few hours of the main game on an M3 Pro, at 1280×720:
   120 fps with Metal (the display's limit; the default, as for Portal 2) and 91 with
   OpenGL (`--release` build).
-- **iPhone**: `./setup.sh --game hl2 --ios` builds the app; it runs in the
-  iOS Simulator, untested on a device ([docs/hl2.md](docs/hl2.md#iphone)).
+- **iPhone**: `./setup.sh --game hl2 --ios` builds the app; first short
+  test on an iPhone 15 Pro Max ([docs/hl2.md](docs/hl2.md#iphone)).
 - **Episodes and Lost Coast**: start them from the main menu (HL2:
   Episode One, HL2: Episode Two; Lost Coast is under Extras). Their first
   maps load and render on Metal; they have not been played through.
@@ -289,7 +289,7 @@ profiles.
 | Community | Community maps copied by hand, loaded with `+map` | 📅 |
 | Community | Steam Workshop on Mac (needs the UGC part of the Steam bridge) | 💡 |
 | Half-Life 2 | Mac app from the same recompiler, installer and checkout as Portal 2, main game played for a few hours | 🚧 |
-| Half-Life 2 | iPhone app: builds and runs in the iOS Simulator, untested on a device (`./setup.sh --game hl2 --ios`, [details](docs/hl2.md#iphone)) | 🚧 |
+| Half-Life 2 | iPhone app: runs on an iPhone 15 Pro Max (first short test) (`./setup.sh --game hl2 --ios`, [details](docs/hl2.md#iphone)) | 🚧 |
 | Half-Life 2 | The episodes and Lost Coast | 📅 |
 | Rendering | Ray-traced lighting with Metal on M3 and A17 Pro GPUs, in the spirit of Portal with RTX (NVIDIA's RTX Remix is Windows and NVIDIA only, so it cannot be reused) | 💡 |
 

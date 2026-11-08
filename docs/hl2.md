@@ -3,8 +3,8 @@
 The same pipeline also recompiles **Half-Life 2** (20th anniversary build,
 Steam app 220, mod `hl2_complete`). It is experimental: it installs and plays
 on Mac, but only a few hours of play have been tested, the episodes and Lost
-Coast have only been started, and the iPhone build has only run in the iOS
-Simulator so far (see [iPhone](#iphone)).
+Coast have only been started, and the iPhone build has had a first short test
+on an iPhone 15 Pro Max (see [iPhone](#iphone)).
 
 **You must own Half-Life 2.** As for Portal 2, everything is generated from
 your own copy and nothing from Valve is in this repository. The app and the
@@ -239,7 +239,8 @@ controller hides the overlay, as for Portal 2.
   go to the game, e.g. `+load <save>`).
 - The game wants the `en_US.UTF-8` locale and warns about glyph support: the
   runtime only provides `C` and `C.UTF-8`.
-- iPhone: built and played in the simulator only; untested on a device.
+- iPhone: one short session on an iPhone 15 Pro Max (8 November 2026), after
+  the simulator; not played for long.
 - Only the main game has been played (a few hours). Episode One, Episode Two
   and Lost Coast are in the same `hl2_complete` build and start from the
   main menu, which switches the game's search paths (`SwitchExpansion`), so
