@@ -1,4 +1,4 @@
-// Contract between the portal2-recomp runtime and a native arm64 Direct3D 9
+// Contract between the source-recomp runtime and a native arm64 Direct3D 9
 // implementation (libd3d9metal.dylib, built separately).
 //
 // The game's renderer shaderapivk.so (Linux i386, translated) talks to
