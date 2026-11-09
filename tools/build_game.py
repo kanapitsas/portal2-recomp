@@ -83,11 +83,12 @@ def generation_key(layout_path, layout, specs, whole_game, objdump='objdump'):
                   lift.SHARD_BITS, 'v1')
 
 
-def generate(args, layout, specs, out):
-    """Generated C of the game in `out` (<build_dir>/gen), reused when its key is unchanged."""
+def generate(layout_path, layout, specs, out, *, whole_game=True, jobs=None, objdump='objdump'):
+    """Generated C of the game in `out` (<build_dir>/gen), reused when its key is unchanged.
+    Explicit parameters (not an argparse namespace): tools/build_ios.py calls it too."""
     out = Path(out)
     manifest_path = out / 'manifest.json'
-    key = generation_key(args.layout, layout, specs, args.all, args.objdump)
+    key = generation_key(layout_path, layout, specs, whole_game, objdump)
     manifest = read_manifest(manifest_path)
     sources = out / 'src'
     if manifest.get('key') == key and all((sources / n).exists() for n in manifest['shards']) \
@@ -96,7 +97,7 @@ def generate(args, layout, specs, out):
               f'{manifest["instructions"]} instructions, {len(manifest["shards"])} files')
         return manifest, 0.0
     started = time.time()
-    manifest = lift.generate_sharded(layout, specs, args.all, args.objdump, ROOT / 'build/disasm-cache', out, args.jobs)
+    manifest = lift.generate_sharded(layout, specs, whole_game, objdump, ROOT / 'build/disasm-cache', out, jobs)
     manifest['key'] = key
     lift._write_atomic(manifest_path, json.dumps(manifest).encode())   # never a truncated manifest
     return manifest, time.time() - started
@@ -304,7 +305,8 @@ def main():
     started = time.time()
     layout = lift.load_layout(args.layout)
     try:
-        manifest, generation_time = generate(args, layout, roots(layout, game['roots']), build_dir / 'gen')
+        manifest, generation_time = generate(args.layout, layout, roots(layout, game['roots']), build_dir / 'gen',
+                                             whole_game=args.all, jobs=args.jobs, objdump=args.objdump)
     except lift.Unsupported as exc:
         parser.exit(1, f'game lift: {exc}\n')
     try:

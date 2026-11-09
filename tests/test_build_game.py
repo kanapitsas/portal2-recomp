@@ -148,3 +148,29 @@ class SymbolScopeTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class GenerateReuseTests(unittest.TestCase):
+    def test_generate_is_called_the_same_way_by_the_ios_build(self):
+        # Regression: build_ios.py used to hand generate() an argparse-like bag that
+        # lacked `objdump` (AttributeError before any C was generated). With an
+        # up-to-date manifest the call returns without lifting anything.
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            image = tmp / 'image.bin'
+            image.write_bytes(b'\0' * 16)
+            layout = {'program': 'p', 'modules': [{'name': 'p', 'image': str(image)}]}
+            layout_path = tmp / 'layout.json'
+            layout_path.write_text(json.dumps(layout))
+            out = tmp / 'gen'
+            (out / 'src').mkdir(parents=True)
+            (out / 'src' / 'dispatch.c').write_text('')
+            specs = ['p:symbol:main']
+            key = build_game.generation_key(layout_path, layout, specs, True)
+            (out / 'manifest.json').write_text(json.dumps(
+                {'key': key, 'shards': {}, 'functions': 0, 'instructions': 0}))
+            manifest, seconds = build_game.generate(layout_path, layout, specs, out, jobs=1)
+            self.assertEqual((manifest['key'], seconds), (key, 0.0))
+            with self.assertRaises(TypeError):   # no positional surprises: options are keywords
+                build_game.generate(layout_path, layout, specs, out, True, 1)

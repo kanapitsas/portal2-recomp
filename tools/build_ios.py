@@ -28,7 +28,6 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from types import SimpleNamespace
 
 from ios_bundle_id import bundle_id
 
@@ -85,8 +84,8 @@ def main():
                          capture_output=True, text=True).stdout.strip()
     started = time.time()
     layout = json.loads(args.layout.read_text())
-    manifest, _ = build_game.generate(SimpleNamespace(layout=args.layout, all=True, jobs=args.jobs),
-                                      layout, build_game.roots(layout, game['roots']), build_dir / 'gen')
+    manifest, _ = build_game.generate(args.layout, layout, build_game.roots(layout, game['roots']), build_dir / 'gen',
+                                      jobs=args.jobs)
     base = ['-target', target['triple'], '-isysroot', sdk]
     memory = ['-DRT_FAST_MEMORY'] if args.fast_memory else []
     debug = ['-DRT_IOS_GL_DEBUG'] if args.debug else []   # runtime/ios/env_ios.h RT_IOS_DEBUG_BUILD (runtime files only)
