@@ -29,7 +29,7 @@
 #include "host_gl.h"   // OpenGL.framework (macOS) ou gl4es (iOS)
 #include "frame_times.h"
 #include <mach/mach_time.h>
-void rt_gl_timing_add(const char *label, uint64_t ticks);
+void rt_gl_timing_add(uint64_t ticks);
 void rt_gl_pass_frame(void);
 void fps_overlay_frame(int drawable_width, int drawable_height);
 int rt_input_logging(void);   // sdl_input.c : P2_INPUT_LOG
@@ -45,18 +45,7 @@ _Static_assert(SDL_WINDOW_OPENGL == 0x2 && SDL_WINDOW_FULLSCREEN_DESKTOP == 0x10
 _Static_assert(SDL_INIT_VIDEO == 0x20 && SDL_GL_CONTEXT_PROFILE_MASK == 21, "SDL2 enums");
 _Static_assert(SDL_WINDOW_VULKAN == 0x10000000 && SDL_WINDOW_METAL == 0x20000000, "SDL2 window flags (Vulkan, Metal)");
 
-static uint32_t arg(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
-static const char *guest_string(CPU *c, uint32_t address) {
-    if (!address) return NULL;
-    return rt_span(c, address, (uint64_t)rt_string_length(c, address) + 1);
-}
-static void *handle(CPU *c, uint32_t value, uint32_t kind, const char *what) {
-    if (!value) return NULL;
-    void *host = rt_handle_get(value, kind);
-    if (!host) rt_trap(c, c->eip, what);
-    return host;
-}
-#define WINDOW(i) ((SDL_Window *)handle(c, arg(c, i), RT_SDL_WINDOW, "SDL: invalid SDL_Window handle"))
+#define WINDOW(i) ((SDL_Window *)rt_handle_require(c, rt_arg32(c, i), RT_SDL_WINDOW, "SDL_Window"))
 
 static void require_main_thread(CPU *c, const char *what) {
     if (!pthread_main_np()) rt_trap(c, c->eip, what);
@@ -65,45 +54,12 @@ static void require_main_thread(CPU *c, const char *what) {
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 // Chaînes constantes renvoyées au code invité (SDL_GetError, pilotes) :
-// une copie stable par contenu distinct, jamais libérée.
-typedef struct ConstString { uint32_t address; struct ConstString *next; char text[]; } ConstString;
-static ConstString *const_strings;
-static uint32_t const_string(CPU *c, const char *text) {
-    if (!text) return 0;
-    pthread_mutex_lock(&lock);
-    ConstString *s = const_strings;
-    while (s && strcmp(s->text, text)) s = s->next;
-    if (!s) {
-        size_t length = strlen(text) + 1;
-        s = malloc(sizeof(*s) + length);
-        uint32_t address = s && length <= UINT32_MAX ? rt_alloc((uint32_t)length) : 0;
-        if (!address) { free(s); pthread_mutex_unlock(&lock); rt_trap(c, c->eip, "SDL: guest string allocation failed"); }
-        memcpy(s->text, text, length);
-        memcpy(GPTR(address), text, length);
-        s->address = address; s->next = const_strings; const_strings = s;
-    }
-    pthread_mutex_unlock(&lock);
-    return s->address;
-}
-
-// Chaînes allouées sur le tas invité et rendues par SDL_free : celles du
-// presse-papiers ici, et celles des événements du pont SDL entrées
-// (SDL_DROPFILE, SDL_TEXTEDITING_EXT). Règle commune : toute adresse du tas
-// invité passée à SDL_free retourne à rt_free ; une adresse inconnue piège.
-static uint32_t heap_string(CPU *c, const char *text) {
-    size_t length = strlen(text) + 1;
-    uint32_t address = length <= UINT32_MAX ? rt_alloc((uint32_t)length) : 0;
-    if (!address) rt_trap(c, c->eip, "SDL: guest string allocation failed");
-    memcpy(GPTR(address), text, length);
-    return address;
-}
-static int is_const_string(uint32_t address) {
-    pthread_mutex_lock(&lock);
-    ConstString *s = const_strings;
-    while (s && s->address != address) s = s->next;
-    pthread_mutex_unlock(&lock);
-    return s != NULL;
-}
+// rt_intern_string, une copie stable par contenu distinct, jamais libérée.
+// Chaînes allouées sur le tas invité et rendues par SDL_free
+// (rt_guest_strdup_or_trap) : celles du presse-papiers ici, et celles des
+// événements du pont SDL entrées (SDL_DROPFILE, SDL_TEXTEDITING_EXT). Règle
+// commune : toute adresse du tas invité passée à SDL_free retourne à rt_free ;
+// une chaîne internée reste en place, une adresse inconnue piège.
 
 // SDL_DisplayMode i386 : format, w, h, refresh_rate, driverdata (20 octets).
 // driverdata est un pointeur hôte privé du pilote : jamais exposé (0 côté
@@ -118,15 +74,11 @@ static SDL_DisplayMode get_mode(CPU *c, uint32_t address) {
     rt_span(c, address, RT_SDL_DISPLAYMODE_SIZE);
     return (SDL_DisplayMode){R32(address), (int)R32(address + 4), (int)R32(address + 8), (int)R32(address + 12), NULL};
 }
-static int mode_result(CPU *c, int result, uint32_t address, const SDL_DisplayMode *mode) {
-    if (!result) put_mode(c, address, mode);
-    return result;
-}
 
 // --- Surfaces ---------------------------------------------------------------
 // Bloc invité : SDL_Surface (60) | SDL_PixelFormat (44) | SDL_Palette (16)
 // | couleurs (4 × n) | pixels (alignés sur 16).
-enum { SURFACE_SIZE = 60, FORMAT_OFFSET = 64, FORMAT_SIZE = 44, PALETTE_OFFSET = 112, COLORS_OFFSET = 128 };
+enum { SURFACE_SIZE = RT_SDL_SURFACE_SIZE, FORMAT_OFFSET = 64, FORMAT_SIZE = RT_SDL_PIXELFORMAT_SIZE, PALETTE_OFFSET = 112, COLORS_OFFSET = 128 };
 _Static_assert(FORMAT_OFFSET >= SURFACE_SIZE && PALETTE_OFFSET >= FORMAT_OFFSET + FORMAT_SIZE, "surface block");
 typedef struct Surface { uint32_t guest, pixels, palette; SDL_Surface *host; struct Surface *next; } Surface;
 static Surface *surfaces;
@@ -245,10 +197,8 @@ static void drawable_size(SDL_Window *window, int *w, int *h);
 // renvoie le numéro d'image.
 uint64_t rt_frame_log_tick(void) {
     static uint64_t frames, last_ticks;
-    static int log = -1;
-    if (log < 0) log = getenv("P2_FRAME_LOG") != NULL;
     ++frames;
-    if (log && frames % 60 == 0) {
+    if (RT_ENV_FLAG("P2_FRAME_LOG") && frames % 60 == 0) {
         uint64_t now = SDL_GetTicks64();
         fprintf(stderr, "[diag] frame %llu, %.1f fps\n", (unsigned long long)frames,
                 last_ticks ? 60000.0 / (double)(now - last_ticks + 1) : 0.0);
@@ -292,15 +242,12 @@ static void diagnose_frame(SDL_Window *w) {
 // chaque image, résultats lus avec quelques images de retard), journalisé
 // toutes les 120 images avec le temps CPU entre deux échanges.
 static void gpu_timing_frame(void) {
-#if TARGET_OS_IPHONE
-    return;   // gl4es : pas de GL_TIME_ELAPSED (requêtes d'occlusion seulement)
-#endif
-    static int enabled = -1, active;
+#if !TARGET_OS_IPHONE   // gl4es : pas de GL_TIME_ELAPSED (requêtes d'occlusion seulement)
+    static int active;
     static GLuint queries[8];
     static unsigned issued, read;
     static double gpu_ms, cpu_ms; static unsigned samples; static uint64_t last;
-    if (enabled < 0) enabled = getenv("P2_GPU_TIMING") != NULL;
-    if (!enabled) return;
+    if (!RT_ENV_FLAG("P2_GPU_TIMING")) return;
     static mach_timebase_info_data_t base;
     if (!base.denom) { mach_timebase_info(&base); glGenQueries(8, queries); }
     if (active) { glEndQuery(GL_TIME_ELAPSED_EXT); ++issued; active = 0; }
@@ -308,9 +255,7 @@ static void gpu_timing_frame(void) {
         GLint ready = 0; glGetQueryObjectiv(queries[read % 8], GL_QUERY_RESULT_AVAILABLE, &ready);
         if (!ready && issued - read < 7) break;
         GLuint64EXT ns = 0;
-#if !TARGET_OS_IPHONE
         glGetQueryObjectui64vEXT(queries[read % 8], GL_QUERY_RESULT, &ns);
-#endif
         gpu_ms += (double)ns / 1e6; ++samples; ++read;
     }
     uint64_t now = mach_absolute_time();
@@ -321,13 +266,10 @@ static void gpu_timing_frame(void) {
         gpu_ms = cpu_ms = 0; samples = 0;
     }
     glBeginQuery(GL_TIME_ELAPSED_EXT, queries[issued % 8]); active = 1;
+#endif
 }
 
-static int hidden_windows(void) {
-    static int value = -1;
-    if (value < 0) { const char *e = getenv("P2_HIDDEN_WINDOWS"); value = e && *e && strcmp(e, "0"); }
-    return value;
-}
+static int hidden_windows(void) { return RT_ENV_FLAG("P2_HIDDEN_WINDOWS"); }
 
 // --- Retina ------------------------------------------------------------------
 // Le jeu raisonne en pixels : taille de fenêtre = taille du tampon arrière, et
@@ -347,9 +289,10 @@ static int display_scale_value, display_scale_forced, window_scale_value = 1;
 static int retina_enabled(void) {
 #if TARGET_OS_IPHONE
     return 0;   // iOS : échelle de rendu gérée par ios/sdl_ios.m
-#endif
-    const char *e = getenv("P2_RETINA");
+#else
+    const char *e = getenv("P2_RETINA");   // actif par défaut : seul « 0 » désactive (pas RT_ENV_FLAG)
     return !e || !*e || strcmp(e, "0");
+#endif
 }
 
 // Échelle de l'écran principal, mesurée une fois sur une petite fenêtre cachée.
@@ -646,6 +589,14 @@ unsigned rt_sdl_game_modes(uint32_t (*modes)[3], unsigned capacity) {
     return count;
 }
 
+// Mode rendu par SDL_Get*DisplayMode : hauteur sous l'encoche (display), pixels.
+static uint32_t mode_out(CPU *c, int result, int display, uint32_t address, SDL_DisplayMode *mode) {
+    if (!result) mode->h = fullscreen_height(display, mode->h);
+    scale_mode(mode, 1);
+    if (!result) put_mode(c, address, mode);
+    return (uint32_t)result;
+}
+
 // --- Boîtes de message -------------------------------------------------------
 // Écrites sur stderr, jamais affichées : une boîte modale bloquerait une
 // exécution diagnostique (P2_HIDDEN_WINDOWS, tests), et le jeu ne s'en sert
@@ -654,7 +605,7 @@ unsigned rt_sdl_game_modes(uint32_t (*modes)[3], unsigned capacity) {
 // SDL_ShowMessageBox rend le bouton par défaut (touche Entrée), sinon le premier.
 static void report_message_box(CPU *c, uint32_t flags, uint32_t title, uint32_t message) {
     const char *kind = flags & SDL_MESSAGEBOX_ERROR ? "error" : flags & SDL_MESSAGEBOX_WARNING ? "warning" : "information";
-    const char *t = guest_string(c, title), *m = guest_string(c, message);
+    const char *t = rt_guest_cstr_or_null(c, title), *m = rt_guest_cstr_or_null(c, message);
     fprintf(stderr, "[sdl] message box (%s): %s\n%s\n", kind, t ? t : "", m ? m : "");
 }
 _Static_assert(SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT == 1, "SDL2 message box button flags");
@@ -675,7 +626,7 @@ static int message_box(CPU *c, uint32_t data, uint32_t buttonid) {
         if (R32(button) & SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT) { chosen = (int32_t)R32(button + 4); break; }
     }
     for (int32_t i = 0; i < count; ++i) {
-        const char *text = guest_string(c, R32(buttons + 12 * (uint32_t)i + 8));
+        const char *text = rt_guest_cstr_or_null(c, R32(buttons + 12 * (uint32_t)i + 8));
         fprintf(stderr, "[sdl]   button %d \"%s\"%s\n", (int)R32(buttons + 12 * (uint32_t)i + 4), text ? text : "",
                 (int32_t)R32(buttons + 12 * (uint32_t)i + 4) == chosen ? " (chosen)" : "");
     }
@@ -688,38 +639,38 @@ static int sdl_video(CPU *c, const char *name) {
     const char *n = name + 4;
     uint32_t r = 0;
     if (!strcmp(n, "Init") || !strcmp(n, "InitSubSystem")) {
-        uint32_t flags = arg(c, 0);
+        uint32_t flags = rt_arg32(c, 0);
         if (flags & SDL_INIT_VIDEO) require_main_thread(c, "SDL video must be initialized on the macOS main thread");
         r = (uint32_t)(!strcmp(n, "Init") ? SDL_Init(flags) : SDL_InitSubSystem(flags));
-    } else if (!strcmp(n, "QuitSubSystem")) SDL_QuitSubSystem(arg(c, 0));
-    else if (!strcmp(n, "WasInit")) r = SDL_WasInit(arg(c, 0));
-    else if (!strcmp(n, "SetHint")) r = (uint32_t)SDL_SetHint(guest_string(c, arg(c, 0)), guest_string(c, arg(c, 1)));
-    else if (!strcmp(n, "GetError")) r = const_string(c, SDL_GetError());
+    } else if (!strcmp(n, "QuitSubSystem")) SDL_QuitSubSystem(rt_arg32(c, 0));
+    else if (!strcmp(n, "WasInit")) r = SDL_WasInit(rt_arg32(c, 0));
+    else if (!strcmp(n, "SetHint")) r = (uint32_t)SDL_SetHint(rt_guest_cstr_or_null(c, rt_arg32(c, 0)), rt_guest_cstr_or_null(c, rt_arg32(c, 1)));
+    else if (!strcmp(n, "GetError")) r = rt_intern_string(c, SDL_GetError());
     else if (!strcmp(n, "setenv")) {
         // Même environnement que getenv/setenv invités (process.c) : celui de
         // l'hôte, recopié dans environ invité. Contrôles de SDL_setenv (SDL2).
-        const char *key = guest_string(c, arg(c, 0)), *value = guest_string(c, arg(c, 1));
-        int overwrite = (int)arg(c, 2), result = -1;
+        const char *key = rt_guest_cstr_or_null(c, rt_arg32(c, 0)), *value = rt_guest_cstr_or_null(c, rt_arg32(c, 1));
+        int overwrite = (int)rt_arg32(c, 2), result = -1;
         if (key && *key && !strchr(key, '=') && value) {
             result = setenv(key, value, overwrite);
             if (!result && rt_environ_sync()) result = -1;
         }
         r = (uint32_t)result;
     }
-    else if (!strcmp(n, "ShowSimpleMessageBox")) { report_message_box(c, arg(c, 0), arg(c, 1), arg(c, 2)); r = 0; }
-    else if (!strcmp(n, "ShowMessageBox")) r = (uint32_t)message_box(c, arg(c, 0), arg(c, 1));
+    else if (!strcmp(n, "ShowSimpleMessageBox")) { report_message_box(c, rt_arg32(c, 0), rt_arg32(c, 1), rt_arg32(c, 2)); r = 0; }
+    else if (!strcmp(n, "ShowMessageBox")) r = (uint32_t)message_box(c, rt_arg32(c, 0), rt_arg32(c, 1));
     else if (!strcmp(n, "GetWindowWMInfo")) {
         // Le jeu Linux y lirait des handles X11 : il n'y en a pas (fenêtre
         // Cocoa), échec explicite plutôt qu'une structure inventée.
-        SDL_Window *w = WINDOW(0); uint32_t info = arg(c, 1);
+        SDL_Window *w = WINDOW(0); uint32_t info = rt_arg32(c, 1);
         (void)w;
         if (info) { rt_write_span(c, info, 8); W32(info + 4, SDL_SYSWM_UNKNOWN); }   // SDL_version (3 octets), subsystem
         SDL_SetError("SDL bridge: no X11 window system information on macOS");
         r = SDL_FALSE;
     }
     else if (!strcmp(n, "free")) {
-        uint32_t address = arg(c, 0);
-        if (address && (is_const_string(address) || rt_free(address)))
+        uint32_t address = rt_arg32(c, 0);
+        if (address && (rt_is_interned(address) || rt_free(address)))
             rt_trap(c, c->eip, "SDL_free: block not allocated by the SDL bridge");
     }
     // Fenêtres
@@ -727,108 +678,104 @@ static int sdl_video(CPU *c, const char *name) {
         require_main_thread(c, "SDL_CreateWindow must run on the macOS main thread");
         // Mode diagnostic P2_HIDDEN_WINDOWS=1 : la fenêtre existe (contexte GL
         // réel) mais n'est jamais montrée ; le jeu n'en voit aucune différence.
-        uint32_t flags = rt_sdl_window_flags(arg(c, 5)) | (hidden_windows() ? SDL_WINDOW_HIDDEN : 0);
-        SDL_Window *w = create_window(guest_string(c, arg(c, 0)), (int)arg(c, 1), (int)arg(c, 2),
-                                      (int)arg(c, 3), (int)arg(c, 4), flags);
+        uint32_t flags = rt_sdl_window_flags(rt_arg32(c, 5)) | (hidden_windows() ? SDL_WINDOW_HIDDEN : 0);
+        SDL_Window *w = create_window(rt_guest_cstr_or_null(c, rt_arg32(c, 0)), (int)rt_arg32(c, 1), (int)rt_arg32(c, 2),
+                                      (int)rt_arg32(c, 3), (int)rt_arg32(c, 4), flags);
         if (w && !(r = rt_handle_new(w, RT_SDL_WINDOW))) { SDL_DestroyWindow(w); rt_trap(c, c->eip, "SDL: handle table full"); }
         if (w && (flags & SDL_WINDOW_METAL)) create_metal_view(w);   // thread principal : vue prête pour Direct3D 9
     } else if (!strcmp(n, "DestroyWindow")) {
         SDL_Window *w = WINDOW(0);
-        if (w) { rt_handle_free(arg(c, 0), RT_SDL_WINDOW); destroy_metal_view(w); }
+        if (w) { rt_handle_free(rt_arg32(c, 0), RT_SDL_WINDOW); destroy_metal_view(w); }
         SDL_DestroyWindow(w);
     }
     else if (!strcmp(n, "ShowWindow")) { SDL_Window *w = WINDOW(0); if (!hidden_windows()) SDL_ShowWindow(w); }
     else if (!strcmp(n, "HideWindow")) SDL_HideWindow(WINDOW(0));
     else if (!strcmp(n, "RaiseWindow")) { SDL_Window *w = WINDOW(0); if (!hidden_windows()) SDL_RaiseWindow(w); }
-    else if (!strcmp(n, "SetWindowTitle")) SDL_SetWindowTitle(WINDOW(0), guest_string(c, arg(c, 1)));
+    else if (!strcmp(n, "SetWindowTitle")) SDL_SetWindowTitle(WINDOW(0), rt_guest_cstr_or_null(c, rt_arg32(c, 1)));
     else if (!strcmp(n, "SetWindowIcon")) {
         SDL_Window *w = WINDOW(0);
-        SDL_SetWindowIcon(w, rt_sdl_surface_sync(c, arg(c, 1)));
+        SDL_SetWindowIcon(w, rt_sdl_surface_sync(c, rt_arg32(c, 1)));
     }
     else if (!strcmp(n, "SetWindowPosition"))
-        SDL_SetWindowPosition(WINDOW(0), position_to_points((int)arg(c, 1)), position_to_points((int)arg(c, 2)));
-    else if (!strcmp(n, "SetWindowSize")) resize_window(WINDOW(0), (int)arg(c, 1), (int)arg(c, 2));
+        SDL_SetWindowPosition(WINDOW(0), position_to_points((int)rt_arg32(c, 1)), position_to_points((int)rt_arg32(c, 2)));
+    else if (!strcmp(n, "SetWindowSize")) resize_window(WINDOW(0), (int)rt_arg32(c, 1), (int)rt_arg32(c, 2));
     else if (!strcmp(n, "GetWindowSize")) {
-        int w = 0, h = 0; uint32_t pw = arg(c, 1), ph = arg(c, 2);
+        int w = 0, h = 0; uint32_t pw = rt_arg32(c, 1), ph = rt_arg32(c, 2);
         if (pw) rt_write_span(c, pw, 4);
         if (ph) rt_write_span(c, ph, 4);
         SDL_GetWindowSize(WINDOW(0), pw ? &w : NULL, ph ? &h : NULL);
         if (pw) W32(pw, (uint32_t)(w * window_scale_value));
         if (ph) W32(ph, (uint32_t)(h * window_scale_value));
     }
-    else if (!strcmp(n, "SetWindowBordered")) SDL_SetWindowBordered(WINDOW(0), arg(c, 1) ? SDL_TRUE : SDL_FALSE);
+    else if (!strcmp(n, "SetWindowBordered")) SDL_SetWindowBordered(WINDOW(0), rt_arg32(c, 1) ? SDL_TRUE : SDL_FALSE);
     else if (!strcmp(n, "SetWindowFullscreen")) {
         SDL_Window *w = WINDOW(0);
-        r = (uint32_t)SDL_SetWindowFullscreen(w, arg(c, 1));
-        fprintf(stderr, "[sdl] SetWindowFullscreen(0x%x) = %d\n", arg(c, 1), (int)r);
+        r = (uint32_t)SDL_SetWindowFullscreen(w, rt_arg32(c, 1));
+        fprintf(stderr, "[sdl] SetWindowFullscreen(0x%x) = %d\n", rt_arg32(c, 1), (int)r);
         log_geometry(w, "plein écran");
     }
     else if (!strcmp(n, "SetWindowDisplayMode")) {
-        SDL_Window *w = WINDOW(0); uint32_t address = arg(c, 1);
+        SDL_Window *w = WINDOW(0); uint32_t address = rt_arg32(c, 1);
         SDL_DisplayMode mode;
         if (address) { mode = get_mode(c, address); scale_mode(&mode, 0); }
         r = (uint32_t)SDL_SetWindowDisplayMode(w, address ? &mode : NULL);
     } else if (!strcmp(n, "GetWindowDisplayMode")) {
-        SDL_Window *w = WINDOW(0); uint32_t address = arg(c, 1);
+        SDL_Window *w = WINDOW(0); uint32_t address = rt_arg32(c, 1);
         SDL_DisplayMode mode = {0};
         if (address) rt_write_span(c, address, RT_SDL_DISPLAYMODE_SIZE);
         int result = SDL_GetWindowDisplayMode(w, address ? &mode : NULL);
-        if (!result) mode.h = fullscreen_height(SDL_GetWindowDisplayIndex(w), mode.h);
-        scale_mode(&mode, 1);
-        r = (uint32_t)mode_result(c, result, address, &mode);
+        r = mode_out(c, result, result ? 0 : SDL_GetWindowDisplayIndex(w), address, &mode);
     }
     else if (!strcmp(n, "GetWindowDisplayIndex")) r = (uint32_t)SDL_GetWindowDisplayIndex(WINDOW(0));
     else if (!strcmp(n, "GetWindowID")) r = SDL_GetWindowID(WINDOW(0));
     else if (!strcmp(n, "GetWindowGrab")) r = (uint32_t)SDL_GetWindowGrab(WINDOW(0));
     else if (!strcmp(n, "SetWindowGrab")) {
-        SDL_SetWindowGrab(WINDOW(0), arg(c, 1) ? SDL_TRUE : SDL_FALSE);
-        if (rt_input_logging()) fprintf(stderr, "[input] %u SetWindowGrab %u\n", SDL_GetTicks(), arg(c, 1));
+        SDL_SetWindowGrab(WINDOW(0), rt_arg32(c, 1) ? SDL_TRUE : SDL_FALSE);
+        if (rt_input_logging()) fprintf(stderr, "[input] %u SetWindowGrab %u\n", SDL_GetTicks(), rt_arg32(c, 1));
     }
     else if (!strcmp(n, "SetWindowGammaRamp")) {
         SDL_Window *w = WINDOW(0);
         const Uint16 *ramp[3];
-        for (unsigned i = 0; i < 3; ++i) ramp[i] = arg(c, 1 + i) ? rt_span(c, arg(c, 1 + i), 512) : NULL;
+        for (unsigned i = 0; i < 3; ++i) ramp[i] = rt_arg32(c, 1 + i) ? rt_span(c, rt_arg32(c, 1 + i), 512) : NULL;
         r = (uint32_t)SDL_SetWindowGammaRamp(w, ramp[0], ramp[1], ramp[2]);
     } else if (!strcmp(n, "WarpMouseInWindow")) {
-        SDL_WarpMouseInWindow(WINDOW(0), (int)arg(c, 1) / window_scale_value, (int)arg(c, 2) / window_scale_value);
-        if (rt_input_logging()) fprintf(stderr, "[input] %u WarpMouseInWindow %d,%d\n", SDL_GetTicks(), (int)arg(c, 1), (int)arg(c, 2));
+        SDL_WarpMouseInWindow(WINDOW(0), (int)rt_arg32(c, 1) / window_scale_value, (int)rt_arg32(c, 2) / window_scale_value);
+        if (rt_input_logging()) fprintf(stderr, "[input] %u WarpMouseInWindow %d,%d\n", SDL_GetTicks(), (int)rt_arg32(c, 1), (int)rt_arg32(c, 2));
     }
     // Écrans
     else if (!strcmp(n, "GetNumVideoDisplays")) r = (uint32_t)SDL_GetNumVideoDisplays();
     else if (!strcmp(n, "GetDisplayBounds")) {
-        uint32_t address = arg(c, 1);
+        uint32_t address = rt_arg32(c, 1);
         SDL_Rect rect;
-        if (!address) r = (uint32_t)SDL_GetDisplayBounds((int)arg(c, 0), NULL);
+        if (!address) r = (uint32_t)SDL_GetDisplayBounds((int)rt_arg32(c, 0), NULL);
         else {
             rt_write_span(c, address, RT_SDL_RECT_SIZE);
-            if (!(r = (uint32_t)SDL_GetDisplayBounds((int)arg(c, 0), &rect))) {
-                rect.h = fullscreen_height((int)arg(c, 0), rect.h);
+            if (!(r = (uint32_t)SDL_GetDisplayBounds((int)rt_arg32(c, 0), &rect))) {
+                rect.h = fullscreen_height((int)rt_arg32(c, 0), rect.h);
                 W32(address, (uint32_t)screen_pixels(rect.x)); W32(address + 4, (uint32_t)screen_pixels(rect.y));
                 W32(address + 8, (uint32_t)screen_pixels(rect.w)); W32(address + 12, (uint32_t)screen_pixels(rect.h));
             }
         }
     } else if (!strcmp(n, "GetCurrentDisplayMode") || !strcmp(n, "GetDesktopDisplayMode")) {
-        uint32_t address = arg(c, 1);
+        uint32_t address = rt_arg32(c, 1);
         SDL_DisplayMode mode = {0};
         if (address) rt_write_span(c, address, RT_SDL_DISPLAYMODE_SIZE);
-        int index = (int)arg(c, 0);
+        int index = (int)rt_arg32(c, 0);
         int result = n[3] == 'C' ? SDL_GetCurrentDisplayMode(index, address ? &mode : NULL)
                                  : SDL_GetDesktopDisplayMode(index, address ? &mode : NULL);
-        if (!result) mode.h = fullscreen_height(index, mode.h);
-        scale_mode(&mode, 1);
-        r = (uint32_t)mode_result(c, result, address, &mode);
+        r = mode_out(c, result, index, address, &mode);
     }
-    else if (!strcmp(n, "GetCurrentVideoDriver")) r = const_string(c, SDL_GetCurrentVideoDriver());
-    else if (!strcmp(n, "GetCurrentAudioDriver")) r = const_string(c, SDL_GetCurrentAudioDriver());
+    else if (!strcmp(n, "GetCurrentVideoDriver")) r = rt_intern_string(c, SDL_GetCurrentVideoDriver());
+    else if (!strcmp(n, "GetCurrentAudioDriver")) r = rt_intern_string(c, SDL_GetCurrentAudioDriver());
     // OpenGL
     else if (!strcmp(n, "GL_LoadLibrary")) {
         // Un chemin invité désignerait une bibliothèque GL Linux, inutilisable ici.
-        if (arg(c, 0)) rt_trap(c, c->eip, "SDL_GL_LoadLibrary with an explicit Linux library path");
+        if (rt_arg32(c, 0)) rt_trap(c, c->eip, "SDL_GL_LoadLibrary with an explicit Linux library path");
         r = (uint32_t)SDL_GL_LoadLibrary(NULL);
     }
     else if (!strcmp(n, "GL_UnloadLibrary")) SDL_GL_UnloadLibrary();
     else if (!strcmp(n, "GL_SetAttribute")) {
-        uint32_t attribute = arg(c, 0), value = arg(c, 1);
+        uint32_t attribute = rt_arg32(c, 0), value = rt_arg32(c, 1);
         r = (uint32_t)SDL_GL_SetAttribute((SDL_GLattr)attribute, (int)value);
         fprintf(stderr, "[sdl] SDL_GL_SetAttribute(%s, %#x) = %d\n", gl_attribute_name(attribute), value, (int)r);
     } else if (!strcmp(n, "GL_CreateContext")) {
@@ -839,16 +786,16 @@ static int sdl_video(CPU *c, const char *name) {
         }
         if (!context) fprintf(stderr, "[sdl] SDL_GL_CreateContext failed: %s\n", SDL_GetError());
     } else if (!strcmp(n, "GL_DeleteContext")) {
-        SDL_GLContext context = handle(c, arg(c, 0), RT_SDL_GLCONTEXT, "SDL: invalid SDL_GLContext handle");
-        if (context) { rt_handle_free(arg(c, 0), RT_SDL_GLCONTEXT); SDL_GL_DeleteContext(context); }
+        SDL_GLContext context = rt_handle_require(c, rt_arg32(c, 0), RT_SDL_GLCONTEXT, "SDL_GLContext");
+        if (context) { rt_handle_free(rt_arg32(c, 0), RT_SDL_GLCONTEXT); SDL_GL_DeleteContext(context); }
     } else if (!strcmp(n, "GL_MakeCurrent")) {
         SDL_Window *w = WINDOW(0);
-        r = (uint32_t)SDL_GL_MakeCurrent(w, handle(c, arg(c, 1), RT_SDL_GLCONTEXT, "SDL: invalid SDL_GLContext handle"));
+        r = (uint32_t)SDL_GL_MakeCurrent(w, rt_handle_require(c, rt_arg32(c, 1), RT_SDL_GLCONTEXT, "SDL_GLContext"));
     }
     else if (!strcmp(n, "GL_SetSwapInterval")) {
         // Fenêtre cachée (diagnostic) : jamais rafraîchie par l'écran, la
         // synchronisation verticale de SDL3/Cocoa y attend indéfiniment.
-        int interval = hidden_windows() ? 0 : (int)arg(c, 0);
+        int interval = hidden_windows() ? 0 : (int)rt_arg32(c, 0);
         r = (uint32_t)SDL_GL_SetSwapInterval(interval);
     }
     else if (!strcmp(n, "GL_SwapWindow")) {
@@ -862,18 +809,18 @@ static int sdl_video(CPU *c, const char *name) {
         unsigned saved = rt_guest_suspend();   // la synchronisation verticale peut bloquer
         uint64_t start = mach_absolute_time();
         SDL_GL_SwapWindow(w);
-        rt_gl_timing_add("SwapWindow", mach_absolute_time() - start);
+        rt_gl_timing_add(mach_absolute_time() - start);
         rt_gl_pass_frame();
         rt_guest_resume(saved);
         if (frame_start) rt_frame_times_record('g', frame_start);
     } else if (!strcmp(n, "GL_GetProcAddress")) {
-        const char *proc = guest_string(c, arg(c, 0));
+        const char *proc = rt_guest_cstr_or_null(c, rt_arg32(c, 0));
         r = proc ? rt_gl_proc_address(proc) : 0;
         if (!r) SDL_SetError("SDL bridge: OpenGL function %s is not bridged", proc ? proc : "(null)");
     }
     // Fichiers et surfaces
     else if (!strcmp(n, "RWFromFile")) {
-        const char *path = guest_string(c, arg(c, 0)), *mode = guest_string(c, arg(c, 1));
+        const char *path = rt_guest_cstr_or_null(c, rt_arg32(c, 0)), *mode = rt_guest_cstr_or_null(c, rt_arg32(c, 1));
         if (!path || !mode) { SDL_SetError("Parameter '%s' is invalid", path ? "mode" : "file"); r = 0; }
         else {
             int writing = mode[0] == 'w' || mode[0] == 'a' || strchr(mode, '+');
@@ -883,43 +830,44 @@ static int sdl_video(CPU *c, const char *name) {
             if (rw && !(r = rt_handle_new(rw, RT_SDL_RWOPS))) { SDL_RWclose(rw); rt_trap(c, c->eip, "SDL: handle table full"); }
         }
     } else if (!strcmp(n, "LoadBMP_RW")) {
-        uint32_t source = arg(c, 0), free_source = arg(c, 1);
-        SDL_RWops *rw = handle(c, source, RT_SDL_RWOPS, "SDL: invalid SDL_RWops handle");
+        // SDL_RWclose n'est pas ponté : avec freesrc=0 la source reste
+        // ouverte (fuite, aucun appelant connu ne le fait) ; avec freesrc=1
+        // le handle est rendu ici.
+        uint32_t source = rt_arg32(c, 0), free_source = rt_arg32(c, 1);
+        SDL_RWops *rw = rt_handle_require(c, source, RT_SDL_RWOPS, "SDL_RWops");
         if (rw && free_source) rt_handle_free(source, RT_SDL_RWOPS);
-        r = export_surface(c, SDL_LoadBMP_RW(rw, (int)free_source));
+        r = export_surface(c, SDL_LoadBMP_RW(rw, (int)(free_source != 0)));
     }
-    else if (!strcmp(n, "FreeSurface")) free_surface(c, arg(c, 0));
+    else if (!strcmp(n, "FreeSurface")) free_surface(c, rt_arg32(c, 0));
     // Curseurs
     else if (!strcmp(n, "CreateColorCursor") || !strcmp(n, "CreateSystemCursor")) {
-        SDL_Cursor *cursor = n[6] == 'C' ? SDL_CreateColorCursor(rt_sdl_surface_sync(c, arg(c, 0)), (int)arg(c, 1), (int)arg(c, 2))
-                                         : SDL_CreateSystemCursor((SDL_SystemCursor)arg(c, 0));
+        SDL_Cursor *cursor = n[6] == 'C' ? SDL_CreateColorCursor(rt_sdl_surface_sync(c, rt_arg32(c, 0)), (int)rt_arg32(c, 1), (int)rt_arg32(c, 2))
+                                         : SDL_CreateSystemCursor((SDL_SystemCursor)rt_arg32(c, 0));
         if (cursor && !(r = rt_handle_new(cursor, RT_SDL_CURSOR))) { SDL_FreeCursor(cursor); rt_trap(c, c->eip, "SDL: handle table full"); }
-    } else if (!strcmp(n, "SetCursor")) SDL_SetCursor(handle(c, arg(c, 0), RT_SDL_CURSOR, "SDL: invalid SDL_Cursor handle"));
+    } else if (!strcmp(n, "SetCursor")) SDL_SetCursor(rt_handle_require(c, rt_arg32(c, 0), RT_SDL_CURSOR, "SDL_Cursor"));
     else if (!strcmp(n, "FreeCursor")) {
-        SDL_Cursor *cursor = handle(c, arg(c, 0), RT_SDL_CURSOR, "SDL: invalid SDL_Cursor handle");
-        if (cursor) { rt_handle_free(arg(c, 0), RT_SDL_CURSOR); SDL_FreeCursor(cursor); }
+        SDL_Cursor *cursor = rt_handle_require(c, rt_arg32(c, 0), RT_SDL_CURSOR, "SDL_Cursor");
+        if (cursor) { rt_handle_free(rt_arg32(c, 0), RT_SDL_CURSOR); SDL_FreeCursor(cursor); }
     }
     else if (!strcmp(n, "ShowCursor")) {
-        r = (uint32_t)SDL_ShowCursor((int)arg(c, 0));
+        r = (uint32_t)SDL_ShowCursor((int)rt_arg32(c, 0));
         static int last = -2;
-        if (rt_input_logging() && (int)arg(c, 0) != last && (int)arg(c, 0) >= 0)
-            fprintf(stderr, "[input] %u ShowCursor %d\n", SDL_GetTicks(), (int)arg(c, 0));
-        if ((int)arg(c, 0) >= 0) last = (int)arg(c, 0);
+        if (rt_input_logging() && (int)rt_arg32(c, 0) != last && (int)rt_arg32(c, 0) >= 0)
+            fprintf(stderr, "[input] %u ShowCursor %d\n", SDL_GetTicks(), (int)rt_arg32(c, 0));
+        if ((int)rt_arg32(c, 0) >= 0) last = (int)rt_arg32(c, 0);
     }
     // Presse-papiers
     else if (!strcmp(n, "GetClipboardText")) {
         char *text = SDL_GetClipboardText();
-        r = heap_string(c, text ? text : "");
+        r = rt_guest_strdup_or_trap(c, text ? text : "");
         SDL_free(text);
     }
-    else if (!strcmp(n, "SetClipboardText")) r = (uint32_t)SDL_SetClipboardText(guest_string(c, arg(c, 0)));
+    else if (!strcmp(n, "SetClipboardText")) r = (uint32_t)SDL_SetClipboardText(rt_guest_cstr_or_null(c, rt_arg32(c, 0)));
     else if (!strcmp(n, "HasClipboardText")) r = (uint32_t)SDL_HasClipboardText();
     else return 0;
     c->eax = r;
-    static int trace = -1;
     // P2_SDL_TRACE=1 (ancien nom RT_SDL_TRACE, toujours accepté) : chaque appel vidéo traité ici.
-    if (trace < 0) trace = getenv("P2_SDL_TRACE") != NULL || getenv("RT_SDL_TRACE") != NULL;
-    if (trace) fprintf(stderr, "[sdl] %s(%#x, %#x, %#x) = %#x\n", name, arg(c, 0), arg(c, 1), arg(c, 2), r);
+    if (RT_ENV_FLAG("P2_SDL_TRACE") || RT_ENV_FLAG("RT_SDL_TRACE")) fprintf(stderr, "[sdl] %s(%#x, %#x, %#x) = %#x\n", name, rt_arg32(c, 0), rt_arg32(c, 1), rt_arg32(c, 2), r);
     return 1;
 }
 RT_SHIM_PROVIDER(sdl_video)

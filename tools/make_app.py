@@ -65,7 +65,7 @@ if ! /usr/bin/pgrep -qx steam_osx; then
     sleep 5
 fi
 export SteamAppId={appid} SteamGameId={appid}
-{renderer}# libsteam_api.dylib de Valve, copiée dans l'app : le runtime la cherche sinon
+# libsteam_api.dylib de Valve, copiée dans l'app : le runtime la cherche sinon
 # à côté du dépôt, absent ici.
 export P2_STEAM_API_DYLIB="$HERE/../Frameworks/libsteam_api.dylib"
 # Configuration Fontconfig embarquée (sinon cherchée dans le préfixe de compilation).
@@ -253,13 +253,6 @@ def default_args(game):
     return ['-game', game['mod'], '-novid']
 
 
-def renderer_line(game):
-    """Launcher line for a game that starts on a given renderer (P2_RENDERER
-    set by the user still wins), empty otherwise."""
-    if not game.get('renderer'): return ''
-    return f'export P2_RENDERER="${{P2_RENDERER:-{game["renderer"]}}}"   # see tools/games.py\n'
-
-
 def build_app(app, binary, prep, config, paths, game_args):
     macos = app / 'Contents/MacOS'
     resources = app / 'Contents/Resources'
@@ -279,7 +272,7 @@ def build_app(app, binary, prep, config, paths, game_args):
     launcher = macos / 'launcher'
     launcher.write_text(LAUNCHER.format(
         name=game['app_name'], log_name=game['log_name'], appid=int(game['steam_appid']), executable=game['executable'],
-        renderer=renderer_line(game), game_args=shlex.join(game_args or default_args(game)),
+        game_args=shlex.join(game_args or default_args(game)),
         **{key: shlex.quote(str(value)) for key, value in paths.items()}))
     launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     bundle_libraries(app, binary, localconfig.host_prefix(config), executable=game['executable'])

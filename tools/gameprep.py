@@ -5,9 +5,11 @@ import json
 from pathlib import Path
 import subprocess
 import sys
-from elfprep import Elf
-import games
-import localconfig
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from elfprep import Elf  # noqa: E402
+import games  # noqa: E402
+import localconfig  # noqa: E402
 
 
 def plan(config):
@@ -42,13 +44,13 @@ def plan(config):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     games.add_argument(parser)
-    parser.add_argument('--config', type=Path, default=Path('config/local.json'))
+    parser.add_argument('--config', type=Path, default=localconfig.DEFAULT_PATH)
     parser.add_argument('--out', type=Path, help='default: <build_dir>/prep of the game (tools/games.py)')
     args = parser.parse_args()
     config = localconfig.game_config(localconfig.load(args.config), args.game)
     if not config.get('linux_root'):
         parser.exit(1, f'no linux_root for {config["game"]} in {args.config}: run ./setup.sh --game {config["game"]}\n')
-    args.out = args.out or Path(games.profile(config)['build_dir']) / 'prep'
+    args.out = args.out or games.ROOT / games.profile(config)['build_dir'] / 'prep'
     modules = plan(config)
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / 'plan.json').write_text(json.dumps([{'path': str(p), 'base': hex(base), 'size': size}

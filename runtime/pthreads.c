@@ -44,14 +44,9 @@ static void once_bridge(void) {
 static Mutex *mutexes;
 static Attr *attributes;
 
-static uint32_t argument(CPU *c, unsigned i) { return R32(c->esp + 4 + i * 4); }
-static int linux_error(int error) {
-    if (error == EAGAIN) return 11;
-    if (error == EDEADLK) return 35;
-    if (error == ENOTSUP) return 95;
-    if (error == ETIMEDOUT) return 110;
-    return error; // EINVAL, EBUSY, ENOMEM, EPERM agree on these platforms
-}
+// Code d'erreur pthread hôte -> Linux (0 reste 0 ; rt_linux_errno traduit
+// EAGAIN, EDEADLK, ENOTSUP, ETIMEDOUT ; EINVAL, EBUSY, ENOMEM, EPERM coïncident).
+static uint32_t linux_error(int error) { return error ? (uint32_t)rt_linux_errno(error) : 0; }
 static Attr *find_attr(uint32_t address) {
     for (Attr *a = attributes; a; a = a->next) if (a->address == address) return a;
     return NULL;
@@ -148,7 +143,7 @@ static int mutex_operation(CPU *c, uint32_t address, int op) {
         }
         if (!error) lock_acquired(m);
     } else if (op == MUTEX_TRYLOCK) { error = pthread_mutex_trylock(&m->native); if (!error) lock_acquired(m); }
-    else if (op == MUTEX_TIMEDLOCK) { error = timed_lock(c, m, argument(c, 1)); if (!error) lock_acquired(m); }
+    else if (op == MUTEX_TIMEDLOCK) { error = timed_lock(c, m, rt_arg32(c, 1)); if (!error) lock_acquired(m); }
     else { error = pthread_mutex_unlock(&m->native); if (!error && m->kind == 2) m->owned = 0; }
     return error;
 }
@@ -159,11 +154,11 @@ static int cond_wake(uint32_t address, int broadcast) {
     return broadcast ? pthread_cond_broadcast(&item->native) : pthread_cond_signal(&item->native);
 }
 static int cond_wait(CPU *c, int timed) {
-    Cond *item = find_cond(argument(c, 0));
-    Mutex *mutex = find_mutex(argument(c, 1));
+    Cond *item = find_cond(rt_arg32(c, 0));
+    Mutex *mutex = find_mutex(rt_arg32(c, 1));
     if (!item || !mutex) return EINVAL;
     struct timespec deadline = {0};
-    if (timed && rt_read_timespec(c, argument(c, 2), &deadline)) return EINVAL;
+    if (timed && rt_read_timespec(c, rt_arg32(c, 2), &deadline)) return EINVAL;
     // The wait releases the mutex: an error-checking owner record must
     // not survive it, or another thread's lock would be misattributed.
     int held = mutex->kind == 2 && mutex->owned && pthread_equal(mutex->owner, pthread_self());
@@ -178,8 +173,8 @@ static int cond_wait(CPU *c, int timed) {
 // getspecific : c->eax reçoit la valeur (EINVAL pour une clé invalide, comme
 // avant) et renvoie -1 ; setspecific renvoie le code d'erreur.
 static int key_specific(CPU *c, int set) {
-    Key *key = find_key(argument(c, 0));
-    if (set) return key ? pthread_setspecific(key->native, (void *)(uintptr_t)argument(c, 1)) : EINVAL;
+    Key *key = find_key(rt_arg32(c, 0));
+    if (set) return key ? pthread_setspecific(key->native, (void *)(uintptr_t)rt_arg32(c, 1)) : EINVAL;
     c->eax = key ? (uint32_t)(uintptr_t)pthread_getspecific(key->native) : (uint32_t)EINVAL;
     return -1;
 }
@@ -187,7 +182,7 @@ static int key_specific(CPU *c, int set) {
 static int pthread_objects(CPU *c, const char *name) {
     if (!strcmp(name, "__pthread_key_create")) name = "pthread_key_create";
     if (strncmp(name, "pthread_", 8)) return 0;
-    uint32_t address = argument(c, 0);
+    uint32_t address = rt_arg32(c, 0);
     int error = 0;
     if (!strcmp(name, "pthread_key_create")) {
         rt_write_span(c, address, 4);   // avant de réserver une clé qui fuirait
@@ -198,7 +193,7 @@ static int pthread_objects(CPU *c, const char *name) {
             // Guest destructors are retained for the guest thread-exit path;
             // they must never be handed to Darwin as native function pointers.
             error = pthread_key_create(&key->native, NULL);
-            if (!error) { key->used = 1; key->destructor = argument(c, 1); W32(address, id); }
+            if (!error) { key->used = 1; key->destructor = rt_arg32(c, 1); W32(address, id); }
         }
     } else if (!strcmp(name, "pthread_setspecific") || !strcmp(name, "pthread_getspecific") || !strcmp(name, "pthread_key_delete")) {
         Key *key = find_key(address);
@@ -207,7 +202,7 @@ static int pthread_objects(CPU *c, const char *name) {
         else if (!key) error = EINVAL;
         else { error = pthread_key_delete(key->native); if (!error) key->used = 0; }
     } else if (!strcmp(name, "pthread_cond_init")) {
-        if (argument(c, 1)) rt_trap(c, c->eip, "guest condition attributes not implemented");
+        if (rt_arg32(c, 1)) rt_trap(c, c->eip, "guest condition attributes not implemented");
         Cond *item = find_cond(address);
         if (!address || item) error = EINVAL;
         else {
@@ -239,7 +234,7 @@ static int pthread_objects(CPU *c, const char *name) {
             item->address=address; item->next=onces; onces=item;
         }
         CPU *old_cpu=once_cpu; uint32_t old_function=once_function, old_address=once_address;
-        once_cpu=c; once_function=argument(c,1); once_address=address;
+        once_cpu=c; once_function=rt_arg32(c,1); once_address=address;
         unsigned saved=rt_guest_suspend();
         error=pthread_once(&item->native,once_bridge);
         rt_guest_resume(saved);
@@ -257,8 +252,8 @@ static int pthread_objects(CPU *c, const char *name) {
         }
     } else if (!strcmp(name, "pthread_mutexattr_settype")) {
         Attr *a = find_attr(address);
-        uint32_t type = argument(c, 1);
-        if (type > 2) { c->eax = 22; return 1; }
+        uint32_t type = rt_arg32(c, 1);
+        if (type > 2) { c->eax = RT_EINVAL; return 1; }
         error = a ? pthread_mutexattr_settype(&a->native, native_type(type)) : EINVAL;
         if (!error) { a->kind = type; W32(address, type); }
     } else if (!strcmp(name, "pthread_mutexattr_destroy")) {
@@ -271,7 +266,7 @@ static int pthread_objects(CPU *c, const char *name) {
             if (!error) { *link = a->next; W32(address, UINT32_MAX); free(a); }
         }
     } else if (!strcmp(name, "pthread_mutex_init")) {
-        uint32_t attr_address = argument(c, 1);
+        uint32_t attr_address = rt_arg32(c, 1);
         Attr *a = find_attr(attr_address);
         error = attr_address && !a ? EINVAL : create_mutex(address, a ? &a->native : NULL, a ? a->kind : 0);
         if (!error) { memset(rt_write_span(c, address, 24), 0, 24); W32(address + 12, a ? a->kind : 0); }
@@ -290,7 +285,7 @@ static int pthread_objects(CPU *c, const char *name) {
                  : !strcmp(name, "pthread_mutex_timedlock") ? MUTEX_TIMEDLOCK : MUTEX_UNLOCK;
         error = mutex_operation(c, address, op);
     } else return 0;
-    c->eax = (uint32_t)linux_error(error);
+    c->eax = linux_error(error);
     return 1;
 }
 
@@ -302,14 +297,14 @@ static int pthread_handler(CPU *c, const char *name, void *data) {
     int op = (int)(intptr_t)data, error;
     rt_guest_enter();
     switch (op) {
-    case ROUTE_COND_SIGNAL: case ROUTE_COND_BROADCAST: error = cond_wake(argument(c, 0), op == ROUTE_COND_BROADCAST); break;
+    case ROUTE_COND_SIGNAL: case ROUTE_COND_BROADCAST: error = cond_wake(rt_arg32(c, 0), op == ROUTE_COND_BROADCAST); break;
     case ROUTE_COND_WAIT: case ROUTE_COND_TIMEDWAIT: error = cond_wait(c, op == ROUTE_COND_TIMEDWAIT); break;
     case ROUTE_GETSPECIFIC: error = key_specific(c, 0); break;
     case ROUTE_SETSPECIFIC: error = key_specific(c, 1); break;
     case ROUTE_SELF: rt_thread_shim(c, "pthread_self"); error = -1; break;
-    default: error = mutex_operation(c, argument(c, 0), op);
+    default: error = mutex_operation(c, rt_arg32(c, 0), op);
     }
-    if (error >= 0) c->eax = (uint32_t)linux_error(error);
+    if (error >= 0) c->eax = linux_error(error);
     rt_guest_leave();
     return 1;
 }

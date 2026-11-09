@@ -5,9 +5,9 @@
 # Sources à versions fixées : SDL2 2.30.9, FreeType 2.13.3, gl4es (commit
 # ci-dessous) avec les correctifs de gl4es-ios.patch.
 set -euo pipefail
-HERE=$(cd "$(dirname "$0")" && pwd)
-WORK=${P2_IOS_DEPS:-$(cd "$HERE/../../.." && pwd)/work/ios-deps}
-TARGET=${1:-sim}
+HERE="$(cd "$(dirname "$0")" && pwd)"
+WORK="${P2_IOS_DEPS:-$(cd "$HERE/../../.." && pwd)/work/ios-deps}"
+TARGET="${1:-sim}"
 case "$TARGET" in
   sim)    SYSROOT=iphonesimulator ;;
   device) SYSROOT=iphoneos ;;
@@ -35,9 +35,9 @@ elif ! git -C src/gl4es diff | cmp -s - "$HERE/gl4es-ios.patch"; then
   echo "src/gl4es modifié et différent de gl4es-ios.patch : à réconcilier" >&2; exit 1
 fi
 
-PREFIX=$WORK/$TARGET
-COMMON=(-G Ninja -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=$SYSROOT -DCMAKE_OSX_ARCHITECTURES=arm64
-        -DCMAKE_OSX_DEPLOYMENT_TARGET=17.0 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX
+PREFIX="$WORK/$TARGET"
+COMMON=(-G Ninja -DCMAKE_SYSTEM_NAME=iOS "-DCMAKE_OSX_SYSROOT=$SYSROOT" -DCMAKE_OSX_ARCHITECTURES=arm64
+        -DCMAKE_OSX_DEPLOYMENT_TARGET=17.0 -DCMAKE_BUILD_TYPE=Release "-DCMAKE_INSTALL_PREFIX=$PREFIX"
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5)
 
 build() {  # nom source options...

@@ -21,8 +21,6 @@ typedef struct AudioDevice {
 } AudioDevice;
 static AudioDevice *audio_devices;   // gate held
 
-static uint32_t argument(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
-
 // Host callback, on SDL's audio thread.
 static void rt_sdl_audio_trampoline(void *opaque, Uint8 *stream, int length) {
     AudioDevice *device = opaque;
@@ -65,8 +63,8 @@ static void write_spec(CPU *c, uint32_t address, const SDL_AudioSpec *spec, uint
 
 static int audio_shim(CPU *c, const char *name) {
     if (!strcmp(name, "SDL_OpenAudioDevice")) {
-        uint32_t device_name = argument(c, 0), desired_address = argument(c, 2), obtained_address = argument(c, 3);
-        int capture = (int32_t)argument(c, 1) != 0, allowed = (int32_t)argument(c, 4);
+        uint32_t device_name = rt_arg32(c, 0), desired_address = rt_arg32(c, 2), obtained_address = rt_arg32(c, 3);
+        int capture = (int32_t)rt_arg32(c, 1) != 0, allowed = (int32_t)rt_arg32(c, 4);
         char *host_name = NULL;
         if (device_name) {
             uint32_t length = rt_string_length(c, device_name);
@@ -104,12 +102,12 @@ static int audio_shim(CPU *c, const char *name) {
         if (obtained_address) write_spec(c, obtained_address, &obtained, callback, userdata);
         c->eax = id;
     } else if (!strcmp(name, "SDL_PauseAudioDevice")) {
-        SDL_AudioDeviceID id = argument(c, 0); int pause = (int32_t)argument(c, 1);
+        SDL_AudioDeviceID id = rt_arg32(c, 0); int pause = (int32_t)rt_arg32(c, 1);
         unsigned saved = rt_guest_suspend();
         SDL_PauseAudioDevice(id, pause);
         rt_guest_resume(saved);
     } else if (!strcmp(name, "SDL_CloseAudioDevice")) {
-        SDL_AudioDeviceID id = argument(c, 0);
+        SDL_AudioDeviceID id = rt_arg32(c, 0);
         // Joins SDL's audio thread, which may be waiting for the gate.
         unsigned saved = rt_guest_suspend();
         SDL_CloseAudioDevice(id);

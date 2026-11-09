@@ -1,14 +1,9 @@
 """Emit small instruction graphs to exercise ABI cases absent from codec exports."""
-import importlib.util
 from pathlib import Path
 import sys
 
-import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
-
-spec = importlib.util.spec_from_file_location('lift', Path(__file__).resolve().parents[1] / 'tools/lift.py')
-lift = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(lift)
+import lift  # noqa: E402
 
 # Addresses are intentionally synthetic; production binaries still go through
 # the real objdump/ELF pipeline in the separate tier0 smoke suite.

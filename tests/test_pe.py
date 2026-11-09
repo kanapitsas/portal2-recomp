@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 import struct
 import sys
@@ -8,6 +7,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'tools'), str(ROOT / 'tests')]
 import lift  # noqa: E402
+import localconfig  # noqa: E402
 import pe_fixture  # noqa: E402
 import peprep  # noqa: E402
 
@@ -104,10 +104,10 @@ class TestDllTests(unittest.TestCase):
         self.assertIn(f'{self.symbols["pe_load"] + 1:#x}u,', relocations)              # vise .data
 
 
-@unittest.skipUnless((ROOT / 'config/local.json').exists(), 'no local game copy')
+@unittest.skipUnless(localconfig.DEFAULT_PATH.exists(), 'no local game copy')
 class RealPluginTests(unittest.TestCase):
     def test_mssmp3_is_fully_lifted(self):
-        config = json.loads((ROOT / 'config/local.json').read_text())
+        config = localconfig.for_game('portal2')
         path = Path(config.get('game_root', '')) / 'bin/linux32/mssmp3.asi'
         if not path.is_file():
             self.skipTest('mssmp3.asi not found')

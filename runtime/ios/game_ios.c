@@ -1,5 +1,6 @@
 // Profils de jeu du build iOS (voir game_ios.h). La table suit tools/games.py
-// (mod, appid) ; tests/checks_ios_game.c vérifie la concordance.
+// (mod, appid) ; tests/checks_touch_layout.c et tests/test_games.py vérifient
+// la concordance.
 #include "game_ios.h"
 #include <TargetConditionals.h>
 #include <stddef.h>

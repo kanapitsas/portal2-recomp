@@ -117,3 +117,28 @@ def host_flags(prefix=None):
     libs = [f'-L{prefix}/lib', f'-Wl,-rpath,{prefix}/lib', '-lSDL2', '-lfreetype', '-lfontconfig', '-liconv',
             '-framework', 'OpenGL', '-framework', 'OpenAL', '-lobjc']
     return cflags, libs
+
+
+def main(argv=None):
+    """`python3 tools/localconfig.py --make KEY... [--game NAME]`: the Makefile's
+    one-shot read of config/local.json. Prints `KEY=value` words on one line,
+    spaces in values encoded as %20 (Make splits $(shell) output on
+    whitespace); an unset key prints nothing. host_prefix is host_prefix()
+    (P2_HOST_PREFIX, the config, else Homebrew)."""
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    games.add_argument(parser)
+    parser.add_argument('--make', nargs='+', metavar='KEY', required=True, help='keys to print as KEY=value words')
+    args = parser.parse_args(argv)
+    config = for_game(args.game)
+    words = []
+    for key in args.make:
+        value = str(host_prefix(config)) if key == 'host_prefix' else config.get(key)
+        if value: words.append(f'{key}={str(value).replace(" ", "%20")}')
+    print(' '.join(words))
+    return 0
+
+
+if __name__ == '__main__':
+    import sys
+    sys.exit(main())

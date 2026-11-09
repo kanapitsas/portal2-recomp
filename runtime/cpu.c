@@ -16,13 +16,15 @@ void rt_cpu_reset(CPU *c) {
 // /proc/cpuinfo. 1 par défaut ; P2_GUEST_CPUS=N (1..16) pour expérimenter :
 // l'exécution invitée reste sérialisée par le verrou (scheduler.c).
 unsigned rt_guest_cpu_count(void) {
-    static unsigned count;
-    if (!count) {
+    static _Atomic unsigned count;
+    unsigned value = atomic_load_explicit(&count, memory_order_relaxed);
+    if (!value) {
         const char *e = getenv("P2_GUEST_CPUS");
         long n = e ? strtol(e, NULL, 10) : 1;
-        count = n < 1 ? 1 : n > 16 ? 16 : (unsigned)n;
+        value = n < 1 ? 1 : n > 16 ? 16 : (unsigned)n;
+        atomic_store_explicit(&count, value, memory_order_relaxed);
     }
-    return count;
+    return value;
 }
 
 void rt_cpuid(CPU *c) {
@@ -178,8 +180,10 @@ void rt_div_narrow(CPU *c, uint32_t divisor, int width, int is_signed, uint32_t 
     uint32_t quotient, remainder;
     if (is_signed) {
         int32_t lhs = (int32_t)sx(dividend, width * 2), rhs = (int32_t)sx(divisor, width);
-        int32_t q = lhs / rhs;
         int32_t limit = width == 8 ? 127 : 32767;
+        // -32768/-1 (ou -128/-1) : quotient hors limite, comme rt_div32 pour INT_MIN/-1.
+        if (rhs == -1 && lhs == -limit - 1) rt_trap(c, pc, "integer quotient overflow");
+        int32_t q = lhs / rhs;
         if (q > limit || q < -limit - 1) rt_trap(c, pc, "integer quotient overflow");
         quotient = (uint32_t)q & mask; remainder = (uint32_t)(lhs % rhs) & mask;
     } else {

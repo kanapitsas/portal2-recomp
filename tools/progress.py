@@ -7,8 +7,14 @@ import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
-import lift
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import games  # noqa: E402
+import lift  # noqa: E402
+
+ROOT = games.ROOT
 
 
 def audit(layout, objdump):
@@ -174,7 +180,7 @@ def compile_forms(forms, out):
     source = out.with_suffix('.forms.c')
     source.write_text(form_check_source(forms))
     result = subprocess.run(['clang', '-fsyntax-only', '-Wall', '-Wextra', '-Werror', '-Wno-missing-prototypes',
-                             '-Iruntime', str(source)], capture_output=True, text=True)
+                             f'-I{ROOT / "runtime"}', str(source)], capture_output=True, text=True)
     return source, result
 
 
@@ -234,20 +240,20 @@ def main():
     ap.add_argument('--layout', type=Path,
                     help='prepared layout (default: build/game/prep/layout.json with --all, else build/prep/layout.json; '
                          'build/hl2/prep/layout.json for Half-Life 2)')
-    ap.add_argument('--out', default='build/progress.json', type=Path)
+    ap.add_argument('--out', default=ROOT / 'build/progress.json', type=Path)
     ap.add_argument('--objdump', default='objdump')
     ap.add_argument('--all', action='store_true', help='audit every function of every prepared module')
     ap.add_argument('--modules', nargs='*', help='restrict --all to these module names')
-    ap.add_argument('--cache', default='build/disasm-cache', type=Path)
+    ap.add_argument('--cache', default=ROOT / 'build/disasm-cache', type=Path)
     ap.add_argument('--jobs', type=int, default=os.cpu_count() or 1)
     ap.add_argument('--top', type=int, default=40)
     ap.add_argument('--compile-forms', action='store_true',
                     help='compile one lifted example of every distinct instruction form (clang -fsyntax-only)')
     args = ap.parse_args()
     if args.layout is None:
-        args.layout = Path('build/game/prep/layout.json' if args.all else 'build/prep/layout.json')
+        args.layout = ROOT / ('build/game/prep/layout.json' if args.all else 'build/prep/layout.json')
     if args.all:
-        result, forms = audit_all(json.loads(args.layout.read_text()), args.objdump, args.cache, args.jobs,
+        result, forms = audit_all(lift.load_layout(args.layout), args.objdump, args.cache, args.jobs,
                                   args.modules, args.compile_forms)
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(result, indent=1) + '\n')
@@ -260,7 +266,7 @@ def main():
                 print(compiled.stderr[:4000])
                 raise SystemExit(1)
         return
-    result = audit(json.loads(args.layout.read_text()), args.objdump)
+    result = audit(lift.load_layout(args.layout), args.objdump)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2) + '\n')
     for item in result['constructors']:

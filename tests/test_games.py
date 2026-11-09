@@ -63,9 +63,23 @@ class GameProfiles(unittest.TestCase):
         roots = build_game.roots(layout, roots_file='/nonexistent/roots.json')
         self.assertEqual(roots, ['hl2_linux:symbol:main', 'hl2_linux:init:dt', 'hl2_linux:init:0', 'hl2_linux:init:1'])
 
-    def test_roots_without_program_key_stay_portal2(self):
-        roots = build_game.roots({'modules': []}, roots_file='/nonexistent/roots.json')
-        self.assertEqual(roots, ['portal2_linux:symbol:main'])
+    def test_roots_need_the_program_key(self):
+        # tools/elfprep.py always writes it (--program); no silent Portal 2 default.
+        with self.assertRaises(KeyError):
+            build_game.roots({'modules': []}, roots_file='/nonexistent/roots.json')
+
+    def test_roots_file_is_relative_to_the_checkout(self):
+        import json
+        import tempfile
+        layout = {'program': 'hl2_linux', 'modules': []}
+        (build_game.ROOT / 'build').mkdir(exist_ok=True)   # absent on a fresh clone (CI python-3-9 job)
+        with tempfile.TemporaryDirectory(dir=build_game.ROOT / 'build') as tmp:
+            path = Path(tmp) / 'roots.json'
+            path.write_text(json.dumps(['engine.so:code:0x10']))
+            relative = path.relative_to(build_game.ROOT)
+            self.assertEqual(build_game.roots(layout, roots_file=str(relative)),
+                             ['hl2_linux:symbol:main', 'engine.so:code:0x10'])
+            self.assertEqual(build_game.roots(layout, roots_file=str(path))[-1], 'engine.so:code:0x10')
 
 
 class IosProfiles(unittest.TestCase):

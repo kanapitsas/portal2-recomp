@@ -2,11 +2,35 @@
 import re
 
 
-def _lower_base(op, args, nxt, Operand, Unsupported, here='c->eip'):
-    def xmm(text):
-        m = re.fullmatch(r'xmm([0-7])', text)
-        return int(m[1]) if m else None
+def xmm(text):
+    """Index of an xmm register operand, None for anything else."""
+    m = re.fullmatch(r'xmm([0-7])', text)
+    return int(m[1]) if m else None
 
+
+def scalar(text, size, Operand, Unsupported):
+    """C expression of a scalar floating operand of `size` bits: low lane of an
+    xmm register, or a memory read of that width."""
+    index = xmm(text)
+    if index is not None:
+        return f'c->xmm[{index}].{"g" if size == 64 else "f"}[0]'
+    mem = Operand(text)
+    if mem.addr is None or mem.width != size:
+        raise Unsupported('scalar floating operand')
+    return f'{"RD" if size == 64 else "RF"}({mem.addr})'
+
+
+def st(text, Unsupported):
+    """x87 stack slot of an `st` / `st(i)` operand."""
+    if text == 'st':
+        return 'ST(0)'
+    m = re.fullmatch(r'st\(([0-7])\)', text)
+    if not m:
+        raise Unsupported(f'x87 register {text!r}')
+    return f'ST({m[1]})'
+
+
+def _lower_base(op, args, nxt, Operand, Unsupported, here='c->eip'):
     def operand(text):
         index = xmm(text)
         if index is not None: return f'c->xmm[{index}]'
@@ -14,23 +38,6 @@ def _lower_base(op, args, nxt, Operand, Unsupported, here='c->eip'):
         if value.width == 64: return f'(XMM){{.q={{{value.read()},0}}}}'
         if value.width == 32: return f'(XMM){{.d={{{value.read()},0,0,0}}}}'
         return value.read()
-
-    def scalar(text, size):
-        index = xmm(text)
-        if index is not None:
-            return f'c->xmm[{index}].{"g" if size == 64 else "f"}[0]'
-        mem = Operand(text)
-        if mem.addr is None or mem.width != size:
-            raise Unsupported('scalar floating operand')
-        return f'{"RD" if size == 64 else "RF"}({mem.addr})'
-
-    def st(text):
-        if text == 'st':
-            return 'ST(0)'
-        m = re.fullmatch(r'st\(([0-7])\)', text)
-        if not m:
-            raise Unsupported(f'x87 register {text!r}')
-        return f'ST({m[1]})'
 
     parts = [x.strip() for x in args.split(',')] if args else []
     code = None
@@ -67,15 +74,15 @@ def _lower_base(op, args, nxt, Operand, Unsupported, here='c->eip'):
             code += f'c->xmm[{xmm(dst)}].{field}[0] = value; }}'
         else:
             code = Operand(dst).write(value)
-    elif op in ('pxor', 'xorps', 'xorpd', 'pand', 'pandn', 'por', 'andps', 'andpd', 'orps', 'orpd') and len(parts) == 2:
+    elif op in ('xorps', 'xorpd', 'andps', 'andpd', 'orps', 'orpd') and len(parts) == 2:
+        # (pxor/pand/pandn/por go through _lower_extended, which handles mm and xmm destinations.)
         dst, src = parts
         if xmm(dst) is None:
             raise Unsupported('packed destination')
-        operator = '^' if op in ('pxor', 'xorps', 'xorpd') else '|' if op in ('por', 'orps', 'orpd') else '&'
-        negate = '~' if op == 'pandn' else ''
+        operator = '^' if op in ('xorps', 'xorpd') else '|' if op in ('orps', 'orpd') else '&'
         code = (f'{{ XMM lhs = {operand(dst)}, rhs = {operand(src)}; '
                 f'for (unsigned lane = 0; lane < 2; ++lane) '
-                f'c->xmm[{xmm(dst)}].q[lane] = {negate}lhs.q[lane] {operator} rhs.q[lane]; }}')
+                f'c->xmm[{xmm(dst)}].q[lane] = lhs.q[lane] {operator} rhs.q[lane]; }}')
     elif op in ('paddq', 'psubq') and len(parts) == 2 and xmm(parts[0]) is not None:
         dst, src = parts
         operator = '+' if op == 'paddq' else '-'
@@ -111,7 +118,7 @@ def _lower_base(op, args, nxt, Operand, Unsupported, here='c->eip'):
         dst,source=parts; match=re.fullmatch(r'cmp(eq|lt|le|unord|neq|nlt|nle|ord)(pd|ps|sd|ss)',op)
         predicate,suffix=match.groups(); wide=suffix in ('pd','sd'); scalar_op=suffix in ('sd','ss')
         field,mask=('g','q') if wide else ('f','d'); lanes=1 if scalar_op else 2 if wide else 4
-        rhs=f'(XMM){{.{field}={{{scalar(source,64 if wide else 32)}}}}}' if scalar_op else operand(source)
+        rhs=f'(XMM){{.{field}={{{scalar(source, 64 if wide else 32, Operand, Unsupported)}}}}}' if scalar_op else operand(source)
         compare={'eq':'a==b','lt':'a<b','le':'a<=b','unord':'isnan(a)||isnan(b)',
                  'neq':'a!=b','nlt':'!(a<b)','nle':'!(a<=b)','ord':'!isnan(a)&&!isnan(b)'}[predicate]
         full='UINT64_MAX' if wide else 'UINT32_MAX'
@@ -132,32 +139,32 @@ def _lower_base(op, args, nxt, Operand, Unsupported, here='c->eip'):
             raise Unsupported('scalar SSE destination')
         size = 64 if op.endswith('sd') else 32
         operator = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/'}[op[:3]]
-        code = f'{scalar(dst, size)} = {scalar(dst, size)} {operator} {scalar(src, size)};'
+        code = f'{scalar(dst, size, Operand, Unsupported)} = {scalar(dst, size, Operand, Unsupported)} {operator} {scalar(src, size, Operand, Unsupported)};'
     elif op in ('ucomisd', 'comisd', 'ucomiss', 'comiss') and len(parts) == 2:
         size = 64 if op.endswith('sd') else 32
-        code = f'f_comi(&f, {scalar(parts[0], size)}, {scalar(parts[1], size)});'
+        code = f'f_comi(&f, {scalar(parts[0], size, Operand, Unsupported)}, {scalar(parts[1], size, Operand, Unsupported)});'
     elif op in ('cvtsi2sd', 'cvtsi2ss') and len(parts) == 2 and xmm(parts[0]) is not None:
         size = 64 if op.endswith('sd') else 32
-        code = f'{scalar(parts[0], size)} = (int32_t){Operand(parts[1]).read()};'
+        code = f'{scalar(parts[0], size, Operand, Unsupported)} = (int32_t){Operand(parts[1]).read()};'
     elif op in ('cvtss2sd', 'cvtsd2ss') and len(parts) == 2 and xmm(parts[0]) is not None:
         size = 64 if op.endswith('sd') else 32
-        code = f'{scalar(parts[0], size)} = {scalar(parts[1], 96 - size)};'
+        code = f'{scalar(parts[0], size, Operand, Unsupported)} = {scalar(parts[1], 96 - size, Operand, Unsupported)};'
     elif op in ('cvttsd2si', 'cvtsd2si', 'cvttss2si', 'cvtss2si') and len(parts) == 2:
         size = 64 if 'sd' in op else 32
         function = 'cvt_trunc32' if op.startswith('cvtt') else 'cvt_round32'
-        code = Operand(parts[0]).write(f'{function}({scalar(parts[1], size)})')
+        code = Operand(parts[0]).write(f'{function}({scalar(parts[1], size, Operand, Unsupported)})')
     elif op in ('fld1', 'fldz', 'fldpi', 'fldln2', 'fldl2e') and not parts:
         value = {'fld1': '1.0', 'fldz': '0.0', 'fldpi': '3.14159265358979323846',
                  'fldln2': '0.69314718055994530942', 'fldl2e': '1.44269504088896340736'}[op]
         code = f'fpush(c, {value});'
     elif op in ('fld', 'fild') and len(parts) == 1:
         if parts[0].startswith('st'):
-            value = st(parts[0])
+            value = st(parts[0], Unsupported)
         elif op == 'fild':
             mem = Operand(parts[0])
             value = f'(int{mem.width}_t){mem.read()}'
         else:
-            mem = Operand(parts[0]); value = scalar(parts[0], mem.width)
+            mem = Operand(parts[0]); value = scalar(parts[0], mem.width, Operand, Unsupported)
         code = f'{{ double value = {value}; fpush(c, value); }}'
     elif op in ('fist', 'fistp', 'fisttp') and len(parts) == 1:
         mem = Operand(parts[0])
@@ -169,7 +176,7 @@ def _lower_base(op, args, nxt, Operand, Unsupported, here='c->eip'):
         if op != 'fist': code += ' fpop(c);'
     elif op in ('fst', 'fstp') and len(parts) == 1:
         if parts[0].startswith('st'):
-            code = f'{st(parts[0])} = ST(0);'
+            code = f'{st(parts[0], Unsupported)} = ST(0);'
         else:
             mem = Operand(parts[0])
             if mem.width not in (32, 64) or mem.addr is None:
@@ -180,12 +187,12 @@ def _lower_base(op, args, nxt, Operand, Unsupported, here='c->eip'):
                 'faddp', 'fsubp', 'fsubrp', 'fmulp', 'fdivp', 'fdivrp'):
         pop = op.endswith('p'); operation = op[:-1] if pop else op
         if len(parts) == 2:
-            dst, src = st(parts[0]), st(parts[1])
+            dst, src = st(parts[0], Unsupported), st(parts[1], Unsupported)
         elif len(parts) == 1:
             dst = 'ST(0)'
-            if parts[0].startswith('st'): src = st(parts[0])
+            if parts[0].startswith('st'): src = st(parts[0], Unsupported)
             else:
-                mem = Operand(parts[0]); src = scalar(parts[0], mem.width)
+                mem = Operand(parts[0]); src = scalar(parts[0], mem.width, Operand, Unsupported)
         elif not parts and pop:
             dst, src = 'ST(1)', 'ST(0)'
         else:
@@ -195,7 +202,7 @@ def _lower_base(op, args, nxt, Operand, Unsupported, here='c->eip'):
         code = f'{dst} = {lhs} {operator} {rhs};'
         if pop: code += ' fpop(c);'
     elif op == 'fxch' and len(parts) <= 1:
-        other = st(parts[0]) if parts else 'ST(1)'
+        other = st(parts[0], Unsupported) if parts else 'ST(1)'
         code = f'{{ double value = ST(0); ST(0) = {other}; {other} = value; }}'
     elif op in ('fchs', 'fabs', 'fsqrt') and not parts:
         value = {'fchs': '-ST(0)', 'fabs': 'fabs(ST(0))', 'fsqrt': 'sqrt(ST(0))'}[op]
@@ -289,20 +296,7 @@ def _lower_extended(op, args, Operand, Unsupported, here='c->eip'):
         return reg(text, 'xmm')
 
     def scalar_src(text, bits):
-        if reg(text, 'xmm') is not None:
-            return f'c->xmm[{reg(text, "xmm")}].{"g" if bits == 64 else "f"}[0]'
-        mem = Operand(text)
-        if mem.addr is None or mem.width != bits:
-            raise Unsupported('scalar floating operand')
-        return f'{"RD" if bits == 64 else "RF"}({mem.addr})'
-
-    def st(text):
-        if text == 'st':
-            return 'ST(0)'
-        m = re.fullmatch(r'st\(([0-7])\)', text)
-        if not m:
-            raise Unsupported(f'x87 register {text!r}')
-        return f'ST({m[1]})'
+        return scalar(text, bits, Operand, Unsupported)
 
     two = len(parts) == 2
     # --- MMX / SSE2 integer ---------------------------------------------------
@@ -549,7 +543,7 @@ def _lower_extended(op, args, Operand, Unsupported, here='c->eip'):
         return f'c->xmm[{xmm_dst(parts[0])}] = (XMM){{0}};'
     # --- x87 ------------------------------------------------------------------
     if op in ('fcomi', 'fucomi', 'fcompi', 'fucompi', 'fcomip', 'fucomip') and len(parts) in (1, 2):
-        other = st(parts[-1]) if parts[-1] != 'st' or len(parts) == 1 else 'ST(1)'
+        other = st(parts[-1], Unsupported) if parts[-1] != 'st' or len(parts) == 1 else 'ST(1)'
         code = f'f_comi(&f, ST(0), {other});'
         return code + (' fpop(c);' if op.endswith('pi') or op.endswith('ip') else '')
     if op in ('fcom', 'fcomp', 'fucom', 'fucomp', 'fcompp', 'fucompp', 'ftst'):
@@ -563,7 +557,7 @@ def _lower_extended(op, args, Operand, Unsupported, here='c->eip'):
             if not parts:
                 other = 'ST(1)'
             elif parts[0].startswith('st'):
-                other = st(parts[0])
+                other = st(parts[0], Unsupported)
             else:
                 mem = Operand(parts[0])
                 if mem.addr is None or mem.width not in (32, 64):
@@ -575,7 +569,7 @@ def _lower_extended(op, args, Operand, Unsupported, here='c->eip'):
         return (f'{{ double x = ST(0), y = {other}; c->fsw = (uint16_t)((c->fsw & ~0x4700u) | '
                 '(x > y ? 0u : x < y ? 0x100u : x == y ? 0x4000u : 0x4500u)); }' + ' fpop(c);' * pops)
     if op in FCMOV and len(parts) == 2:
-        return f'if (cond(&f, CC_{FCMOV[op]})) ST(0) = {st(parts[1])};'
+        return f'if (cond(&f, CC_{FCMOV[op]})) ST(0) = {st(parts[1], Unsupported)};'
     if op in ('fldcw',) and len(parts) == 1:
         return f'c->fcw = (uint16_t){Operand(parts[0]).read()};'
     if op in ('fnstcw', 'fstcw') and len(parts) == 1:

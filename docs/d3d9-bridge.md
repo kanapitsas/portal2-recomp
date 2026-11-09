@@ -3,17 +3,25 @@
 The Linux releases of Portal 2 and Half-Life 2 ship two renderers: `shaderapidx9.so` + `libtogl.so`
 (Direct3D 9 translated to OpenGL) and `shaderapivk.so`,
 selected with `-vulkan`, which expects DXVK (`libdxvk_d3d9.so`). Its only
-graphics import is `Direct3DCreate9`. Instead of recompiling DXVK, the
-runtime forwards the guest's Direct3D 9 COM calls to a **native arm64
-Direct3D 9 implementation**, `libd3d9metal.dylib`, built separately (from
-mtld3d). It is the default renderer whenever that library is found and
-initializes; without it everything stays on OpenGL.
+graphics imports are `Direct3DCreate9` (Portal 2) and `Direct3DCreate9Ex`
+(Half-Life 2). Instead of recompiling DXVK, the runtime forwards the guest's
+Direct3D 9 COM calls to a **native arm64 Direct3D 9 implementation**,
+`libd3d9metal.dylib`, built separately (from mtld3d). It is the default
+renderer whenever that library is found and initializes; without it
+everything stays on OpenGL.
 
 The library is [mtld3d](https://github.com/athei/mtld3d) (zlib licence) by
 Alexander Theissen, built without Wine through a native host linkage that is
 not upstream yet (see [athei/mtld3d#1193](https://github.com/athei/mtld3d/issues/1193)).
-On macOS (laser_over_goo, 2560×1440, MSAA 4) it ran at 122 fps against 81 for
-OpenGL, and the map loaded in 13 s instead of 25 s.
+Designed on 29 October 2026, in game since 30 October. On macOS
+(laser_over_goo, 2560×1440, MSAA 4, `tools/bench_renderer.py`) it ran at
+**122 fps against 81** for OpenGL, and the map loaded in 13 s instead of 25 s;
+on an iPhone 15 Pro Max, **71–77 against 60 fps**, linked statically
+(`tools/build_ios.py --d3d9metal`, `RT_D3D9METAL_STATIC`, chosen in the
+Settings page; see [ios.md](ios.md#metal-renderer-default)). Source may call
+Direct3D from its material system thread (`mat_queue_mode`): the bridge
+relies on the guest gate, so calls are serialized, but the library sees them
+from different host threads.
 
 ## Using it
 
@@ -21,17 +29,11 @@ OpenGL, and the map loaded in 13 s instead of 25 s.
 commit of the mtld3d native host branch into `deps/mtld3d-native` and builds
 `libd3d9metal`; without Rust, it uses the prebuilt library of the same commit
 from the host-library download. It records the library in `config/local.json`
-and bundles it into the app; `P2_NO_METAL=1` skips it. The steps below are the
-manual equivalent (add `--game hl2` for Half-Life 2).
-
-```sh
-python3 tools/gameprep.py                 # shaderapivk.so is now prepared (module bases shift)
-python3 tools/build_game.py --release     # full rebuild after gameprep
-P2_D3D9METAL=/path/to/libd3d9metal.dylib python3 tools/run_game.py --show --timeout 3600
-```
-
-(`SteamAppId` comes from `steam_appid` in `config/local.json` when it is not
-in the environment.)
+(`d3d9metal_dylib`) and bundles it into the app; `P2_NO_METAL=1` skips it.
+By hand, follow the [manual build](usage.md#manual-build) after setting
+`d3d9metal_dylib` (or `P2_D3D9METAL=/path/to/libd3d9metal.dylib` on
+`run_game.py`): `gameprep.py` prepares `shaderapivk.so`, which shifts the
+module bases, so a full `build_game.py` follows it.
 
 - By default the runtime loads and initializes the library
   (`d3d9metal_init`) before the game starts and adds `-vulkan` only if that
@@ -54,7 +56,9 @@ in the environment.)
 - `P2_D3D9_VENDOR_ID` / `P2_D3D9_DEVICE_ID` (hex): PCI ids handed to the
   library for `D3DADAPTER_IDENTIFIER9` (default NVIDIA `10de` / `0000`; Source
   keys vendor-specific paths on them, and with Apple `106b` it turns off the
-  shadow depth textures of dynamic lights). `P2_D3D9_CACHE`: shader/PSO cache
+  shadow depth textures of dynamic lights, issue #20). Whether
+  `dxsupport.cfg` picks other NVIDIA-specific defaults that hurt on Apple GPUs
+  is not checked; on Half-Life 2 the NVIDIA id costs nothing measurable. `P2_D3D9_CACHE`: shader/PSO cache
   directory (default `<user_dir>/d3d9metal-cache`).
 - Memory caps: before `d3d9metal_init` the runtime puts
   `memory.pageboxPoolCapMB=64;memory.vbibRetentionCapMB=192;memory.vramBudgetMB=1024`
@@ -94,8 +98,9 @@ in the environment.)
   another interface pointer of the same object obtained by `QueryInterface`
   shares its count and is retired with it. All bridge state is touched with
   the guest gate held.
-- `tools/gen_d3d9.py` generates the thunks for all 20 interfaces (226
-  methods, including D3D9Ex, `d3d9.h` order) from an explicit signature table in the script.
+- `tools/gen_d3d9.py` generates the thunks for every d3d9 interface,
+  D3D9Ex included, in `d3d9.h` order, from the explicit `SIGNATURES` table in
+  the script (the authoritative list of interfaces and methods).
   Every pointer parameter has a rule: in place (same layout on i386 and
   arm64), interface in/out, HWND, present parameters, lock results, shader
   tokens, vertex declarations. `P2_D3D9_HEADER=/path/to/d3d9.h python3 -m
@@ -208,21 +213,9 @@ in the environment.)
   memory, presents and releases everything to 0. Skipped without the
   variable.
 
-## Open questions
+## Not verified
 
-- Vendor id: NVIDIA (`10de`) by default, since Apple (`106b`) turns off the
-  shadow depth textures (#20). Whether `dxsupport.cfg` picks other
-  NVIDIA-specific defaults that hurt on Apple GPUs is not checked.
 - Retina: `metal_layer` reports the game's back buffer size (window points ×
   window scale), the same rule as the OpenGL path; mtld3d resamples to the
   layer's bounds × contentsScale if they differ. Fullscreen in Retina is not
   verified.
-- Threading: Source may call Direct3D from its material system thread
-  (`mat_queue_mode`); the bridge relies on the guest gate, so calls are
-  serialized, but the library sees them from different host threads.
-
-Resolved since the 29 October design: the game runs on this path on macOS
-(122 vs 81 fps above, now the default renderer) and on an iPhone 15 Pro Max
-(71–77 vs 60 fps, linked statically with `tools/build_ios.py --d3d9metal`,
-`RT_D3D9METAL_STATIC`, chosen in the Settings page; see "Metal renderer" in
-[ios.md](ios.md#metal-renderer-default)).

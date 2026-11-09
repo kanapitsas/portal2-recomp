@@ -9,6 +9,7 @@
 #undef glBindFramebufferEXT
 #define glBindFramebufferEXT glBindFramebuffer   // gl4es : sans le nom EXT ; 0 = son tampon principal
 #endif
+#include <ctype.h>
 #include <mach/mach_time.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -18,33 +19,31 @@
 
 static atomic_int enabled = -1;
 static uint64_t last_ticks, frames;
-static double shown_fps;
+static _Atomic double shown_fps;   // écrite par le thread du rendu, lue aussi par la surcouche iOS
 
 void fps_overlay_toggle(void) {
     if (atomic_load(&enabled) < 0) atomic_store(&enabled, 0);
     atomic_store(&enabled, !atomic_load(&enabled));
 }
 
-// Police 5x7 : chiffres, ponctuation et les lettres de « OpenGL », « Metal », « fps ».
-static const char glyph_chars[] = "0123456789. fpsOenGLMtal";
+// Police 5x7, une ligne par octet (bit 4 : colonne de gauche) : chiffres,
+// ponctuation et les capitales de « OPENGL », « METAL », « FPS », « DATA »
+// (la surcouche iOS) ; les minuscules du texte sont dessinées en capitales.
+static const char glyph_chars[] = "0123456789. /XFPSMETALOGND";
 static const uint8_t glyphs[][7] = {
     {0x0E,0x11,0x13,0x15,0x19,0x11,0x0E}, {0x04,0x0C,0x04,0x04,0x04,0x04,0x0E},
     {0x0E,0x11,0x01,0x02,0x04,0x08,0x1F}, {0x1F,0x02,0x04,0x02,0x01,0x11,0x0E},
     {0x02,0x06,0x0A,0x12,0x1F,0x02,0x02}, {0x1F,0x10,0x1E,0x01,0x01,0x11,0x0E},
     {0x06,0x08,0x10,0x1E,0x11,0x11,0x0E}, {0x1F,0x01,0x02,0x04,0x08,0x08,0x08},
     {0x0E,0x11,0x11,0x0E,0x11,0x11,0x0E}, {0x0E,0x11,0x11,0x0F,0x01,0x02,0x0C},
-    {0x00,0x00,0x00,0x00,0x00,0x0C,0x0C}, {0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    {0x06,0x09,0x08,0x1C,0x08,0x08,0x08}, {0x00,0x00,0x1E,0x11,0x1E,0x10,0x10},
-    {0x00,0x00,0x0F,0x10,0x0E,0x01,0x1E},
-    {0x0E,0x11,0x11,0x11,0x11,0x11,0x0E},   // O
-    {0x00,0x00,0x0E,0x11,0x1F,0x10,0x0E},   // e
-    {0x00,0x00,0x16,0x19,0x11,0x11,0x11},   // n
-    {0x0E,0x11,0x10,0x17,0x11,0x11,0x0F},   // G
-    {0x10,0x10,0x10,0x10,0x10,0x10,0x1F},   // L
-    {0x11,0x1B,0x15,0x15,0x11,0x11,0x11},   // M
-    {0x08,0x08,0x1C,0x08,0x08,0x09,0x06},   // t
-    {0x00,0x00,0x0E,0x01,0x0F,0x11,0x0F},   // a
-    {0x0C,0x04,0x04,0x04,0x04,0x04,0x0E},   // l
+    {0x00,0x00,0x00,0x00,0x00,0x0C,0x0C}, {0x00,0x00,0x00,0x00,0x00,0x00,0x00},   // . espace
+    {0x01,0x01,0x02,0x04,0x08,0x10,0x10}, {0x11,0x11,0x0A,0x04,0x0A,0x11,0x11},   // / X
+    {0x1F,0x10,0x10,0x1E,0x10,0x10,0x10}, {0x1E,0x11,0x11,0x1E,0x10,0x10,0x10},   // F P
+    {0x0F,0x10,0x10,0x0E,0x01,0x01,0x1E}, {0x11,0x1B,0x15,0x15,0x11,0x11,0x11},   // S M
+    {0x1F,0x10,0x10,0x1E,0x10,0x10,0x1F}, {0x1F,0x04,0x04,0x04,0x04,0x04,0x04},   // E T
+    {0x0E,0x11,0x11,0x1F,0x11,0x11,0x11}, {0x10,0x10,0x10,0x10,0x10,0x10,0x1F},   // A L
+    {0x0E,0x11,0x11,0x11,0x11,0x11,0x0E}, {0x0E,0x11,0x10,0x17,0x11,0x11,0x0F},   // O G
+    {0x11,0x19,0x15,0x13,0x11,0x11,0x11}, {0x1E,0x11,0x11,0x11,0x11,0x11,0x1E},   // N D
 };
 
 // Compte une image ; vrai si le compteur est affiché. P2_FPS=1 l'affiche dès le lancement.
@@ -59,31 +58,39 @@ int fps_overlay_tick(void) {
     ++frames;
     if (!last_ticks) last_ticks = now;
     double elapsed = (double)(now - last_ticks) * base.numer / base.denom / 1e9;
-    if (elapsed >= 0.5) { shown_fps = (double)frames / elapsed; frames = 0; last_ticks = now; }
+    if (elapsed >= 0.5) { atomic_store(&shown_fps, (double)frames / elapsed); frames = 0; last_ticks = now; }
     return atomic_load(&enabled);
 }
 
-double fps_overlay_value(void) { return shown_fps; }
+double fps_overlay_value(void) { return atomic_load(&shown_fps); }
 
 // Texte en rectangles (origine en haut à gauche, y vers le bas) : une rangée de
-// pixels allumés contigus d'un glyphe = un rectangle. Commun aux deux rendus.
+// pixels allumés contigus d'un glyphe = un rectangle. Commun aux deux rendus
+// et à la surcouche iOS.
+int fps_overlay_text(const char *text, int x, int y, int scale, FpsRect *out, int max) {
+    int n = 0;
+    for (const char *p = text; p && *p; ++p, x += 6 * scale) {
+        const char *at = strchr(glyph_chars, toupper((unsigned char)*p));
+        if (!at || !*at) continue;
+        const uint8_t *g = glyphs[at - glyph_chars];
+        for (int row = 0; row < 7; ++row)
+            for (int col = 0; col < 5;) {
+                if (!(g[row] & (0x10 >> col))) { ++col; continue; }
+                int start = col;
+                while (col < 5 && (g[row] & (0x10 >> col))) ++col;
+                if (n < max) out[n++] = (FpsRect){x + start * scale, y + row * scale, (col - start) * scale, scale};
+            }
+    }
+    return n;
+}
+
+// Les deux lignes du compteur F3, en haut à gauche, à l'échelle de l'écran.
 int fps_overlay_layout(const char *line1, const char *line2, int drawable_height, FpsRect *out, int max) {
     int scale = drawable_height >= 1200 ? 4 : 3, n = 0;
     const char *lines[2] = {line1, line2};
     for (int l = 0; l < 2; ++l) {
-        int x = 12 * scale / 3, y = 12 + l * 9 * scale;
-        for (const char *p = lines[l]; p && *p; ++p, x += 6 * scale) {
-            const char *at = strchr(glyph_chars, *p);
-            if (!at) continue;
-            const uint8_t *g = glyphs[at - glyph_chars];
-            for (int row = 0; row < 7; ++row)
-                for (int col = 0; col < 5;) {
-                    if (!(g[row] & (0x10 >> col))) { ++col; continue; }
-                    int start = col;
-                    while (col < 5 && (g[row] & (0x10 >> col))) ++col;
-                    if (n < max) out[n++] = (FpsRect){x + start * scale, y + row * scale, (col - start) * scale, scale};
-                }
-        }
+        int m = fps_overlay_text(lines[l], 12 * scale / 3, 12 + l * 9 * scale, scale, out + n, max > n ? max - n : 0);
+        n += m;
     }
     return n;
 }

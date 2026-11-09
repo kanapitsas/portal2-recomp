@@ -33,7 +33,7 @@ void rt_ios_view_set_scale(void *uiview, float wanted); // sdl_ios.m
 void rt_ios_request_frame_rate(void);  // gl_ios.m
 
 int rt_renderer_request(const char *value);   // runtime/d3d9.c
-volatile int rt_ios_metal_active;   // une image présentée par Direct3D 9 (compteur : « METAL »)
+_Atomic int rt_ios_metal_active;   // une image présentée par Direct3D 9 (compteur : « METAL »)
 static void presented(void) { ++rt_ios_frames; rt_ios_metal_active = 1; }
 // libd3d9metal.a n'est liée dans l'exécutable qu'avec tools/build_ios.py
 // --d3d9metal, qui définit alors RT_D3D9METAL_STATIC pour ce fichier (et pour

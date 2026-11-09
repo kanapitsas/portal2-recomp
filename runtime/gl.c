@@ -4,10 +4,10 @@
 // gl_shim, qui exécute le thunk de runtime/gl_generated.c (généré par
 // tools/gen_gl.py) ou une fonction manuelle ci-dessous.
 //
-// Comme SDL sous macOS, une adresse est rendue pour tout symbole exporté par
-// OpenGL.framework, même si le contexte courant (legacy 2.1) ne le prend pas
-// en charge : l'appel répond alors GL_INVALID_OPERATION, comme sur un vrai
-// Mac. Voir docs/gl-audit.md.
+// Comme SDL sous macOS, une adresse est rendue pour tout nom de rt_gl_entries
+// (la liste NAMES de tools/gen_gl.py) que OpenGL.framework exporte, même si le
+// contexte courant (legacy 2.1) ne le prend pas en charge : l'appel répond
+// alors GL_INVALID_OPERATION, comme sur un vrai Mac. Voir docs/gl-audit.md.
 //
 // Pointeurs invités : la mémoire invitée est projetée dans l'espace hôte
 // (M + adresse), donc un pointeur invité validé devient GPTR(adresse) et
@@ -16,17 +16,12 @@
 // GLsync) demandent une copie ou un handle.
 #include <stdio.h>
 #include <mach/mach_time.h>
-#include "rt.h"
+#include "gl_bridge.h"
 #include <stdarg.h>
 #include "host_gl.h"   // OpenGL.framework (macOS) ou gl4es (iOS)
 #include <dlfcn.h>
 #include <pthread.h>
 #include <stdlib.h>
-
-typedef int (*rt_gl_thunk)(CPU *c, void *fn);
-typedef struct { const char *name; rt_gl_thunk thunk; } RtGlEntry;
-extern const RtGlEntry rt_gl_entries[];
-extern const unsigned rt_gl_entry_count;
 
 #define GL_SYNC_KIND 0x474c5359u  // 'GLSY'
 // ARB_map_buffer_range (gl3.h, absent de glext.h).
@@ -39,11 +34,13 @@ extern const unsigned rt_gl_entry_count;
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_once_t once = PTHREAD_ONCE_INIT;
 static void *library;
-static void **hosts;  // pointeur hôte par entrée, résolu à la demande
+static void **hosts;    // pointeur hôte par entrée, résolu à la demande
+static uint8_t *kinds;  // rôle (GL_KIND_*) par entrée, calculé au premier appel (gl_execute)
 
 static void open_library(void) {
     library = rt_host_gl_open();
     hosts = calloc(rt_gl_entry_count, sizeof(*hosts));
+    kinds = calloc(rt_gl_entry_count, 1);
 }
 
 static int compare_entry(const void *key, const void *entry) {
@@ -105,23 +102,25 @@ uint32_t rt_gl_proc_address(const char *name) {
 }
 
 static int gl_execute(CPU *c, const char *name, const RtGlEntry *entry, void *fn);
+static int gl_no_context(CPU *c, const char *name);
 static int gl_shim(CPU *c, const char *name) {
     if (is_glx(name)) return glx_shim(c, name);
     const RtGlEntry *entry = find_entry(name);
     if (!entry) return 0;
     void *fn = host_function(entry);
     if (!fn) rt_trap(c, c->eip, "fonction GL absente de OpenGL.framework");
-    // Sans contexte courant, le GL d'Apple déréférence un contexte nul ; la libGL
-    // Linux, elle, aiguille vers une table « sans contexte » qui ne fait rien et
-    // rend 0. togl en fait à l'arrêt (Cmd-Q) après destruction du contexte :
-    // même comportement que Linux, signalé une fois.
-    if (!CGLGetCurrentContext()) {
-        static _Atomic int reported;
-        if (!reported++) fprintf(stderr, "gl: %s sans contexte courant ignoré (comme la libGL Linux)\n", name);
-        c->eax = 0; c->edx = 0;
-        return 1;
-    }
+    if (!CGLGetCurrentContext()) return gl_no_context(c, name);
     return gl_execute(c, name, entry, fn);
+}
+// Sans contexte courant, le GL d'Apple déréférence un contexte nul ; la libGL
+// Linux, elle, aiguille vers une table « sans contexte » qui ne fait rien et
+// rend 0. togl en fait à l'arrêt (Cmd-Q) après destruction du contexte :
+// même comportement que Linux, signalé une fois.
+static int gl_no_context(CPU *c, const char *name) {
+    static _Atomic int reported;
+    if (!reported++) fprintf(stderr, "gl: %s sans contexte courant ignoré (comme la libGL Linux)\n", name);
+    c->eax = 0; c->edx = 0;
+    return 1;
 }
 static int stream_enabled(void);
 // Rôle de chaque fonction GL pour le suivi des tampons, calculé une fois par
@@ -134,7 +133,7 @@ static void stream_after(CPU *c, int kind);
 // d'images, sdl_video.c), affiché toutes les 5 s, sans signaux.
 static _Atomic uint64_t *gl_ticks, *gl_counts;
 static uint64_t gl_timing_last, gl_timing_start;
-void rt_gl_timing_add(const char *label, uint64_t ticks);
+void rt_gl_timing_add(uint64_t ticks);
 static void gl_timing_report(void) {
     static mach_timebase_info_data_t base;
     if (!base.denom) mach_timebase_info(&base);
@@ -164,13 +163,12 @@ static void gl_timing_report(void) {
 static int gl_timing(void) {
     static int value = -1;
     if (value < 0) {
-        value = getenv("P2_GL_TIMING") != NULL;
+        value = RT_ENV_FLAG("P2_GL_TIMING");
         if (value) { gl_ticks = calloc(rt_gl_entry_count + 1, 8); gl_counts = calloc(rt_gl_entry_count + 1, 8); }
     }
     return value && gl_ticks && gl_counts;
 }
-void rt_gl_timing_add(const char *label, uint64_t ticks) {   // échange d'images (sdl_video.c)
-    (void)label;
+void rt_gl_timing_add(uint64_t ticks) {   // échange d'images (sdl_video.c)
     if (!gl_timing()) return;
     gl_ticks[rt_gl_entry_count] += ticks; ++gl_counts[rt_gl_entry_count];
     gl_timing_report();
@@ -179,7 +177,7 @@ static int gl_call(CPU *c, const char *name, void *data) {
     const RtGlEntry *entry = data;
     void *fn = host_function(entry);
     if (!fn) rt_trap(c, c->eip, "fonction GL absente de OpenGL.framework");
-    if (!CGLGetCurrentContext()) return gl_shim(c, name);   // chemin rare : même traitement que sans résolution
+    if (!CGLGetCurrentContext()) return gl_no_context(c, name);
     return gl_execute(c, name, entry, fn);
 }
 // Seul chemin d'exécution d'un thunk GL, premier appel compris (avant que
@@ -316,8 +314,7 @@ static void pass_trace(CPU *c, const char *name) {
 }
 
 static int gl_execute(CPU *c, const char *name, const RtGlEntry *entry, void *fn) {
-    static uint8_t *kinds;
-    if (__builtin_expect(!kinds, 0)) kinds = calloc(rt_gl_entry_count, 1);
+    // kinds est alloué dans open_library (pthread_once, avant tout host_function réussi).
     size_t index = (size_t)(entry - rt_gl_entries);
     int kind = kinds ? kinds[index] : 0;
     if (__builtin_expect(!kind, 0)) {
@@ -357,11 +354,7 @@ static int gl_resolve(const char *name, RtShimRoute *route) {
 }
 RT_SHIM_PROVIDER_RESOLVER(gl_shim, gl_resolve)
 
-// ---- Arguments i386 cdecl ----
-uint32_t rt_gl_u32(CPU *c, unsigned slot) { return R32(c->esp + 4 + 4 * slot); }
-float rt_gl_f32(CPU *c, unsigned slot) { return RF(c->esp + 4 + 4 * slot); }
-double rt_gl_f64(CPU *c, unsigned slot) { return RD(c->esp + 4 + 4 * slot); }
-uint64_t rt_gl_u64(CPU *c, unsigned slot) { return R64(c->esp + 4 + 4 * slot); }
+// ---- Arguments i386 cdecl : rt_arg32/rt_arg64/rt_arg_f32/rt_arg_f64 (rt.h) ----
 uint64_t rt_gl_n(int64_t n) { return n < 0 ? 0 : (uint64_t)n; }
 // Le contexte OpenGL 2.1 legacy de macOS n'expose pas GL_ARB_sampler_objects :
 // glGenSamplers/glBindSampler ont bien une adresse (comme avec SDL sur un vrai
@@ -402,7 +395,6 @@ void *rt_gl_out(CPU *c, uint32_t ptr, uint64_t size, int nullable) {
     }
     return rt_write_span(c, ptr, size);
 }
-const char *rt_gl_str(CPU *c, uint32_t ptr) { rt_string_length(c, ptr); return GPTR(ptr); }
 
 static GLint integer(GLenum pname) { GLint v = 0; glGetIntegerv(pname, &v); return v; }
 
@@ -545,28 +537,12 @@ uint32_t rt_gl_get_count(uint32_t pname) {
 uint32_t rt_gl_texparam_count(uint32_t pname) { return pname == GL_TEXTURE_BORDER_COLOR ? 4 : 1; }
 
 // ---- glGetString : copie stable en mémoire invitée ----
-typedef struct GlString { uint32_t name, guest; char *text; struct GlString *next; } GlString;
-static GlString *strings;
-
+// Internée par contenu (rt_intern_string), jamais libérée : le pointeur reste
+// valide comme sous Linux. Deux noms (GL_VENDOR, GL_RENDERER…) au même texte
+// partagent la copie, ce qui est indifférent à l'invité.
 int rt_gl_manual_glGetString(CPU *c, void *fn) {
-    uint32_t name = rt_gl_u32(c, 0);
-    const char *text = (const char *)((const GLubyte *(*)(GLenum))fn)(name);
-    c->eax = 0;
-    if (!text) return 1;
-    pthread_mutex_lock(&lock);
-    GlString *s = strings;
-    while (s && (s->name != name || strcmp(s->text, text))) s = s->next;
-    if (!s) {
-        size_t length = strlen(text);
-        s = calloc(1, sizeof(*s));
-        if (s) s->text = strdup(text);
-        if (s && s->text && length < UINT32_MAX) s->guest = rt_alloc((uint32_t)length + 1);
-        if (!s || !s->text || !s->guest) { pthread_mutex_unlock(&lock); rt_trap(c, c->eip, "glGetString : mémoire invitée épuisée"); }
-        memcpy(GPTR(s->guest), text, length + 1);
-        s->name = name; s->next = strings; strings = s;
-    }
-    c->eax = s->guest;  // jamais libéré : le pointeur reste valide comme sous Linux
-    pthread_mutex_unlock(&lock);
+    const char *text = (const char *)((const GLubyte *(*)(GLenum))fn)(rt_arg32(c, 0));
+    c->eax = rt_intern_string(c, text);
     return 1;
 }
 
@@ -648,7 +624,7 @@ static Mirror *mapped_mirror(uint32_t target) {
 }
 
 int rt_gl_manual_glMapBufferARB(CPU *c, void *fn) {
-    uint32_t target = rt_gl_u32(c, 0), access = rt_gl_u32(c, 1);
+    uint32_t target = rt_arg32(c, 0), access = rt_arg32(c, 1);
     void *host = ((void *(*)(GLenum, GLenum))fn)(target, access);
     c->eax = 0;
     if (!host) return 1;
@@ -660,8 +636,8 @@ int rt_gl_manual_glMapBufferARB(CPU *c, void *fn) {
 }
 
 int rt_gl_manual_glMapBufferRange(CPU *c, void *fn) {
-    uint32_t target = rt_gl_u32(c, 0), access = rt_gl_u32(c, 3);
-    intptr_t offset = (int32_t)rt_gl_u32(c, 1), length = (int32_t)rt_gl_u32(c, 2);
+    uint32_t target = rt_arg32(c, 0), access = rt_arg32(c, 3);
+    intptr_t offset = (int32_t)rt_arg32(c, 1), length = (int32_t)rt_arg32(c, 2);
     void *host = ((void *(*)(GLenum, intptr_t, intptr_t, GLbitfield))fn)(target, offset, length, access);
     c->eax = 0;
     if (!host) return 1;
@@ -672,7 +648,7 @@ int rt_gl_manual_glMapBufferRange(CPU *c, void *fn) {
 }
 
 int rt_gl_manual_glUnmapBuffer(CPU *c, void *fn) {
-    uint32_t target = rt_gl_u32(c, 0);
+    uint32_t target = rt_arg32(c, 0);
     Mirror *m = mapped_mirror(target);
     if (m) {
         if (m->writable && !m->explicit_flush && m->length) memcpy(m->host, GPTR(m->guest), m->length);
@@ -683,8 +659,8 @@ int rt_gl_manual_glUnmapBuffer(CPU *c, void *fn) {
 }
 
 static int flush_range(CPU *c, void *fn) {
-    uint32_t target = rt_gl_u32(c, 0);
-    intptr_t offset = (int32_t)rt_gl_u32(c, 1), size = (int32_t)rt_gl_u32(c, 2);
+    uint32_t target = rt_arg32(c, 0);
+    intptr_t offset = (int32_t)rt_arg32(c, 1), size = (int32_t)rt_arg32(c, 2);
     Mirror *m = mapped_mirror(target);
     if (m && m->writable && offset >= 0 && size >= 0 && (uint64_t)offset + (uint64_t)size <= m->length)
         memcpy((char *)m->host + offset, (char *)GPTR(m->guest) + offset, (size_t)size);
@@ -694,8 +670,8 @@ static int flush_range(CPU *c, void *fn) {
 void rt_gl_stream_serialized(uint32_t name, int serialized);
 void rt_gl_stream_forget(uint32_t name);
 int rt_gl_manual_glBufferParameteriAPPLE(CPU *c, void *fn) {
-    uint32_t target = rt_gl_u32(c, 0), pname = rt_gl_u32(c, 1);
-    int32_t value = (int32_t)rt_gl_u32(c, 2);
+    uint32_t target = rt_arg32(c, 0), pname = rt_arg32(c, 1);
+    int32_t value = (int32_t)rt_arg32(c, 2);
     ((void (*)(GLenum, GLenum, GLint))fn)(target, pname, value);
     uint32_t name = bound_buffer(target);
     // Seul un appel valide modifie l'état : relire la valeur retenue par GL.
@@ -714,8 +690,8 @@ int rt_gl_manual_glFlushMappedBufferRangeAPPLE(CPU *c, void *fn) { return flush_
 int rt_gl_manual_glFlushMappedBufferRange(CPU *c, void *fn) { return flush_range(c, fn); }
 
 int rt_gl_manual_glDeleteBuffersARB(CPU *c, void *fn) {
-    int32_t n = (int32_t)rt_gl_u32(c, 0);
-    uint32_t list = rt_gl_u32(c, 1);
+    int32_t n = (int32_t)rt_arg32(c, 0);
+    uint32_t list = rt_arg32(c, 1);
     const GLuint *names = rt_gl_in(c, list, rt_gl_n(n) * 4, 0);
     CGLShareGroupObj share = current_share();
     for (int32_t i = 0; i < n; ++i) {
@@ -734,11 +710,11 @@ int rt_gl_manual_glDeleteBuffersARB(CPU *c, void *fn) {
 
 // ---- Sources de shaders : tableau de char * invités ----
 int rt_gl_manual_glShaderSourceARB(CPU *c, void *fn) {
-    void *shader = rt_gl_handle_arg(rt_gl_u32(c, 0));
-    int32_t count = (int32_t)rt_gl_u32(c, 1);
+    void *shader = rt_gl_handle_arg(rt_arg32(c, 0));
+    int32_t count = (int32_t)rt_arg32(c, 1);
     typedef void (*F)(void *, GLsizei, const char *const *, const GLint *);
     if (count <= 0) { ((F)fn)(shader, count, NULL, NULL); return 1; }  // GL valide count
-    uint32_t list = rt_gl_u32(c, 2), length_list = rt_gl_u32(c, 3);
+    uint32_t list = rt_arg32(c, 2), length_list = rt_arg32(c, 3);
     rt_gl_in(c, list, (uint64_t)count * 4, 0);
     const GLint *lengths = rt_gl_in(c, length_list, (uint64_t)count * 4, 1);
     const char **host = calloc((size_t)count, sizeof(*host));
@@ -746,7 +722,7 @@ int rt_gl_manual_glShaderSourceARB(CPU *c, void *fn) {
     for (int32_t i = 0; i < count; ++i) {
         uint32_t text = R32(list + 4 * (uint32_t)i);
         int32_t length = lengths ? (int32_t)R32(length_list + 4 * (uint32_t)i) : -1;
-        host[i] = length >= 0 ? rt_gl_in(c, text, (uint64_t)length, 0) : rt_gl_str(c, text);
+        host[i] = length >= 0 ? rt_gl_in(c, text, (uint64_t)length, 0) : rt_guest_cstr(c, text);
     }
     ((F)fn)(shader, count, host, lengths);
     free(host);
@@ -761,15 +737,15 @@ static void *sync_arg(CPU *c, uint32_t handle) {
     return sync;
 }
 int rt_gl_manual_glFenceSync(CPU *c, void *fn) {
-    void *sync = ((void *(*)(GLenum, GLbitfield))fn)(rt_gl_u32(c, 0), rt_gl_u32(c, 1));
+    void *sync = ((void *(*)(GLenum, GLbitfield))fn)(rt_arg32(c, 0), rt_arg32(c, 1));
     c->eax = sync ? rt_handle_new(sync, GL_SYNC_KIND) : 0;
     if (sync && !c->eax) { glDeleteSync(sync); rt_trap(c, c->eip, "table de handles pleine (GLsync)"); }
     return 1;
 }
 int rt_gl_manual_glClientWaitSync(CPU *c, void *fn) {
-    void *sync = sync_arg(c, rt_gl_u32(c, 0));
-    GLbitfield flags = rt_gl_u32(c, 1);
-    uint64_t timeout = rt_gl_u64(c, 2);
+    void *sync = sync_arg(c, rt_arg32(c, 0));
+    GLbitfield flags = rt_arg32(c, 1);
+    uint64_t timeout = rt_arg64(c, 2);
     unsigned saved = rt_guest_suspend();  // attente bloquante : laisser tourner les autres threads
     GLenum result = ((GLenum (*)(void *, GLbitfield, uint64_t))fn)(sync, flags, timeout);
     rt_guest_resume(saved);
@@ -777,35 +753,33 @@ int rt_gl_manual_glClientWaitSync(CPU *c, void *fn) {
     return 1;
 }
 int rt_gl_manual_glWaitSync(CPU *c, void *fn) {
-    ((void (*)(void *, GLbitfield, uint64_t))fn)(sync_arg(c, rt_gl_u32(c, 0)), rt_gl_u32(c, 1), rt_gl_u64(c, 2));
+    ((void (*)(void *, GLbitfield, uint64_t))fn)(sync_arg(c, rt_arg32(c, 0)), rt_arg32(c, 1), rt_arg64(c, 2));
     return 1;
 }
 int rt_gl_manual_glDeleteSync(CPU *c, void *fn) {
-    uint32_t handle = rt_gl_u32(c, 0);
+    uint32_t handle = rt_arg32(c, 0);
     void *sync = sync_arg(c, handle);
     if (sync) rt_handle_free(handle, GL_SYNC_KIND);
     ((void (*)(void *))fn)(sync);
     return 1;
 }
 int rt_gl_manual_glGetSynciv(CPU *c, void *fn) {
-    void *sync = sync_arg(c, rt_gl_u32(c, 0));
-    uint32_t pname = rt_gl_u32(c, 1);
-    int32_t size = (int32_t)rt_gl_u32(c, 2);
-    GLsizei *length = rt_gl_out(c, rt_gl_u32(c, 3), 4, 1);
-    GLint *values = rt_gl_out(c, rt_gl_u32(c, 4), rt_gl_n(size) * 4, 0);
+    void *sync = sync_arg(c, rt_arg32(c, 0));
+    uint32_t pname = rt_arg32(c, 1);
+    int32_t size = (int32_t)rt_arg32(c, 2);
+    GLsizei *length = rt_gl_out(c, rt_arg32(c, 3), 4, 1);
+    GLint *values = rt_gl_out(c, rt_arg32(c, 4), rt_gl_n(size) * 4, 0);
     ((void (*)(void *, GLenum, GLsizei, GLsizei *, GLint *))fn)(sync, pname, size, length, values);
     return 1;
 }
 
 // APPLE_texture_range : le pointeur rendu est celui fourni par l'invité.
 int rt_gl_manual_glGetTexParameterPointervAPPLE(CPU *c, void *fn) {
-    uint32_t target = rt_gl_u32(c, 0), pname = rt_gl_u32(c, 1), out = rt_gl_u32(c, 2);
+    uint32_t target = rt_arg32(c, 0), pname = rt_arg32(c, 1), out = rt_arg32(c, 2);
     rt_gl_out(c, out, 4, 0);
     void *value = NULL;
     ((void (*)(GLenum, GLenum, void **))fn)(target, pname, &value);
-    uintptr_t p = (uintptr_t)value, base = (uintptr_t)M;
-    if (p && (p < base || p - base > UINT32_MAX)) rt_trap(c, c->eip, "pointeur GL hôte hors de la mémoire invitée");
-    W32(out, p ? (uint32_t)(p - base) : 0);
+    W32(out, rt_guest_address(c, value, "pointeur GL hôte hors de la mémoire invitée"));
     return 1;
 }
 

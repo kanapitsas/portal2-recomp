@@ -4,92 +4,64 @@
 #include "d3d9_bridge.h"
 
 static void t_IDirect3D9_CheckDepthStencilMatch(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Adapter = R32(a + 0);
-    uint32_t g_DeviceType = R32(a + 4);
-    uint32_t g_AdapterFormat = R32(a + 8);
-    uint32_t g_RenderTargetFormat = R32(a + 12);
-    uint32_t g_DepthStencilFormat = R32(a + 16);
-    uint32_t a_Adapter = g_Adapter;
-    uint32_t a_DeviceType = g_DeviceType;
-    uint32_t a_AdapterFormat = g_AdapterFormat;
-    uint32_t a_RenderTargetFormat = g_RenderTargetFormat;
-    uint32_t a_DepthStencilFormat = g_DepthStencilFormat;
+    uint32_t a_Adapter = R32(a + 0);
+    uint32_t a_DeviceType = R32(a + 4);
+    uint32_t a_AdapterFormat = R32(a + 8);
+    uint32_t a_RenderTargetFormat = R32(a + 12);
+    uint32_t a_DepthStencilFormat = R32(a + 16);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t))D3D9_VTBL(self)[12])(self, a_Adapter, a_DeviceType, a_AdapterFormat, a_RenderTargetFormat, a_DepthStencilFormat);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3D9_CheckDeviceFormat(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Adapter = R32(a + 0);
-    uint32_t g_DeviceType = R32(a + 4);
-    uint32_t g_AdapterFormat = R32(a + 8);
-    uint32_t g_Usage = R32(a + 12);
-    uint32_t g_RType = R32(a + 16);
-    uint32_t g_CheckFormat = R32(a + 20);
-    uint32_t a_Adapter = g_Adapter;
-    uint32_t a_DeviceType = g_DeviceType;
-    uint32_t a_AdapterFormat = g_AdapterFormat;
-    uint32_t a_Usage = g_Usage;
-    uint32_t a_RType = g_RType;
-    uint32_t a_CheckFormat = g_CheckFormat;
+    uint32_t a_Adapter = R32(a + 0);
+    uint32_t a_DeviceType = R32(a + 4);
+    uint32_t a_AdapterFormat = R32(a + 8);
+    uint32_t a_Usage = R32(a + 12);
+    uint32_t a_RType = R32(a + 16);
+    uint32_t a_CheckFormat = R32(a + 20);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t))D3D9_VTBL(self)[10])(self, a_Adapter, a_DeviceType, a_AdapterFormat, a_Usage, a_RType, a_CheckFormat);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3D9_CheckDeviceFormatConversion(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Adapter = R32(a + 0);
-    uint32_t g_DeviceType = R32(a + 4);
-    uint32_t g_SourceFormat = R32(a + 8);
-    uint32_t g_TargetFormat = R32(a + 12);
-    uint32_t a_Adapter = g_Adapter;
-    uint32_t a_DeviceType = g_DeviceType;
-    uint32_t a_SourceFormat = g_SourceFormat;
-    uint32_t a_TargetFormat = g_TargetFormat;
+    uint32_t a_Adapter = R32(a + 0);
+    uint32_t a_DeviceType = R32(a + 4);
+    uint32_t a_SourceFormat = R32(a + 8);
+    uint32_t a_TargetFormat = R32(a + 12);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t))D3D9_VTBL(self)[13])(self, a_Adapter, a_DeviceType, a_SourceFormat, a_TargetFormat);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3D9_CheckDeviceMultiSampleType(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Adapter = R32(a + 0);
-    uint32_t g_DeviceType = R32(a + 4);
-    uint32_t g_SurfaceFormat = R32(a + 8);
-    uint32_t g_Windowed = R32(a + 12);
-    uint32_t g_MultiSampleType = R32(a + 16);
+    uint32_t a_Adapter = R32(a + 0);
+    uint32_t a_DeviceType = R32(a + 4);
+    uint32_t a_SurfaceFormat = R32(a + 8);
+    uint32_t a_Windowed = R32(a + 12);
+    uint32_t a_MultiSampleType = R32(a + 16);
     uint32_t g_pQualityLevels = R32(a + 20);
-    uint32_t a_Adapter = g_Adapter;
-    uint32_t a_DeviceType = g_DeviceType;
-    uint32_t a_SurfaceFormat = g_SurfaceFormat;
-    uint32_t a_Windowed = g_Windowed;
-    uint32_t a_MultiSampleType = g_MultiSampleType;
     void *a_pQualityLevels = d3d9_out(c, g_pQualityLevels, (uint64_t)(4));
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void *))D3D9_VTBL(self)[11])(self, a_Adapter, a_DeviceType, a_SurfaceFormat, a_Windowed, a_MultiSampleType, a_pQualityLevels);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3D9_CheckDeviceType(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Adapter = R32(a + 0);
-    uint32_t g_DevType = R32(a + 4);
-    uint32_t g_AdapterFormat = R32(a + 8);
-    uint32_t g_BackBufferFormat = R32(a + 12);
-    uint32_t g_bWindowed = R32(a + 16);
-    uint32_t a_Adapter = g_Adapter;
-    uint32_t a_DevType = g_DevType;
-    uint32_t a_AdapterFormat = g_AdapterFormat;
-    uint32_t a_BackBufferFormat = g_BackBufferFormat;
-    uint32_t a_bWindowed = g_bWindowed;
+    uint32_t a_Adapter = R32(a + 0);
+    uint32_t a_DevType = R32(a + 4);
+    uint32_t a_AdapterFormat = R32(a + 8);
+    uint32_t a_BackBufferFormat = R32(a + 12);
+    uint32_t a_bWindowed = R32(a + 16);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t))D3D9_VTBL(self)[9])(self, a_Adapter, a_DevType, a_AdapterFormat, a_BackBufferFormat, a_bWindowed);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3D9_CreateDevice(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Adapter = R32(a + 0);
-    uint32_t g_DeviceType = R32(a + 4);
+    uint32_t a_Adapter = R32(a + 0);
+    uint32_t a_DeviceType = R32(a + 4);
     uint32_t g_hFocusWindow = R32(a + 8);
-    uint32_t g_BehaviorFlags = R32(a + 12);
+    uint32_t a_BehaviorFlags = R32(a + 12);
     uint32_t g_pPresentationParameters = R32(a + 16);
     uint32_t g_ppReturnedDeviceInterface = R32(a + 20);
-    uint32_t a_Adapter = g_Adapter;
-    uint32_t a_DeviceType = g_DeviceType;
-    uint32_t a_BehaviorFlags = g_BehaviorFlags;
     void *a_hFocusWindow = d3d9_hwnd(c, g_hFocusWindow);
     D3d9HostParams h_pPresentationParameters; void *a_pPresentationParameters = d3d9_params_in(c, g_pPresentationParameters, &h_pPresentationParameters, 1);
     void *h_ppReturnedDeviceInterface = NULL, **a_ppReturnedDeviceInterface = d3d9_out_slot(c, g_ppReturnedDeviceInterface) ? &h_ppReturnedDeviceInterface : NULL;
@@ -100,13 +72,10 @@ static void t_IDirect3D9_CreateDevice(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3D9_EnumAdapterModes(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Adapter = R32(a + 0);
-    uint32_t g_Format = R32(a + 4);
-    uint32_t g_Mode = R32(a + 8);
+    uint32_t a_Adapter = R32(a + 0);
+    uint32_t a_Format = R32(a + 4);
+    uint32_t a_Mode = R32(a + 8);
     uint32_t g_pMode = R32(a + 12);
-    uint32_t a_Adapter = g_Adapter;
-    uint32_t a_Format = g_Format;
-    uint32_t a_Mode = g_Mode;
     void *a_pMode = d3d9_out(c, g_pMode, (uint64_t)(16));
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, void *))D3D9_VTBL(self)[7])(self, a_Adapter, a_Format, a_Mode, a_pMode);
     c->eax = (uint32_t)hr;
@@ -118,20 +87,17 @@ static void t_IDirect3D9_GetAdapterCount(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3D9_GetAdapterDisplayMode(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Adapter = R32(a + 0);
+    uint32_t a_Adapter = R32(a + 0);
     uint32_t g_pMode = R32(a + 4);
-    uint32_t a_Adapter = g_Adapter;
     void *a_pMode = d3d9_out(c, g_pMode, (uint64_t)(16));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[8])(self, a_Adapter, a_pMode);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3D9_GetAdapterIdentifier(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Adapter = R32(a + 0);
-    uint32_t g_Flags = R32(a + 4);
+    uint32_t a_Adapter = R32(a + 0);
+    uint32_t a_Flags = R32(a + 4);
     uint32_t g_pIdentifier = R32(a + 8);
-    uint32_t a_Adapter = g_Adapter;
-    uint32_t a_Flags = g_Flags;
     D3d9HostAdapterId h_pIdentifier; void *a_pIdentifier = d3d9_adapter_id_in(c, g_pIdentifier, &h_pIdentifier);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, void *))D3D9_VTBL(self)[5])(self, a_Adapter, a_Flags, a_pIdentifier);
     if (hr >= 0) d3d9_adapter_id_out(c, g_pIdentifier, &h_pIdentifier);
@@ -139,35 +105,28 @@ static void t_IDirect3D9_GetAdapterIdentifier(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3D9_GetAdapterModeCount(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Adapter = R32(a + 0);
-    uint32_t g_Format = R32(a + 4);
-    uint32_t a_Adapter = g_Adapter;
-    uint32_t a_Format = g_Format;
+    uint32_t a_Adapter = R32(a + 0);
+    uint32_t a_Format = R32(a + 4);
     c->eax = ((uint32_t (*)(void *, uint32_t, uint32_t))D3D9_VTBL(self)[6])(self, a_Adapter, a_Format);
 }
 
 static void t_IDirect3D9_GetDeviceCaps(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Adapter = R32(a + 0);
-    uint32_t g_DeviceType = R32(a + 4);
+    uint32_t a_Adapter = R32(a + 0);
+    uint32_t a_DeviceType = R32(a + 4);
     uint32_t g_pCaps = R32(a + 8);
-    uint32_t a_Adapter = g_Adapter;
-    uint32_t a_DeviceType = g_DeviceType;
     void *a_pCaps = d3d9_out(c, g_pCaps, (uint64_t)(304));
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, void *))D3D9_VTBL(self)[14])(self, a_Adapter, a_DeviceType, a_pCaps);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3D9Ex_CreateDeviceEx(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Adapter = R32(a + 0);
-    uint32_t g_DeviceType = R32(a + 4);
+    uint32_t a_Adapter = R32(a + 0);
+    uint32_t a_DeviceType = R32(a + 4);
     uint32_t g_hFocusWindow = R32(a + 8);
-    uint32_t g_BehaviorFlags = R32(a + 12);
+    uint32_t a_BehaviorFlags = R32(a + 12);
     uint32_t g_pPresentationParameters = R32(a + 16);
     uint32_t g_pFullscreenDisplayMode = R32(a + 20);
     uint32_t g_ppReturnedDeviceInterface = R32(a + 24);
-    uint32_t a_Adapter = g_Adapter;
-    uint32_t a_DeviceType = g_DeviceType;
-    uint32_t a_BehaviorFlags = g_BehaviorFlags;
     void *a_hFocusWindow = d3d9_hwnd(c, g_hFocusWindow);
     D3d9HostParams h_pPresentationParameters; void *a_pPresentationParameters = d3d9_params_in(c, g_pPresentationParameters, &h_pPresentationParameters, 1);
     void *a_pFullscreenDisplayMode = d3d9_in(c, g_pFullscreenDisplayMode, (uint64_t)(24));
@@ -179,12 +138,10 @@ static void t_IDirect3D9Ex_CreateDeviceEx(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3D9Ex_EnumAdapterModesEx(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Adapter = R32(a + 0);
+    uint32_t a_Adapter = R32(a + 0);
     uint32_t g_pFilter = R32(a + 4);
-    uint32_t g_Mode = R32(a + 8);
+    uint32_t a_Mode = R32(a + 8);
     uint32_t g_pMode = R32(a + 12);
-    uint32_t a_Adapter = g_Adapter;
-    uint32_t a_Mode = g_Mode;
     void *a_pFilter = d3d9_in(c, g_pFilter, (uint64_t)(12));
     void *a_pMode = d3d9_out(c, g_pMode, (uint64_t)(24));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, uint32_t, void *))D3D9_VTBL(self)[18])(self, a_Adapter, a_pFilter, a_Mode, a_pMode);
@@ -192,10 +149,9 @@ static void t_IDirect3D9Ex_EnumAdapterModesEx(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3D9Ex_GetAdapterDisplayModeEx(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Adapter = R32(a + 0);
+    uint32_t a_Adapter = R32(a + 0);
     uint32_t g_pMode = R32(a + 4);
     uint32_t g_pRotation = R32(a + 8);
-    uint32_t a_Adapter = g_Adapter;
     void *a_pMode = d3d9_out(c, g_pMode, (uint64_t)(24));
     void *a_pRotation = d3d9_out(c, g_pRotation, (uint64_t)(4));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, void *))D3D9_VTBL(self)[19])(self, a_Adapter, a_pMode, a_pRotation);
@@ -203,18 +159,16 @@ static void t_IDirect3D9Ex_GetAdapterDisplayModeEx(CPU *c, void *self, uint32_t 
 }
 
 static void t_IDirect3D9Ex_GetAdapterLUID(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Adapter = R32(a + 0);
+    uint32_t a_Adapter = R32(a + 0);
     uint32_t g_pLUID = R32(a + 4);
-    uint32_t a_Adapter = g_Adapter;
     void *a_pLUID = d3d9_out(c, g_pLUID, (uint64_t)(8));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[21])(self, a_Adapter, a_pLUID);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3D9Ex_GetAdapterModeCountEx(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Adapter = R32(a + 0);
+    uint32_t a_Adapter = R32(a + 0);
     uint32_t g_pFilter = R32(a + 4);
-    uint32_t a_Adapter = g_Adapter;
     void *a_pFilter = d3d9_in(c, g_pFilter, (uint64_t)(12));
     c->eax = ((uint32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[17])(self, a_Adapter, a_pFilter);
 }
@@ -240,33 +194,28 @@ static void t_IDirect3DBaseTexture9_GetLevelCount(CPU *c, void *self, uint32_t a
 }
 
 static void t_IDirect3DBaseTexture9_SetAutoGenFilterType(CPU *c, void *self, uint32_t a) {
-    uint32_t g_FilterType = R32(a + 0);
-    uint32_t a_FilterType = g_FilterType;
+    uint32_t a_FilterType = R32(a + 0);
     int32_t hr = ((int32_t (*)(void *, uint32_t))D3D9_VTBL(self)[14])(self, a_FilterType);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DBaseTexture9_SetLOD(CPU *c, void *self, uint32_t a) {
-    uint32_t g_LODNew = R32(a + 0);
-    uint32_t a_LODNew = g_LODNew;
+    uint32_t a_LODNew = R32(a + 0);
     c->eax = ((uint32_t (*)(void *, uint32_t))D3D9_VTBL(self)[11])(self, a_LODNew);
 }
 
 static void t_IDirect3DCubeTexture9_AddDirtyRect(CPU *c, void *self, uint32_t a) {
-    uint32_t g_FaceType = R32(a + 0);
+    uint32_t a_FaceType = R32(a + 0);
     uint32_t g_pDirtyRect = R32(a + 4);
-    uint32_t a_FaceType = g_FaceType;
     void *a_pDirtyRect = d3d9_in(c, g_pDirtyRect, (uint64_t)(16));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[21])(self, a_FaceType, a_pDirtyRect);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DCubeTexture9_GetCubeMapSurface(CPU *c, void *self, uint32_t a) {
-    uint32_t g_FaceType = R32(a + 0);
-    uint32_t g_Level = R32(a + 4);
+    uint32_t a_FaceType = R32(a + 0);
+    uint32_t a_Level = R32(a + 4);
     uint32_t g_ppCubeMapSurface = R32(a + 8);
-    uint32_t a_FaceType = g_FaceType;
-    uint32_t a_Level = g_Level;
     void *h_ppCubeMapSurface = NULL, **a_ppCubeMapSurface = d3d9_out_slot(c, g_ppCubeMapSurface) ? &h_ppCubeMapSurface : NULL;
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, void **))D3D9_VTBL(self)[18])(self, a_FaceType, a_Level, a_ppCubeMapSurface);
     d3d9_child_out(c, g_ppCubeMapSurface, h_ppCubeMapSurface, D3D9_IDirect3DSurface9, self, 1);
@@ -274,23 +223,19 @@ static void t_IDirect3DCubeTexture9_GetCubeMapSurface(CPU *c, void *self, uint32
 }
 
 static void t_IDirect3DCubeTexture9_GetLevelDesc(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Level = R32(a + 0);
+    uint32_t a_Level = R32(a + 0);
     uint32_t g_pDesc = R32(a + 4);
-    uint32_t a_Level = g_Level;
     void *a_pDesc = d3d9_out(c, g_pDesc, (uint64_t)(32));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[17])(self, a_Level, a_pDesc);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DCubeTexture9_LockRect(CPU *c, void *self, uint32_t a) {
-    uint32_t g_FaceType = R32(a + 0);
-    uint32_t g_Level = R32(a + 4);
+    uint32_t a_FaceType = R32(a + 0);
+    uint32_t a_Level = R32(a + 4);
     uint32_t g_pLockedRect = R32(a + 8);
     uint32_t g_pRect = R32(a + 12);
-    uint32_t g_Flags = R32(a + 16);
-    uint32_t a_FaceType = g_FaceType;
-    uint32_t a_Level = g_Level;
-    uint32_t a_Flags = g_Flags;
+    uint32_t a_Flags = R32(a + 16);
     D3d9HostLocked h_pLockedRect; void *a_pLockedRect = d3d9_locked_in(c, g_pLockedRect, &h_pLockedRect, 8);
     void *a_pRect = d3d9_in(c, g_pRect, (uint64_t)(16));
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, void *, void *, uint32_t))D3D9_VTBL(self)[19])(self, a_FaceType, a_Level, a_pLockedRect, a_pRect, a_Flags);
@@ -299,10 +244,8 @@ static void t_IDirect3DCubeTexture9_LockRect(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DCubeTexture9_UnlockRect(CPU *c, void *self, uint32_t a) {
-    uint32_t g_FaceType = R32(a + 0);
-    uint32_t g_Level = R32(a + 4);
-    uint32_t a_FaceType = g_FaceType;
-    uint32_t a_Level = g_Level;
+    uint32_t a_FaceType = R32(a + 0);
+    uint32_t a_Level = R32(a + 4);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t))D3D9_VTBL(self)[20])(self, a_FaceType, a_Level);
     c->eax = (uint32_t)hr;
 }
@@ -320,17 +263,13 @@ static void t_IDirect3DDevice9_BeginStateBlock(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_Clear(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Count = R32(a + 0);
+    uint32_t a_Count = R32(a + 0);
     uint32_t g_pRects = R32(a + 4);
-    uint32_t g_Flags = R32(a + 8);
-    uint32_t g_Color = R32(a + 12);
+    uint32_t a_Flags = R32(a + 8);
+    uint32_t a_Color = R32(a + 12);
     uint32_t g_Z = R32(a + 16);
-    uint32_t g_Stencil = R32(a + 20);
-    uint32_t a_Count = g_Count;
-    uint32_t a_Flags = g_Flags;
-    uint32_t a_Color = g_Color;
+    uint32_t a_Stencil = R32(a + 20);
     float a_Z = d3d9_f32(g_Z);
-    uint32_t a_Stencil = g_Stencil;
     void *a_pRects = d3d9_in(c, g_pRects, (uint64_t)(a_Count*16));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, uint32_t, uint32_t, float, uint32_t))D3D9_VTBL(self)[43])(self, a_Count, a_pRects, a_Flags, a_Color, a_Z, a_Stencil);
     c->eax = (uint32_t)hr;
@@ -339,8 +278,7 @@ static void t_IDirect3DDevice9_Clear(CPU *c, void *self, uint32_t a) {
 static void t_IDirect3DDevice9_ColorFill(CPU *c, void *self, uint32_t a) {
     uint32_t g_pSurface = R32(a + 0);
     uint32_t g_pRect = R32(a + 4);
-    uint32_t g_color = R32(a + 8);
-    uint32_t a_color = g_color;
+    uint32_t a_color = R32(a + 8);
     void *a_pSurface = d3d9_iface_in(c, g_pSurface, 0x800u);
     void *a_pRect = d3d9_in(c, g_pRect, (uint64_t)(16));
     int32_t hr = ((int32_t (*)(void *, void *, void *, uint32_t))D3D9_VTBL(self)[35])(self, a_pSurface, a_pRect, a_color);
@@ -359,18 +297,13 @@ static void t_IDirect3DDevice9_CreateAdditionalSwapChain(CPU *c, void *self, uin
 }
 
 static void t_IDirect3DDevice9_CreateCubeTexture(CPU *c, void *self, uint32_t a) {
-    uint32_t g_EdgeLength = R32(a + 0);
-    uint32_t g_Levels = R32(a + 4);
-    uint32_t g_Usage = R32(a + 8);
-    uint32_t g_Format = R32(a + 12);
-    uint32_t g_Pool = R32(a + 16);
+    uint32_t a_EdgeLength = R32(a + 0);
+    uint32_t a_Levels = R32(a + 4);
+    uint32_t a_Usage = R32(a + 8);
+    uint32_t a_Format = R32(a + 12);
+    uint32_t a_Pool = R32(a + 16);
     uint32_t g_ppCubeTexture = R32(a + 20);
     uint32_t g_pSharedHandle = R32(a + 24);
-    uint32_t a_EdgeLength = g_EdgeLength;
-    uint32_t a_Levels = g_Levels;
-    uint32_t a_Usage = g_Usage;
-    uint32_t a_Format = g_Format;
-    uint32_t a_Pool = g_Pool;
     void *h_ppCubeTexture = NULL, **a_ppCubeTexture = d3d9_out_slot(c, g_ppCubeTexture) ? &h_ppCubeTexture : NULL;
     void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[25])(self, a_EdgeLength, a_Levels, a_Usage, a_Format, a_Pool, a_ppCubeTexture, a_pSharedHandle);
@@ -379,20 +312,14 @@ static void t_IDirect3DDevice9_CreateCubeTexture(CPU *c, void *self, uint32_t a)
 }
 
 static void t_IDirect3DDevice9_CreateDepthStencilSurface(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Width = R32(a + 0);
-    uint32_t g_Height = R32(a + 4);
-    uint32_t g_Format = R32(a + 8);
-    uint32_t g_MultiSample = R32(a + 12);
-    uint32_t g_MultisampleQuality = R32(a + 16);
-    uint32_t g_Discard = R32(a + 20);
+    uint32_t a_Width = R32(a + 0);
+    uint32_t a_Height = R32(a + 4);
+    uint32_t a_Format = R32(a + 8);
+    uint32_t a_MultiSample = R32(a + 12);
+    uint32_t a_MultisampleQuality = R32(a + 16);
+    uint32_t a_Discard = R32(a + 20);
     uint32_t g_ppSurface = R32(a + 24);
     uint32_t g_pSharedHandle = R32(a + 28);
-    uint32_t a_Width = g_Width;
-    uint32_t a_Height = g_Height;
-    uint32_t a_Format = g_Format;
-    uint32_t a_MultiSample = g_MultiSample;
-    uint32_t a_MultisampleQuality = g_MultisampleQuality;
-    uint32_t a_Discard = g_Discard;
     void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
     void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[29])(self, a_Width, a_Height, a_Format, a_MultiSample, a_MultisampleQuality, a_Discard, a_ppSurface, a_pSharedHandle);
@@ -401,16 +328,12 @@ static void t_IDirect3DDevice9_CreateDepthStencilSurface(CPU *c, void *self, uin
 }
 
 static void t_IDirect3DDevice9_CreateIndexBuffer(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Length = R32(a + 0);
-    uint32_t g_Usage = R32(a + 4);
-    uint32_t g_Format = R32(a + 8);
-    uint32_t g_Pool = R32(a + 12);
+    uint32_t a_Length = R32(a + 0);
+    uint32_t a_Usage = R32(a + 4);
+    uint32_t a_Format = R32(a + 8);
+    uint32_t a_Pool = R32(a + 12);
     uint32_t g_ppIndexBuffer = R32(a + 16);
     uint32_t g_pSharedHandle = R32(a + 20);
-    uint32_t a_Length = g_Length;
-    uint32_t a_Usage = g_Usage;
-    uint32_t a_Format = g_Format;
-    uint32_t a_Pool = g_Pool;
     void *h_ppIndexBuffer = NULL, **a_ppIndexBuffer = d3d9_out_slot(c, g_ppIndexBuffer) ? &h_ppIndexBuffer : NULL;
     void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[27])(self, a_Length, a_Usage, a_Format, a_Pool, a_ppIndexBuffer, a_pSharedHandle);
@@ -419,18 +342,15 @@ static void t_IDirect3DDevice9_CreateIndexBuffer(CPU *c, void *self, uint32_t a)
 }
 
 static void t_IDirect3DDevice9_CreateOffscreenPlainSurface(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Width = R32(a + 0);
-    uint32_t g_Height = R32(a + 4);
-    uint32_t g_Format = R32(a + 8);
-    uint32_t g_Pool = R32(a + 12);
+    uint32_t a_Width = R32(a + 0);
+    uint32_t a_Height = R32(a + 4);
+    uint32_t a_Format = R32(a + 8);
+    uint32_t a_Pool = R32(a + 12);
     uint32_t g_ppSurface = R32(a + 16);
     uint32_t g_pSharedHandle = R32(a + 20);
-    uint32_t a_Width = g_Width;
-    uint32_t a_Height = g_Height;
-    uint32_t a_Format = g_Format;
-    uint32_t a_Pool = g_Pool;
     void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
     void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, (a_Pool == 2), &h_pSharedHandle);
+    d3d9_user_memory_check(c, a_pSharedHandle, a_Width, a_Height, a_Format);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[36])(self, a_Width, a_Height, a_Format, a_Pool, a_ppSurface, a_pSharedHandle);
     d3d9_iface_out(c, g_ppSurface, h_ppSurface, D3D9_IDirect3DSurface9);
     c->eax = (uint32_t)hr;
@@ -447,9 +367,8 @@ static void t_IDirect3DDevice9_CreatePixelShader(CPU *c, void *self, uint32_t a)
 }
 
 static void t_IDirect3DDevice9_CreateQuery(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Type = R32(a + 0);
+    uint32_t a_Type = R32(a + 0);
     uint32_t g_ppQuery = R32(a + 4);
-    uint32_t a_Type = g_Type;
     void *h_ppQuery = NULL, **a_ppQuery = d3d9_out_slot(c, g_ppQuery) ? &h_ppQuery : NULL;
     int32_t hr = ((int32_t (*)(void *, uint32_t, void **))D3D9_VTBL(self)[118])(self, a_Type, a_ppQuery);
     d3d9_iface_out(c, g_ppQuery, h_ppQuery, D3D9_IDirect3DQuery9);
@@ -457,20 +376,14 @@ static void t_IDirect3DDevice9_CreateQuery(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_CreateRenderTarget(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Width = R32(a + 0);
-    uint32_t g_Height = R32(a + 4);
-    uint32_t g_Format = R32(a + 8);
-    uint32_t g_MultiSample = R32(a + 12);
-    uint32_t g_MultisampleQuality = R32(a + 16);
-    uint32_t g_Lockable = R32(a + 20);
+    uint32_t a_Width = R32(a + 0);
+    uint32_t a_Height = R32(a + 4);
+    uint32_t a_Format = R32(a + 8);
+    uint32_t a_MultiSample = R32(a + 12);
+    uint32_t a_MultisampleQuality = R32(a + 16);
+    uint32_t a_Lockable = R32(a + 20);
     uint32_t g_ppSurface = R32(a + 24);
     uint32_t g_pSharedHandle = R32(a + 28);
-    uint32_t a_Width = g_Width;
-    uint32_t a_Height = g_Height;
-    uint32_t a_Format = g_Format;
-    uint32_t a_MultiSample = g_MultiSample;
-    uint32_t a_MultisampleQuality = g_MultisampleQuality;
-    uint32_t a_Lockable = g_Lockable;
     void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
     void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[28])(self, a_Width, a_Height, a_Format, a_MultiSample, a_MultisampleQuality, a_Lockable, a_ppSurface, a_pSharedHandle);
@@ -479,9 +392,8 @@ static void t_IDirect3DDevice9_CreateRenderTarget(CPU *c, void *self, uint32_t a
 }
 
 static void t_IDirect3DDevice9_CreateStateBlock(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Type = R32(a + 0);
+    uint32_t a_Type = R32(a + 0);
     uint32_t g_ppSB = R32(a + 4);
-    uint32_t a_Type = g_Type;
     void *h_ppSB = NULL, **a_ppSB = d3d9_out_slot(c, g_ppSB) ? &h_ppSB : NULL;
     int32_t hr = ((int32_t (*)(void *, uint32_t, void **))D3D9_VTBL(self)[59])(self, a_Type, a_ppSB);
     d3d9_iface_out(c, g_ppSB, h_ppSB, D3D9_IDirect3DStateBlock9);
@@ -489,38 +401,29 @@ static void t_IDirect3DDevice9_CreateStateBlock(CPU *c, void *self, uint32_t a) 
 }
 
 static void t_IDirect3DDevice9_CreateTexture(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Width = R32(a + 0);
-    uint32_t g_Height = R32(a + 4);
-    uint32_t g_Levels = R32(a + 8);
-    uint32_t g_Usage = R32(a + 12);
-    uint32_t g_Format = R32(a + 16);
-    uint32_t g_Pool = R32(a + 20);
+    uint32_t a_Width = R32(a + 0);
+    uint32_t a_Height = R32(a + 4);
+    uint32_t a_Levels = R32(a + 8);
+    uint32_t a_Usage = R32(a + 12);
+    uint32_t a_Format = R32(a + 16);
+    uint32_t a_Pool = R32(a + 20);
     uint32_t g_ppTexture = R32(a + 24);
     uint32_t g_pSharedHandle = R32(a + 28);
-    uint32_t a_Width = g_Width;
-    uint32_t a_Height = g_Height;
-    uint32_t a_Levels = g_Levels;
-    uint32_t a_Usage = g_Usage;
-    uint32_t a_Format = g_Format;
-    uint32_t a_Pool = g_Pool;
     void *h_ppTexture = NULL, **a_ppTexture = d3d9_out_slot(c, g_ppTexture) ? &h_ppTexture : NULL;
     void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, (a_Pool == 2 && a_Levels == 1), &h_pSharedHandle);
+    d3d9_user_memory_check(c, a_pSharedHandle, a_Width, a_Height, a_Format);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[23])(self, a_Width, a_Height, a_Levels, a_Usage, a_Format, a_Pool, a_ppTexture, a_pSharedHandle);
     d3d9_iface_out(c, g_ppTexture, h_ppTexture, D3D9_IDirect3DTexture9);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_CreateVertexBuffer(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Length = R32(a + 0);
-    uint32_t g_Usage = R32(a + 4);
-    uint32_t g_FVF = R32(a + 8);
-    uint32_t g_Pool = R32(a + 12);
+    uint32_t a_Length = R32(a + 0);
+    uint32_t a_Usage = R32(a + 4);
+    uint32_t a_FVF = R32(a + 8);
+    uint32_t a_Pool = R32(a + 12);
     uint32_t g_ppVertexBuffer = R32(a + 16);
     uint32_t g_pSharedHandle = R32(a + 20);
-    uint32_t a_Length = g_Length;
-    uint32_t a_Usage = g_Usage;
-    uint32_t a_FVF = g_FVF;
-    uint32_t a_Pool = g_Pool;
     void *h_ppVertexBuffer = NULL, **a_ppVertexBuffer = d3d9_out_slot(c, g_ppVertexBuffer) ? &h_ppVertexBuffer : NULL;
     void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[26])(self, a_Length, a_Usage, a_FVF, a_Pool, a_ppVertexBuffer, a_pSharedHandle);
@@ -549,22 +452,15 @@ static void t_IDirect3DDevice9_CreateVertexShader(CPU *c, void *self, uint32_t a
 }
 
 static void t_IDirect3DDevice9_CreateVolumeTexture(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Width = R32(a + 0);
-    uint32_t g_Height = R32(a + 4);
-    uint32_t g_Depth = R32(a + 8);
-    uint32_t g_Levels = R32(a + 12);
-    uint32_t g_Usage = R32(a + 16);
-    uint32_t g_Format = R32(a + 20);
-    uint32_t g_Pool = R32(a + 24);
+    uint32_t a_Width = R32(a + 0);
+    uint32_t a_Height = R32(a + 4);
+    uint32_t a_Depth = R32(a + 8);
+    uint32_t a_Levels = R32(a + 12);
+    uint32_t a_Usage = R32(a + 16);
+    uint32_t a_Format = R32(a + 20);
+    uint32_t a_Pool = R32(a + 24);
     uint32_t g_ppVolumeTexture = R32(a + 28);
     uint32_t g_pSharedHandle = R32(a + 32);
-    uint32_t a_Width = g_Width;
-    uint32_t a_Height = g_Height;
-    uint32_t a_Depth = g_Depth;
-    uint32_t a_Levels = g_Levels;
-    uint32_t a_Usage = g_Usage;
-    uint32_t a_Format = g_Format;
-    uint32_t a_Pool = g_Pool;
     void *h_ppVolumeTexture = NULL, **a_ppVolumeTexture = d3d9_out_slot(c, g_ppVolumeTexture) ? &h_ppVolumeTexture : NULL;
     void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *))D3D9_VTBL(self)[24])(self, a_Width, a_Height, a_Depth, a_Levels, a_Usage, a_Format, a_Pool, a_ppVolumeTexture, a_pSharedHandle);
@@ -573,44 +469,32 @@ static void t_IDirect3DDevice9_CreateVolumeTexture(CPU *c, void *self, uint32_t 
 }
 
 static void t_IDirect3DDevice9_DeletePatch(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Handle = R32(a + 0);
-    uint32_t a_Handle = g_Handle;
+    uint32_t a_Handle = R32(a + 0);
     int32_t hr = ((int32_t (*)(void *, uint32_t))D3D9_VTBL(self)[117])(self, a_Handle);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_DrawIndexedPrimitive(CPU *c, void *self, uint32_t a) {
-    uint32_t g_PrimitiveType = R32(a + 0);
+    uint32_t a_PrimitiveType = R32(a + 0);
     uint32_t g_BaseVertexIndex = R32(a + 4);
-    uint32_t g_MinVertexIndex = R32(a + 8);
-    uint32_t g_NumVertices = R32(a + 12);
-    uint32_t g_startIndex = R32(a + 16);
-    uint32_t g_primCount = R32(a + 20);
-    uint32_t a_PrimitiveType = g_PrimitiveType;
+    uint32_t a_MinVertexIndex = R32(a + 8);
+    uint32_t a_NumVertices = R32(a + 12);
+    uint32_t a_startIndex = R32(a + 16);
+    uint32_t a_primCount = R32(a + 20);
     int32_t a_BaseVertexIndex = (int32_t)g_BaseVertexIndex;
-    uint32_t a_MinVertexIndex = g_MinVertexIndex;
-    uint32_t a_NumVertices = g_NumVertices;
-    uint32_t a_startIndex = g_startIndex;
-    uint32_t a_primCount = g_primCount;
     int32_t hr = ((int32_t (*)(void *, uint32_t, int32_t, uint32_t, uint32_t, uint32_t, uint32_t))D3D9_VTBL(self)[82])(self, a_PrimitiveType, a_BaseVertexIndex, a_MinVertexIndex, a_NumVertices, a_startIndex, a_primCount);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_DrawIndexedPrimitiveUP(CPU *c, void *self, uint32_t a) {
-    uint32_t g_PrimitiveType = R32(a + 0);
-    uint32_t g_MinVertexIndex = R32(a + 4);
-    uint32_t g_NumVertices = R32(a + 8);
-    uint32_t g_PrimitiveCount = R32(a + 12);
+    uint32_t a_PrimitiveType = R32(a + 0);
+    uint32_t a_MinVertexIndex = R32(a + 4);
+    uint32_t a_NumVertices = R32(a + 8);
+    uint32_t a_PrimitiveCount = R32(a + 12);
     uint32_t g_pIndexData = R32(a + 16);
-    uint32_t g_IndexDataFormat = R32(a + 20);
+    uint32_t a_IndexDataFormat = R32(a + 20);
     uint32_t g_pVertexStreamZeroData = R32(a + 24);
-    uint32_t g_VertexStreamZeroStride = R32(a + 28);
-    uint32_t a_PrimitiveType = g_PrimitiveType;
-    uint32_t a_MinVertexIndex = g_MinVertexIndex;
-    uint32_t a_NumVertices = g_NumVertices;
-    uint32_t a_PrimitiveCount = g_PrimitiveCount;
-    uint32_t a_IndexDataFormat = g_IndexDataFormat;
-    uint32_t a_VertexStreamZeroStride = g_VertexStreamZeroStride;
+    uint32_t a_VertexStreamZeroStride = R32(a + 28);
     void *a_pIndexData = d3d9_in(c, g_pIndexData, (uint64_t)((uint64_t)d3d9_vertex_count(a_PrimitiveType,a_PrimitiveCount)*d3d9_index_size(a_IndexDataFormat)));
     void *a_pVertexStreamZeroData = d3d9_in(c, g_pVertexStreamZeroData, (uint64_t)(((uint64_t)a_MinVertexIndex+a_NumVertices)*a_VertexStreamZeroStride));
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, void *, uint32_t, void *, uint32_t))D3D9_VTBL(self)[84])(self, a_PrimitiveType, a_MinVertexIndex, a_NumVertices, a_PrimitiveCount, a_pIndexData, a_IndexDataFormat, a_pVertexStreamZeroData, a_VertexStreamZeroStride);
@@ -618,24 +502,18 @@ static void t_IDirect3DDevice9_DrawIndexedPrimitiveUP(CPU *c, void *self, uint32
 }
 
 static void t_IDirect3DDevice9_DrawPrimitive(CPU *c, void *self, uint32_t a) {
-    uint32_t g_PrimitiveType = R32(a + 0);
-    uint32_t g_StartVertex = R32(a + 4);
-    uint32_t g_PrimitiveCount = R32(a + 8);
-    uint32_t a_PrimitiveType = g_PrimitiveType;
-    uint32_t a_StartVertex = g_StartVertex;
-    uint32_t a_PrimitiveCount = g_PrimitiveCount;
+    uint32_t a_PrimitiveType = R32(a + 0);
+    uint32_t a_StartVertex = R32(a + 4);
+    uint32_t a_PrimitiveCount = R32(a + 8);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t))D3D9_VTBL(self)[81])(self, a_PrimitiveType, a_StartVertex, a_PrimitiveCount);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_DrawPrimitiveUP(CPU *c, void *self, uint32_t a) {
-    uint32_t g_PrimitiveType = R32(a + 0);
-    uint32_t g_PrimitiveCount = R32(a + 4);
+    uint32_t a_PrimitiveType = R32(a + 0);
+    uint32_t a_PrimitiveCount = R32(a + 4);
     uint32_t g_pVertexStreamZeroData = R32(a + 8);
-    uint32_t g_VertexStreamZeroStride = R32(a + 12);
-    uint32_t a_PrimitiveType = g_PrimitiveType;
-    uint32_t a_PrimitiveCount = g_PrimitiveCount;
-    uint32_t a_VertexStreamZeroStride = g_VertexStreamZeroStride;
+    uint32_t a_VertexStreamZeroStride = R32(a + 12);
     void *a_pVertexStreamZeroData = d3d9_in(c, g_pVertexStreamZeroData, (uint64_t)((uint64_t)d3d9_vertex_count(a_PrimitiveType,a_PrimitiveCount)*a_VertexStreamZeroStride));
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, void *, uint32_t))D3D9_VTBL(self)[83])(self, a_PrimitiveType, a_PrimitiveCount, a_pVertexStreamZeroData, a_VertexStreamZeroStride);
     c->eax = (uint32_t)hr;
@@ -667,13 +545,10 @@ static void t_IDirect3DDevice9_GetAvailableTextureMem(CPU *c, void *self, uint32
 }
 
 static void t_IDirect3DDevice9_GetBackBuffer(CPU *c, void *self, uint32_t a) {
-    uint32_t g_iSwapChain = R32(a + 0);
-    uint32_t g_iBackBuffer = R32(a + 4);
-    uint32_t g_Type = R32(a + 8);
+    uint32_t a_iSwapChain = R32(a + 0);
+    uint32_t a_iBackBuffer = R32(a + 4);
+    uint32_t a_Type = R32(a + 8);
     uint32_t g_ppBackBuffer = R32(a + 12);
-    uint32_t a_iSwapChain = g_iSwapChain;
-    uint32_t a_iBackBuffer = g_iBackBuffer;
-    uint32_t a_Type = g_Type;
     void *h_ppBackBuffer = NULL, **a_ppBackBuffer = d3d9_out_slot(c, g_ppBackBuffer) ? &h_ppBackBuffer : NULL;
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, void **))D3D9_VTBL(self)[18])(self, a_iSwapChain, a_iBackBuffer, a_Type, a_ppBackBuffer);
     d3d9_child_out(c, g_ppBackBuffer, h_ppBackBuffer, D3D9_IDirect3DSurface9, self, 0);
@@ -681,9 +556,8 @@ static void t_IDirect3DDevice9_GetBackBuffer(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_GetClipPlane(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Index = R32(a + 0);
+    uint32_t a_Index = R32(a + 0);
     uint32_t g_pPlane = R32(a + 4);
-    uint32_t a_Index = g_Index;
     void *a_pPlane = d3d9_out(c, g_pPlane, (uint64_t)(16));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[56])(self, a_Index, a_pPlane);
     c->eax = (uint32_t)hr;
@@ -735,9 +609,8 @@ static void t_IDirect3DDevice9_GetDirect3D(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_GetDisplayMode(CPU *c, void *self, uint32_t a) {
-    uint32_t g_iSwapChain = R32(a + 0);
+    uint32_t a_iSwapChain = R32(a + 0);
     uint32_t g_pMode = R32(a + 4);
-    uint32_t a_iSwapChain = g_iSwapChain;
     void *a_pMode = d3d9_out(c, g_pMode, (uint64_t)(16));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[8])(self, a_iSwapChain, a_pMode);
     c->eax = (uint32_t)hr;
@@ -751,21 +624,18 @@ static void t_IDirect3DDevice9_GetFVF(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_GetFrontBufferData(CPU *c, void *self, uint32_t a) {
-    uint32_t g_iSwapChain = R32(a + 0);
+    uint32_t a_iSwapChain = R32(a + 0);
     uint32_t g_pDestSurface = R32(a + 4);
-    uint32_t a_iSwapChain = g_iSwapChain;
     void *a_pDestSurface = d3d9_iface_in(c, g_pDestSurface, 0x800u);
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[33])(self, a_iSwapChain, a_pDestSurface);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_GetGammaRamp(CPU *c, void *self, uint32_t a) {
-    uint32_t g_iSwapChain = R32(a + 0);
+    uint32_t a_iSwapChain = R32(a + 0);
     uint32_t g_pRamp = R32(a + 4);
-    uint32_t a_iSwapChain = g_iSwapChain;
     void *a_pRamp = d3d9_out(c, g_pRamp, (uint64_t)(1536));
     ((void (*)(void *, uint32_t, void *))D3D9_VTBL(self)[22])(self, a_iSwapChain, a_pRamp);
-    (void)c;
 }
 
 static void t_IDirect3DDevice9_GetIndices(CPU *c, void *self, uint32_t a) {
@@ -777,18 +647,16 @@ static void t_IDirect3DDevice9_GetIndices(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_GetLight(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Index = R32(a + 0);
+    uint32_t a_Index = R32(a + 0);
     uint32_t g_pLight = R32(a + 4);
-    uint32_t a_Index = g_Index;
     void *a_pLight = d3d9_out(c, g_pLight, (uint64_t)(104));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[52])(self, a_Index, a_pLight);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_GetLightEnable(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Index = R32(a + 0);
+    uint32_t a_Index = R32(a + 0);
     uint32_t g_pEnable = R32(a + 4);
-    uint32_t a_Index = g_Index;
     void *a_pEnable = d3d9_out(c, g_pEnable, (uint64_t)(4));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[54])(self, a_Index, a_pEnable);
     c->eax = (uint32_t)hr;
@@ -812,9 +680,8 @@ static void t_IDirect3DDevice9_GetNumberOfSwapChains(CPU *c, void *self, uint32_
 }
 
 static void t_IDirect3DDevice9_GetPaletteEntries(CPU *c, void *self, uint32_t a) {
-    uint32_t g_PaletteNumber = R32(a + 0);
+    uint32_t a_PaletteNumber = R32(a + 0);
     uint32_t g_pEntries = R32(a + 4);
-    uint32_t a_PaletteNumber = g_PaletteNumber;
     void *a_pEntries = d3d9_out(c, g_pEntries, (uint64_t)(1024));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[72])(self, a_PaletteNumber, a_pEntries);
     c->eax = (uint32_t)hr;
@@ -829,60 +696,51 @@ static void t_IDirect3DDevice9_GetPixelShader(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_GetPixelShaderConstantB(CPU *c, void *self, uint32_t a) {
-    uint32_t g_StartRegister = R32(a + 0);
+    uint32_t a_StartRegister = R32(a + 0);
     uint32_t g_pConstantData = R32(a + 4);
-    uint32_t g_BoolCount = R32(a + 8);
-    uint32_t a_StartRegister = g_StartRegister;
-    uint32_t a_BoolCount = g_BoolCount;
+    uint32_t a_BoolCount = R32(a + 8);
     void *a_pConstantData = d3d9_out(c, g_pConstantData, (uint64_t)((uint64_t)a_BoolCount*4));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, uint32_t))D3D9_VTBL(self)[114])(self, a_StartRegister, a_pConstantData, a_BoolCount);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_GetPixelShaderConstantF(CPU *c, void *self, uint32_t a) {
-    uint32_t g_StartRegister = R32(a + 0);
+    uint32_t a_StartRegister = R32(a + 0);
     uint32_t g_pConstantData = R32(a + 4);
-    uint32_t g_Vector4fCount = R32(a + 8);
-    uint32_t a_StartRegister = g_StartRegister;
-    uint32_t a_Vector4fCount = g_Vector4fCount;
+    uint32_t a_Vector4fCount = R32(a + 8);
     void *a_pConstantData = d3d9_out(c, g_pConstantData, (uint64_t)((uint64_t)a_Vector4fCount*16));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, uint32_t))D3D9_VTBL(self)[110])(self, a_StartRegister, a_pConstantData, a_Vector4fCount);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_GetPixelShaderConstantI(CPU *c, void *self, uint32_t a) {
-    uint32_t g_StartRegister = R32(a + 0);
+    uint32_t a_StartRegister = R32(a + 0);
     uint32_t g_pConstantData = R32(a + 4);
-    uint32_t g_Vector4iCount = R32(a + 8);
-    uint32_t a_StartRegister = g_StartRegister;
-    uint32_t a_Vector4iCount = g_Vector4iCount;
+    uint32_t a_Vector4iCount = R32(a + 8);
     void *a_pConstantData = d3d9_out(c, g_pConstantData, (uint64_t)((uint64_t)a_Vector4iCount*16));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, uint32_t))D3D9_VTBL(self)[112])(self, a_StartRegister, a_pConstantData, a_Vector4iCount);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_GetRasterStatus(CPU *c, void *self, uint32_t a) {
-    uint32_t g_iSwapChain = R32(a + 0);
+    uint32_t a_iSwapChain = R32(a + 0);
     uint32_t g_pRasterStatus = R32(a + 4);
-    uint32_t a_iSwapChain = g_iSwapChain;
     void *a_pRasterStatus = d3d9_out(c, g_pRasterStatus, (uint64_t)(8));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[19])(self, a_iSwapChain, a_pRasterStatus);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_GetRenderState(CPU *c, void *self, uint32_t a) {
-    uint32_t g_State = R32(a + 0);
+    uint32_t a_State = R32(a + 0);
     uint32_t g_pValue = R32(a + 4);
-    uint32_t a_State = g_State;
     void *a_pValue = d3d9_out(c, g_pValue, (uint64_t)(4));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[58])(self, a_State, a_pValue);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_GetRenderTarget(CPU *c, void *self, uint32_t a) {
-    uint32_t g_RenderTargetIndex = R32(a + 0);
+    uint32_t a_RenderTargetIndex = R32(a + 0);
     uint32_t g_ppRenderTarget = R32(a + 4);
-    uint32_t a_RenderTargetIndex = g_RenderTargetIndex;
     void *h_ppRenderTarget = NULL, **a_ppRenderTarget = d3d9_out_slot(c, g_ppRenderTarget) ? &h_ppRenderTarget : NULL;
     int32_t hr = ((int32_t (*)(void *, uint32_t, void **))D3D9_VTBL(self)[38])(self, a_RenderTargetIndex, a_ppRenderTarget);
     d3d9_iface_out(c, g_ppRenderTarget, h_ppRenderTarget, D3D9_IDirect3DSurface9);
@@ -899,11 +757,9 @@ static void t_IDirect3DDevice9_GetRenderTargetData(CPU *c, void *self, uint32_t 
 }
 
 static void t_IDirect3DDevice9_GetSamplerState(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Sampler = R32(a + 0);
-    uint32_t g_Type = R32(a + 4);
+    uint32_t a_Sampler = R32(a + 0);
+    uint32_t a_Type = R32(a + 4);
     uint32_t g_pValue = R32(a + 8);
-    uint32_t a_Sampler = g_Sampler;
-    uint32_t a_Type = g_Type;
     void *a_pValue = d3d9_out(c, g_pValue, (uint64_t)(4));
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, void *))D3D9_VTBL(self)[68])(self, a_Sampler, a_Type, a_pValue);
     c->eax = (uint32_t)hr;
@@ -922,11 +778,10 @@ static void t_IDirect3DDevice9_GetSoftwareVertexProcessing(CPU *c, void *self, u
 }
 
 static void t_IDirect3DDevice9_GetStreamSource(CPU *c, void *self, uint32_t a) {
-    uint32_t g_StreamNumber = R32(a + 0);
+    uint32_t a_StreamNumber = R32(a + 0);
     uint32_t g_ppStreamData = R32(a + 4);
     uint32_t g_pOffsetInBytes = R32(a + 8);
     uint32_t g_pStride = R32(a + 12);
-    uint32_t a_StreamNumber = g_StreamNumber;
     void *h_ppStreamData = NULL, **a_ppStreamData = d3d9_out_slot(c, g_ppStreamData) ? &h_ppStreamData : NULL;
     void *a_pOffsetInBytes = d3d9_out(c, g_pOffsetInBytes, (uint64_t)(4));
     void *a_pStride = d3d9_out(c, g_pStride, (uint64_t)(4));
@@ -936,18 +791,16 @@ static void t_IDirect3DDevice9_GetStreamSource(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_GetStreamSourceFreq(CPU *c, void *self, uint32_t a) {
-    uint32_t g_StreamNumber = R32(a + 0);
+    uint32_t a_StreamNumber = R32(a + 0);
     uint32_t g_pSetting = R32(a + 4);
-    uint32_t a_StreamNumber = g_StreamNumber;
     void *a_pSetting = d3d9_out(c, g_pSetting, (uint64_t)(4));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[103])(self, a_StreamNumber, a_pSetting);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_GetSwapChain(CPU *c, void *self, uint32_t a) {
-    uint32_t g_iSwapChain = R32(a + 0);
+    uint32_t a_iSwapChain = R32(a + 0);
     uint32_t g_pSwapChain = R32(a + 4);
-    uint32_t a_iSwapChain = g_iSwapChain;
     void *h_pSwapChain = NULL, **a_pSwapChain = d3d9_out_slot(c, g_pSwapChain) ? &h_pSwapChain : NULL;
     int32_t hr = ((int32_t (*)(void *, uint32_t, void **))D3D9_VTBL(self)[14])(self, a_iSwapChain, a_pSwapChain);
     d3d9_iface_out(c, g_pSwapChain, h_pSwapChain, D3D9_IDirect3DSwapChain9);
@@ -955,9 +808,8 @@ static void t_IDirect3DDevice9_GetSwapChain(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_GetTexture(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Stage = R32(a + 0);
+    uint32_t a_Stage = R32(a + 0);
     uint32_t g_ppTexture = R32(a + 4);
-    uint32_t a_Stage = g_Stage;
     void *h_ppTexture = NULL, **a_ppTexture = d3d9_out_slot(c, g_ppTexture) ? &h_ppTexture : NULL;
     int32_t hr = ((int32_t (*)(void *, uint32_t, void **))D3D9_VTBL(self)[64])(self, a_Stage, a_ppTexture);
     d3d9_iface_out(c, g_ppTexture, h_ppTexture, D3D9_IDirect3DBaseTexture9);
@@ -965,20 +817,17 @@ static void t_IDirect3DDevice9_GetTexture(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_GetTextureStageState(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Stage = R32(a + 0);
-    uint32_t g_Type = R32(a + 4);
+    uint32_t a_Stage = R32(a + 0);
+    uint32_t a_Type = R32(a + 4);
     uint32_t g_pValue = R32(a + 8);
-    uint32_t a_Stage = g_Stage;
-    uint32_t a_Type = g_Type;
     void *a_pValue = d3d9_out(c, g_pValue, (uint64_t)(4));
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, void *))D3D9_VTBL(self)[66])(self, a_Stage, a_Type, a_pValue);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_GetTransform(CPU *c, void *self, uint32_t a) {
-    uint32_t g_State = R32(a + 0);
+    uint32_t a_State = R32(a + 0);
     uint32_t g_pMatrix = R32(a + 4);
-    uint32_t a_State = g_State;
     void *a_pMatrix = d3d9_out(c, g_pMatrix, (uint64_t)(64));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[45])(self, a_State, a_pMatrix);
     c->eax = (uint32_t)hr;
@@ -1001,33 +850,27 @@ static void t_IDirect3DDevice9_GetVertexShader(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_GetVertexShaderConstantB(CPU *c, void *self, uint32_t a) {
-    uint32_t g_StartRegister = R32(a + 0);
+    uint32_t a_StartRegister = R32(a + 0);
     uint32_t g_pConstantData = R32(a + 4);
-    uint32_t g_BoolCount = R32(a + 8);
-    uint32_t a_StartRegister = g_StartRegister;
-    uint32_t a_BoolCount = g_BoolCount;
+    uint32_t a_BoolCount = R32(a + 8);
     void *a_pConstantData = d3d9_out(c, g_pConstantData, (uint64_t)((uint64_t)a_BoolCount*4));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, uint32_t))D3D9_VTBL(self)[99])(self, a_StartRegister, a_pConstantData, a_BoolCount);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_GetVertexShaderConstantF(CPU *c, void *self, uint32_t a) {
-    uint32_t g_StartRegister = R32(a + 0);
+    uint32_t a_StartRegister = R32(a + 0);
     uint32_t g_pConstantData = R32(a + 4);
-    uint32_t g_Vector4fCount = R32(a + 8);
-    uint32_t a_StartRegister = g_StartRegister;
-    uint32_t a_Vector4fCount = g_Vector4fCount;
+    uint32_t a_Vector4fCount = R32(a + 8);
     void *a_pConstantData = d3d9_out(c, g_pConstantData, (uint64_t)((uint64_t)a_Vector4fCount*16));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, uint32_t))D3D9_VTBL(self)[95])(self, a_StartRegister, a_pConstantData, a_Vector4fCount);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_GetVertexShaderConstantI(CPU *c, void *self, uint32_t a) {
-    uint32_t g_StartRegister = R32(a + 0);
+    uint32_t a_StartRegister = R32(a + 0);
     uint32_t g_pConstantData = R32(a + 4);
-    uint32_t g_Vector4iCount = R32(a + 8);
-    uint32_t a_StartRegister = g_StartRegister;
-    uint32_t a_Vector4iCount = g_Vector4iCount;
+    uint32_t a_Vector4iCount = R32(a + 8);
     void *a_pConstantData = d3d9_out(c, g_pConstantData, (uint64_t)((uint64_t)a_Vector4iCount*16));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, uint32_t))D3D9_VTBL(self)[97])(self, a_StartRegister, a_pConstantData, a_Vector4iCount);
     c->eax = (uint32_t)hr;
@@ -1041,18 +884,15 @@ static void t_IDirect3DDevice9_GetViewport(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_LightEnable(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Index = R32(a + 0);
-    uint32_t g_Enable = R32(a + 4);
-    uint32_t a_Index = g_Index;
-    uint32_t a_Enable = g_Enable;
+    uint32_t a_Index = R32(a + 0);
+    uint32_t a_Enable = R32(a + 4);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t))D3D9_VTBL(self)[53])(self, a_Index, a_Enable);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_MultiplyTransform(CPU *c, void *self, uint32_t a) {
-    uint32_t g_State = R32(a + 0);
+    uint32_t a_State = R32(a + 0);
     uint32_t g_pMatrix = R32(a + 4);
-    uint32_t a_State = g_State;
     void *a_pMatrix = d3d9_in(c, g_pMatrix, (uint64_t)(64));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[46])(self, a_State, a_pMatrix);
     c->eax = (uint32_t)hr;
@@ -1072,16 +912,12 @@ static void t_IDirect3DDevice9_Present(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_ProcessVertices(CPU *c, void *self, uint32_t a) {
-    uint32_t g_SrcStartIndex = R32(a + 0);
-    uint32_t g_DestIndex = R32(a + 4);
-    uint32_t g_VertexCount = R32(a + 8);
+    uint32_t a_SrcStartIndex = R32(a + 0);
+    uint32_t a_DestIndex = R32(a + 4);
+    uint32_t a_VertexCount = R32(a + 8);
     uint32_t g_pDestBuffer = R32(a + 12);
     uint32_t g_pVertexDecl = R32(a + 16);
-    uint32_t g_Flags = R32(a + 20);
-    uint32_t a_SrcStartIndex = g_SrcStartIndex;
-    uint32_t a_DestIndex = g_DestIndex;
-    uint32_t a_VertexCount = g_VertexCount;
-    uint32_t a_Flags = g_Flags;
+    uint32_t a_Flags = R32(a + 20);
     void *a_pDestBuffer = d3d9_iface_in(c, g_pDestBuffer, 0x200u);
     void *a_pVertexDecl = d3d9_iface_in(c, g_pVertexDecl, 0x2000u);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, void *, void *, uint32_t))D3D9_VTBL(self)[85])(self, a_SrcStartIndex, a_DestIndex, a_VertexCount, a_pDestBuffer, a_pVertexDecl, a_Flags);
@@ -1097,9 +933,8 @@ static void t_IDirect3DDevice9_Reset(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_SetClipPlane(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Index = R32(a + 0);
+    uint32_t a_Index = R32(a + 0);
     uint32_t g_pPlane = R32(a + 4);
-    uint32_t a_Index = g_Index;
     void *a_pPlane = d3d9_in(c, g_pPlane, (uint64_t)(16));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[55])(self, a_Index, a_pPlane);
     c->eax = (uint32_t)hr;
@@ -1113,8 +948,7 @@ static void t_IDirect3DDevice9_SetClipStatus(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_SetCurrentTexturePalette(CPU *c, void *self, uint32_t a) {
-    uint32_t g_PaletteNumber = R32(a + 0);
-    uint32_t a_PaletteNumber = g_PaletteNumber;
+    uint32_t a_PaletteNumber = R32(a + 0);
     int32_t hr = ((int32_t (*)(void *, uint32_t))D3D9_VTBL(self)[73])(self, a_PaletteNumber);
     c->eax = (uint32_t)hr;
 }
@@ -1122,20 +956,17 @@ static void t_IDirect3DDevice9_SetCurrentTexturePalette(CPU *c, void *self, uint
 static void t_IDirect3DDevice9_SetCursorPosition(CPU *c, void *self, uint32_t a) {
     uint32_t g_X = R32(a + 0);
     uint32_t g_Y = R32(a + 4);
-    uint32_t g_Flags = R32(a + 8);
+    uint32_t a_Flags = R32(a + 8);
     int32_t a_X = (int32_t)g_X;
     int32_t a_Y = (int32_t)g_Y;
-    uint32_t a_Flags = g_Flags;
     ((void (*)(void *, int32_t, int32_t, uint32_t))D3D9_VTBL(self)[11])(self, a_X, a_Y, a_Flags);
     (void)c;
 }
 
 static void t_IDirect3DDevice9_SetCursorProperties(CPU *c, void *self, uint32_t a) {
-    uint32_t g_XHotSpot = R32(a + 0);
-    uint32_t g_YHotSpot = R32(a + 4);
+    uint32_t a_XHotSpot = R32(a + 0);
+    uint32_t a_YHotSpot = R32(a + 4);
     uint32_t g_pCursorBitmap = R32(a + 8);
-    uint32_t a_XHotSpot = g_XHotSpot;
-    uint32_t a_YHotSpot = g_YHotSpot;
     void *a_pCursorBitmap = d3d9_iface_in(c, g_pCursorBitmap, 0x800u);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, void *))D3D9_VTBL(self)[10])(self, a_XHotSpot, a_YHotSpot, a_pCursorBitmap);
     c->eax = (uint32_t)hr;
@@ -1149,15 +980,13 @@ static void t_IDirect3DDevice9_SetDepthStencilSurface(CPU *c, void *self, uint32
 }
 
 static void t_IDirect3DDevice9_SetDialogBoxMode(CPU *c, void *self, uint32_t a) {
-    uint32_t g_bEnableDialogs = R32(a + 0);
-    uint32_t a_bEnableDialogs = g_bEnableDialogs;
+    uint32_t a_bEnableDialogs = R32(a + 0);
     int32_t hr = ((int32_t (*)(void *, uint32_t))D3D9_VTBL(self)[20])(self, a_bEnableDialogs);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_SetFVF(CPU *c, void *self, uint32_t a) {
-    uint32_t g_FVF = R32(a + 0);
-    uint32_t a_FVF = g_FVF;
+    uint32_t a_FVF = R32(a + 0);
     int32_t hr = ((int32_t (*)(void *, uint32_t))D3D9_VTBL(self)[89])(self, a_FVF);
     c->eax = (uint32_t)hr;
 }
@@ -1170,9 +999,8 @@ static void t_IDirect3DDevice9_SetIndices(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_SetLight(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Index = R32(a + 0);
+    uint32_t a_Index = R32(a + 0);
     uint32_t g_pLight = R32(a + 4);
-    uint32_t a_Index = g_Index;
     void *a_pLight = d3d9_in(c, g_pLight, (uint64_t)(104));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[51])(self, a_Index, a_pLight);
     c->eax = (uint32_t)hr;
@@ -1193,9 +1021,8 @@ static void t_IDirect3DDevice9_SetNPatchMode(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_SetPaletteEntries(CPU *c, void *self, uint32_t a) {
-    uint32_t g_PaletteNumber = R32(a + 0);
+    uint32_t a_PaletteNumber = R32(a + 0);
     uint32_t g_pEntries = R32(a + 4);
-    uint32_t a_PaletteNumber = g_PaletteNumber;
     void *a_pEntries = d3d9_in(c, g_pEntries, (uint64_t)(1024));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[71])(self, a_PaletteNumber, a_pEntries);
     c->eax = (uint32_t)hr;
@@ -1209,63 +1036,51 @@ static void t_IDirect3DDevice9_SetPixelShader(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_SetPixelShaderConstantB(CPU *c, void *self, uint32_t a) {
-    uint32_t g_StartRegister = R32(a + 0);
+    uint32_t a_StartRegister = R32(a + 0);
     uint32_t g_pConstantData = R32(a + 4);
-    uint32_t g_BoolCount = R32(a + 8);
-    uint32_t a_StartRegister = g_StartRegister;
-    uint32_t a_BoolCount = g_BoolCount;
+    uint32_t a_BoolCount = R32(a + 8);
     void *a_pConstantData = d3d9_in(c, g_pConstantData, (uint64_t)((uint64_t)a_BoolCount*4));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, uint32_t))D3D9_VTBL(self)[113])(self, a_StartRegister, a_pConstantData, a_BoolCount);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_SetPixelShaderConstantF(CPU *c, void *self, uint32_t a) {
-    uint32_t g_StartRegister = R32(a + 0);
+    uint32_t a_StartRegister = R32(a + 0);
     uint32_t g_pConstantData = R32(a + 4);
-    uint32_t g_Vector4fCount = R32(a + 8);
-    uint32_t a_StartRegister = g_StartRegister;
-    uint32_t a_Vector4fCount = g_Vector4fCount;
+    uint32_t a_Vector4fCount = R32(a + 8);
     void *a_pConstantData = d3d9_in(c, g_pConstantData, (uint64_t)((uint64_t)a_Vector4fCount*16));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, uint32_t))D3D9_VTBL(self)[109])(self, a_StartRegister, a_pConstantData, a_Vector4fCount);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_SetPixelShaderConstantI(CPU *c, void *self, uint32_t a) {
-    uint32_t g_StartRegister = R32(a + 0);
+    uint32_t a_StartRegister = R32(a + 0);
     uint32_t g_pConstantData = R32(a + 4);
-    uint32_t g_Vector4iCount = R32(a + 8);
-    uint32_t a_StartRegister = g_StartRegister;
-    uint32_t a_Vector4iCount = g_Vector4iCount;
+    uint32_t a_Vector4iCount = R32(a + 8);
     void *a_pConstantData = d3d9_in(c, g_pConstantData, (uint64_t)((uint64_t)a_Vector4iCount*16));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, uint32_t))D3D9_VTBL(self)[111])(self, a_StartRegister, a_pConstantData, a_Vector4iCount);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_SetRenderState(CPU *c, void *self, uint32_t a) {
-    uint32_t g_State = R32(a + 0);
-    uint32_t g_Value = R32(a + 4);
-    uint32_t a_State = g_State;
-    uint32_t a_Value = g_Value;
+    uint32_t a_State = R32(a + 0);
+    uint32_t a_Value = R32(a + 4);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t))D3D9_VTBL(self)[57])(self, a_State, a_Value);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_SetRenderTarget(CPU *c, void *self, uint32_t a) {
-    uint32_t g_RenderTargetIndex = R32(a + 0);
+    uint32_t a_RenderTargetIndex = R32(a + 0);
     uint32_t g_pRenderTarget = R32(a + 4);
-    uint32_t a_RenderTargetIndex = g_RenderTargetIndex;
     void *a_pRenderTarget = d3d9_iface_in(c, g_pRenderTarget, 0x800u);
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[37])(self, a_RenderTargetIndex, a_pRenderTarget);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_SetSamplerState(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Sampler = R32(a + 0);
-    uint32_t g_Type = R32(a + 4);
-    uint32_t g_Value = R32(a + 8);
-    uint32_t a_Sampler = g_Sampler;
-    uint32_t a_Type = g_Type;
-    uint32_t a_Value = g_Value;
+    uint32_t a_Sampler = R32(a + 0);
+    uint32_t a_Type = R32(a + 4);
+    uint32_t a_Value = R32(a + 8);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t))D3D9_VTBL(self)[69])(self, a_Sampler, a_Type, a_Value);
     c->eax = (uint32_t)hr;
 }
@@ -1278,58 +1093,47 @@ static void t_IDirect3DDevice9_SetScissorRect(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_SetSoftwareVertexProcessing(CPU *c, void *self, uint32_t a) {
-    uint32_t g_bSoftware = R32(a + 0);
-    uint32_t a_bSoftware = g_bSoftware;
+    uint32_t a_bSoftware = R32(a + 0);
     int32_t hr = ((int32_t (*)(void *, uint32_t))D3D9_VTBL(self)[77])(self, a_bSoftware);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_SetStreamSource(CPU *c, void *self, uint32_t a) {
-    uint32_t g_StreamNumber = R32(a + 0);
+    uint32_t a_StreamNumber = R32(a + 0);
     uint32_t g_pStreamData = R32(a + 4);
-    uint32_t g_OffsetInBytes = R32(a + 8);
-    uint32_t g_Stride = R32(a + 12);
-    uint32_t a_StreamNumber = g_StreamNumber;
-    uint32_t a_OffsetInBytes = g_OffsetInBytes;
-    uint32_t a_Stride = g_Stride;
+    uint32_t a_OffsetInBytes = R32(a + 8);
+    uint32_t a_Stride = R32(a + 12);
     void *a_pStreamData = d3d9_iface_in(c, g_pStreamData, 0x200u);
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, uint32_t, uint32_t))D3D9_VTBL(self)[100])(self, a_StreamNumber, a_pStreamData, a_OffsetInBytes, a_Stride);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_SetStreamSourceFreq(CPU *c, void *self, uint32_t a) {
-    uint32_t g_StreamNumber = R32(a + 0);
-    uint32_t g_Setting = R32(a + 4);
-    uint32_t a_StreamNumber = g_StreamNumber;
-    uint32_t a_Setting = g_Setting;
+    uint32_t a_StreamNumber = R32(a + 0);
+    uint32_t a_Setting = R32(a + 4);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t))D3D9_VTBL(self)[102])(self, a_StreamNumber, a_Setting);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_SetTexture(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Stage = R32(a + 0);
+    uint32_t a_Stage = R32(a + 0);
     uint32_t g_pTexture = R32(a + 4);
-    uint32_t a_Stage = g_Stage;
     void *a_pTexture = d3d9_iface_in(c, g_pTexture, 0x1c0u);
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[65])(self, a_Stage, a_pTexture);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_SetTextureStageState(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Stage = R32(a + 0);
-    uint32_t g_Type = R32(a + 4);
-    uint32_t g_Value = R32(a + 8);
-    uint32_t a_Stage = g_Stage;
-    uint32_t a_Type = g_Type;
-    uint32_t a_Value = g_Value;
+    uint32_t a_Stage = R32(a + 0);
+    uint32_t a_Type = R32(a + 4);
+    uint32_t a_Value = R32(a + 8);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t))D3D9_VTBL(self)[67])(self, a_Stage, a_Type, a_Value);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_SetTransform(CPU *c, void *self, uint32_t a) {
-    uint32_t g_State = R32(a + 0);
+    uint32_t a_State = R32(a + 0);
     uint32_t g_pMatrix = R32(a + 4);
-    uint32_t a_State = g_State;
     void *a_pMatrix = d3d9_in(c, g_pMatrix, (uint64_t)(64));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[44])(self, a_State, a_pMatrix);
     c->eax = (uint32_t)hr;
@@ -1350,33 +1154,27 @@ static void t_IDirect3DDevice9_SetVertexShader(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_SetVertexShaderConstantB(CPU *c, void *self, uint32_t a) {
-    uint32_t g_StartRegister = R32(a + 0);
+    uint32_t a_StartRegister = R32(a + 0);
     uint32_t g_pConstantData = R32(a + 4);
-    uint32_t g_BoolCount = R32(a + 8);
-    uint32_t a_StartRegister = g_StartRegister;
-    uint32_t a_BoolCount = g_BoolCount;
+    uint32_t a_BoolCount = R32(a + 8);
     void *a_pConstantData = d3d9_in(c, g_pConstantData, (uint64_t)((uint64_t)a_BoolCount*4));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, uint32_t))D3D9_VTBL(self)[98])(self, a_StartRegister, a_pConstantData, a_BoolCount);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_SetVertexShaderConstantF(CPU *c, void *self, uint32_t a) {
-    uint32_t g_StartRegister = R32(a + 0);
+    uint32_t a_StartRegister = R32(a + 0);
     uint32_t g_pConstantData = R32(a + 4);
-    uint32_t g_Vector4fCount = R32(a + 8);
-    uint32_t a_StartRegister = g_StartRegister;
-    uint32_t a_Vector4fCount = g_Vector4fCount;
+    uint32_t a_Vector4fCount = R32(a + 8);
     void *a_pConstantData = d3d9_in(c, g_pConstantData, (uint64_t)((uint64_t)a_Vector4fCount*16));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, uint32_t))D3D9_VTBL(self)[94])(self, a_StartRegister, a_pConstantData, a_Vector4fCount);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9_SetVertexShaderConstantI(CPU *c, void *self, uint32_t a) {
-    uint32_t g_StartRegister = R32(a + 0);
+    uint32_t a_StartRegister = R32(a + 0);
     uint32_t g_pConstantData = R32(a + 4);
-    uint32_t g_Vector4iCount = R32(a + 8);
-    uint32_t a_StartRegister = g_StartRegister;
-    uint32_t a_Vector4iCount = g_Vector4iCount;
+    uint32_t a_Vector4iCount = R32(a + 8);
     void *a_pConstantData = d3d9_in(c, g_pConstantData, (uint64_t)((uint64_t)a_Vector4iCount*16));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, uint32_t))D3D9_VTBL(self)[96])(self, a_StartRegister, a_pConstantData, a_Vector4iCount);
     c->eax = (uint32_t)hr;
@@ -1390,8 +1188,7 @@ static void t_IDirect3DDevice9_SetViewport(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9_ShowCursor(CPU *c, void *self, uint32_t a) {
-    uint32_t g_bShow = R32(a + 0);
-    uint32_t a_bShow = g_bShow;
+    uint32_t a_bShow = R32(a + 0);
     c->eax = ((uint32_t (*)(void *, uint32_t))D3D9_VTBL(self)[12])(self, a_bShow);
 }
 
@@ -1400,8 +1197,7 @@ static void t_IDirect3DDevice9_StretchRect(CPU *c, void *self, uint32_t a) {
     uint32_t g_pSourceRect = R32(a + 4);
     uint32_t g_pDestSurface = R32(a + 8);
     uint32_t g_pDestRect = R32(a + 12);
-    uint32_t g_Filter = R32(a + 16);
-    uint32_t a_Filter = g_Filter;
+    uint32_t a_Filter = R32(a + 16);
     void *a_pSourceSurface = d3d9_iface_in(c, g_pSourceSurface, 0x800u);
     void *a_pSourceRect = d3d9_in(c, g_pSourceRect, (uint64_t)(16));
     void *a_pDestSurface = d3d9_iface_in(c, g_pDestSurface, 0x800u);
@@ -1456,13 +1252,11 @@ static void t_IDirect3DDevice9Ex_ComposeRects(CPU *c, void *self, uint32_t a) {
     uint32_t g_pSrc = R32(a + 0);
     uint32_t g_pDst = R32(a + 4);
     uint32_t g_pSrcRectDescs = R32(a + 8);
-    uint32_t g_NumRects = R32(a + 12);
+    uint32_t a_NumRects = R32(a + 12);
     uint32_t g_pDstRectDescs = R32(a + 16);
-    uint32_t g_Operation = R32(a + 20);
+    uint32_t a_Operation = R32(a + 20);
     uint32_t g_Xoffset = R32(a + 24);
     uint32_t g_Yoffset = R32(a + 28);
-    uint32_t a_NumRects = g_NumRects;
-    uint32_t a_Operation = g_Operation;
     int32_t a_Xoffset = (int32_t)g_Xoffset;
     int32_t a_Yoffset = (int32_t)g_Yoffset;
     void *a_pSrc = d3d9_iface_in(c, g_pSrc, 0x800u);
@@ -1474,22 +1268,15 @@ static void t_IDirect3DDevice9Ex_ComposeRects(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9Ex_CreateDepthStencilSurfaceEx(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Width = R32(a + 0);
-    uint32_t g_Height = R32(a + 4);
-    uint32_t g_Format = R32(a + 8);
-    uint32_t g_MultiSample = R32(a + 12);
-    uint32_t g_MultisampleQuality = R32(a + 16);
-    uint32_t g_Discard = R32(a + 20);
+    uint32_t a_Width = R32(a + 0);
+    uint32_t a_Height = R32(a + 4);
+    uint32_t a_Format = R32(a + 8);
+    uint32_t a_MultiSample = R32(a + 12);
+    uint32_t a_MultisampleQuality = R32(a + 16);
+    uint32_t a_Discard = R32(a + 20);
     uint32_t g_ppSurface = R32(a + 24);
     uint32_t g_pSharedHandle = R32(a + 28);
-    uint32_t g_Usage = R32(a + 32);
-    uint32_t a_Width = g_Width;
-    uint32_t a_Height = g_Height;
-    uint32_t a_Format = g_Format;
-    uint32_t a_MultiSample = g_MultiSample;
-    uint32_t a_MultisampleQuality = g_MultisampleQuality;
-    uint32_t a_Discard = g_Discard;
-    uint32_t a_Usage = g_Usage;
+    uint32_t a_Usage = R32(a + 32);
     void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
     void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *, uint32_t))D3D9_VTBL(self)[131])(self, a_Width, a_Height, a_Format, a_MultiSample, a_MultisampleQuality, a_Discard, a_ppSurface, a_pSharedHandle, a_Usage);
@@ -1498,42 +1285,31 @@ static void t_IDirect3DDevice9Ex_CreateDepthStencilSurfaceEx(CPU *c, void *self,
 }
 
 static void t_IDirect3DDevice9Ex_CreateOffscreenPlainSurfaceEx(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Width = R32(a + 0);
-    uint32_t g_Height = R32(a + 4);
-    uint32_t g_Format = R32(a + 8);
-    uint32_t g_Pool = R32(a + 12);
+    uint32_t a_Width = R32(a + 0);
+    uint32_t a_Height = R32(a + 4);
+    uint32_t a_Format = R32(a + 8);
+    uint32_t a_Pool = R32(a + 12);
     uint32_t g_ppSurface = R32(a + 16);
     uint32_t g_pSharedHandle = R32(a + 20);
-    uint32_t g_Usage = R32(a + 24);
-    uint32_t a_Width = g_Width;
-    uint32_t a_Height = g_Height;
-    uint32_t a_Format = g_Format;
-    uint32_t a_Pool = g_Pool;
-    uint32_t a_Usage = g_Usage;
+    uint32_t a_Usage = R32(a + 24);
     void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
     void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, (a_Pool == 2), &h_pSharedHandle);
+    d3d9_user_memory_check(c, a_pSharedHandle, a_Width, a_Height, a_Format);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *, uint32_t))D3D9_VTBL(self)[130])(self, a_Width, a_Height, a_Format, a_Pool, a_ppSurface, a_pSharedHandle, a_Usage);
     d3d9_iface_out(c, g_ppSurface, h_ppSurface, D3D9_IDirect3DSurface9);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9Ex_CreateRenderTargetEx(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Width = R32(a + 0);
-    uint32_t g_Height = R32(a + 4);
-    uint32_t g_Format = R32(a + 8);
-    uint32_t g_MultiSample = R32(a + 12);
-    uint32_t g_MultisampleQuality = R32(a + 16);
-    uint32_t g_Lockable = R32(a + 20);
+    uint32_t a_Width = R32(a + 0);
+    uint32_t a_Height = R32(a + 4);
+    uint32_t a_Format = R32(a + 8);
+    uint32_t a_MultiSample = R32(a + 12);
+    uint32_t a_MultisampleQuality = R32(a + 16);
+    uint32_t a_Lockable = R32(a + 20);
     uint32_t g_ppSurface = R32(a + 24);
     uint32_t g_pSharedHandle = R32(a + 28);
-    uint32_t g_Usage = R32(a + 32);
-    uint32_t a_Width = g_Width;
-    uint32_t a_Height = g_Height;
-    uint32_t a_Format = g_Format;
-    uint32_t a_MultiSample = g_MultiSample;
-    uint32_t a_MultisampleQuality = g_MultisampleQuality;
-    uint32_t a_Lockable = g_Lockable;
-    uint32_t a_Usage = g_Usage;
+    uint32_t a_Usage = R32(a + 32);
     void *h_ppSurface = NULL, **a_ppSurface = d3d9_out_slot(c, g_ppSurface) ? &h_ppSurface : NULL;
     void *h_pSharedHandle = NULL, *a_pSharedHandle = d3d9_shared(c, g_pSharedHandle, 0, &h_pSharedHandle);
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, void **, void *, uint32_t))D3D9_VTBL(self)[129])(self, a_Width, a_Height, a_Format, a_MultiSample, a_MultisampleQuality, a_Lockable, a_ppSurface, a_pSharedHandle, a_Usage);
@@ -1542,10 +1318,9 @@ static void t_IDirect3DDevice9Ex_CreateRenderTargetEx(CPU *c, void *self, uint32
 }
 
 static void t_IDirect3DDevice9Ex_GetDisplayModeEx(CPU *c, void *self, uint32_t a) {
-    uint32_t g_iSwapChain = R32(a + 0);
+    uint32_t a_iSwapChain = R32(a + 0);
     uint32_t g_pMode = R32(a + 4);
     uint32_t g_pRotation = R32(a + 8);
-    uint32_t a_iSwapChain = g_iSwapChain;
     void *a_pMode = d3d9_out(c, g_pMode, (uint64_t)(24));
     void *a_pRotation = d3d9_out(c, g_pRotation, (uint64_t)(4));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, void *))D3D9_VTBL(self)[133])(self, a_iSwapChain, a_pMode, a_pRotation);
@@ -1571,8 +1346,7 @@ static void t_IDirect3DDevice9Ex_PresentEx(CPU *c, void *self, uint32_t a) {
     uint32_t g_pDestRect = R32(a + 4);
     uint32_t g_hDestWindowOverride = R32(a + 8);
     uint32_t g_pDirtyRegion = R32(a + 12);
-    uint32_t g_dwFlags = R32(a + 16);
-    uint32_t a_dwFlags = g_dwFlags;
+    uint32_t a_dwFlags = R32(a + 16);
     void *a_pSourceRect = d3d9_in(c, g_pSourceRect, (uint64_t)(16));
     void *a_pDestRect = d3d9_in(c, g_pDestRect, (uint64_t)(16));
     void *a_hDestWindowOverride = d3d9_hwnd(c, g_hDestWindowOverride);
@@ -1592,12 +1366,10 @@ static void t_IDirect3DDevice9Ex_ResetEx(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DDevice9Ex_SetConvolutionMonoKernel(CPU *c, void *self, uint32_t a) {
-    uint32_t g_width = R32(a + 0);
-    uint32_t g_height = R32(a + 4);
+    uint32_t a_width = R32(a + 0);
+    uint32_t a_height = R32(a + 4);
     uint32_t g_rows = R32(a + 8);
     uint32_t g_columns = R32(a + 12);
-    uint32_t a_width = g_width;
-    uint32_t a_height = g_height;
     void *a_rows = d3d9_in(c, g_rows, (uint64_t)(4*a_width));
     void *a_columns = d3d9_in(c, g_columns, (uint64_t)(4*a_height));
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, void *, void *))D3D9_VTBL(self)[119])(self, a_width, a_height, a_rows, a_columns);
@@ -1612,15 +1384,13 @@ static void t_IDirect3DDevice9Ex_SetGPUThreadPriority(CPU *c, void *self, uint32
 }
 
 static void t_IDirect3DDevice9Ex_SetMaximumFrameLatency(CPU *c, void *self, uint32_t a) {
-    uint32_t g_MaxLatency = R32(a + 0);
-    uint32_t a_MaxLatency = g_MaxLatency;
+    uint32_t a_MaxLatency = R32(a + 0);
     int32_t hr = ((int32_t (*)(void *, uint32_t))D3D9_VTBL(self)[126])(self, a_MaxLatency);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DDevice9Ex_WaitForVBlank(CPU *c, void *self, uint32_t a) {
-    uint32_t g_iSwapChain = R32(a + 0);
-    uint32_t a_iSwapChain = g_iSwapChain;
+    uint32_t a_iSwapChain = R32(a + 0);
     int32_t hr = ((int32_t (*)(void *, uint32_t))D3D9_VTBL(self)[124])(self, a_iSwapChain);
     c->eax = (uint32_t)hr;
 }
@@ -1633,13 +1403,10 @@ static void t_IDirect3DIndexBuffer9_GetDesc(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DIndexBuffer9_Lock(CPU *c, void *self, uint32_t a) {
-    uint32_t g_OffsetToLock = R32(a + 0);
-    uint32_t g_SizeToLock = R32(a + 4);
+    uint32_t a_OffsetToLock = R32(a + 0);
+    uint32_t a_SizeToLock = R32(a + 4);
     uint32_t g_ppbData = R32(a + 8);
-    uint32_t g_Flags = R32(a + 12);
-    uint32_t a_OffsetToLock = g_OffsetToLock;
-    uint32_t a_SizeToLock = g_SizeToLock;
-    uint32_t a_Flags = g_Flags;
+    uint32_t a_Flags = R32(a + 12);
     void *h_ppbData = NULL, **a_ppbData = d3d9_out_slot(c, g_ppbData) ? &h_ppbData : NULL;
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, void **, uint32_t))D3D9_VTBL(self)[11])(self, a_OffsetToLock, a_SizeToLock, a_ppbData, a_Flags);
     d3d9_lock_ptr_out(c, g_ppbData, h_ppbData, hr >= 0);
@@ -1729,8 +1496,7 @@ static void t_IDirect3DResource9_PreLoad(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DResource9_SetPriority(CPU *c, void *self, uint32_t a) {
-    uint32_t g_PriorityNew = R32(a + 0);
-    uint32_t a_PriorityNew = g_PriorityNew;
+    uint32_t a_PriorityNew = R32(a + 0);
     c->eax = ((uint32_t (*)(void *, uint32_t))D3D9_VTBL(self)[7])(self, a_PriorityNew);
 }
 
@@ -1764,8 +1530,7 @@ static void t_IDirect3DSurface9_GetDesc(CPU *c, void *self, uint32_t a) {
 static void t_IDirect3DSurface9_LockRect(CPU *c, void *self, uint32_t a) {
     uint32_t g_pLockedRect = R32(a + 0);
     uint32_t g_pRect = R32(a + 4);
-    uint32_t g_Flags = R32(a + 8);
-    uint32_t a_Flags = g_Flags;
+    uint32_t a_Flags = R32(a + 8);
     D3d9HostLocked h_pLockedRect; void *a_pLockedRect = d3d9_locked_in(c, g_pLockedRect, &h_pLockedRect, 8);
     void *a_pRect = d3d9_in(c, g_pRect, (uint64_t)(16));
     int32_t hr = ((int32_t (*)(void *, void *, void *, uint32_t))D3D9_VTBL(self)[13])(self, a_pLockedRect, a_pRect, a_Flags);
@@ -1780,11 +1545,9 @@ static void t_IDirect3DSurface9_UnlockRect(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DSwapChain9_GetBackBuffer(CPU *c, void *self, uint32_t a) {
-    uint32_t g_iBackBuffer = R32(a + 0);
-    uint32_t g_Type = R32(a + 4);
+    uint32_t a_iBackBuffer = R32(a + 0);
+    uint32_t a_Type = R32(a + 4);
     uint32_t g_ppBackBuffer = R32(a + 8);
-    uint32_t a_iBackBuffer = g_iBackBuffer;
-    uint32_t a_Type = g_Type;
     void *h_ppBackBuffer = NULL, **a_ppBackBuffer = d3d9_out_slot(c, g_ppBackBuffer) ? &h_ppBackBuffer : NULL;
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, void **))D3D9_VTBL(self)[5])(self, a_iBackBuffer, a_Type, a_ppBackBuffer);
     d3d9_child_out(c, g_ppBackBuffer, h_ppBackBuffer, D3D9_IDirect3DSurface9, self, 0);
@@ -1833,8 +1596,7 @@ static void t_IDirect3DSwapChain9_Present(CPU *c, void *self, uint32_t a) {
     uint32_t g_pDestRect = R32(a + 4);
     uint32_t g_hDestWindowOverride = R32(a + 8);
     uint32_t g_pDirtyRegion = R32(a + 12);
-    uint32_t g_dwFlags = R32(a + 16);
-    uint32_t a_dwFlags = g_dwFlags;
+    uint32_t a_dwFlags = R32(a + 16);
     void *a_pSourceRect = d3d9_in(c, g_pSourceRect, (uint64_t)(16));
     void *a_pDestRect = d3d9_in(c, g_pDestRect, (uint64_t)(16));
     void *a_hDestWindowOverride = d3d9_hwnd(c, g_hDestWindowOverride);
@@ -1867,18 +1629,16 @@ static void t_IDirect3DTexture9_AddDirtyRect(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DTexture9_GetLevelDesc(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Level = R32(a + 0);
+    uint32_t a_Level = R32(a + 0);
     uint32_t g_pDesc = R32(a + 4);
-    uint32_t a_Level = g_Level;
     void *a_pDesc = d3d9_out(c, g_pDesc, (uint64_t)(32));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[17])(self, a_Level, a_pDesc);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DTexture9_GetSurfaceLevel(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Level = R32(a + 0);
+    uint32_t a_Level = R32(a + 0);
     uint32_t g_ppSurfaceLevel = R32(a + 4);
-    uint32_t a_Level = g_Level;
     void *h_ppSurfaceLevel = NULL, **a_ppSurfaceLevel = d3d9_out_slot(c, g_ppSurfaceLevel) ? &h_ppSurfaceLevel : NULL;
     int32_t hr = ((int32_t (*)(void *, uint32_t, void **))D3D9_VTBL(self)[18])(self, a_Level, a_ppSurfaceLevel);
     d3d9_child_out(c, g_ppSurfaceLevel, h_ppSurfaceLevel, D3D9_IDirect3DSurface9, self, 1);
@@ -1886,12 +1646,10 @@ static void t_IDirect3DTexture9_GetSurfaceLevel(CPU *c, void *self, uint32_t a) 
 }
 
 static void t_IDirect3DTexture9_LockRect(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Level = R32(a + 0);
+    uint32_t a_Level = R32(a + 0);
     uint32_t g_pLockedRect = R32(a + 4);
     uint32_t g_pRect = R32(a + 8);
-    uint32_t g_Flags = R32(a + 12);
-    uint32_t a_Level = g_Level;
-    uint32_t a_Flags = g_Flags;
+    uint32_t a_Flags = R32(a + 12);
     D3d9HostLocked h_pLockedRect; void *a_pLockedRect = d3d9_locked_in(c, g_pLockedRect, &h_pLockedRect, 8);
     void *a_pRect = d3d9_in(c, g_pRect, (uint64_t)(16));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, void *, uint32_t))D3D9_VTBL(self)[19])(self, a_Level, a_pLockedRect, a_pRect, a_Flags);
@@ -1900,8 +1658,7 @@ static void t_IDirect3DTexture9_LockRect(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DTexture9_UnlockRect(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Level = R32(a + 0);
-    uint32_t a_Level = g_Level;
+    uint32_t a_Level = R32(a + 0);
     int32_t hr = ((int32_t (*)(void *, uint32_t))D3D9_VTBL(self)[20])(self, a_Level);
     c->eax = (uint32_t)hr;
 }
@@ -1914,13 +1671,10 @@ static void t_IDirect3DVertexBuffer9_GetDesc(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DVertexBuffer9_Lock(CPU *c, void *self, uint32_t a) {
-    uint32_t g_OffsetToLock = R32(a + 0);
-    uint32_t g_SizeToLock = R32(a + 4);
+    uint32_t a_OffsetToLock = R32(a + 0);
+    uint32_t a_SizeToLock = R32(a + 4);
     uint32_t g_ppbData = R32(a + 8);
-    uint32_t g_Flags = R32(a + 12);
-    uint32_t a_OffsetToLock = g_OffsetToLock;
-    uint32_t a_SizeToLock = g_SizeToLock;
-    uint32_t a_Flags = g_Flags;
+    uint32_t a_Flags = R32(a + 12);
     void *h_ppbData = NULL, **a_ppbData = d3d9_out_slot(c, g_ppbData) ? &h_ppbData : NULL;
     int32_t hr = ((int32_t (*)(void *, uint32_t, uint32_t, void **, uint32_t))D3D9_VTBL(self)[11])(self, a_OffsetToLock, a_SizeToLock, a_ppbData, a_Flags);
     d3d9_lock_ptr_out(c, g_ppbData, h_ppbData, hr >= 0);
@@ -1994,8 +1748,7 @@ static void t_IDirect3DVolume9_GetPrivateData(CPU *c, void *self, uint32_t a) {
 static void t_IDirect3DVolume9_LockBox(CPU *c, void *self, uint32_t a) {
     uint32_t g_pLockedVolume = R32(a + 0);
     uint32_t g_pBox = R32(a + 4);
-    uint32_t g_Flags = R32(a + 8);
-    uint32_t a_Flags = g_Flags;
+    uint32_t a_Flags = R32(a + 8);
     D3d9HostLocked h_pLockedVolume; void *a_pLockedVolume = d3d9_locked_in(c, g_pLockedVolume, &h_pLockedVolume, 12);
     void *a_pBox = d3d9_in(c, g_pBox, (uint64_t)(24));
     int32_t hr = ((int32_t (*)(void *, void *, void *, uint32_t))D3D9_VTBL(self)[9])(self, a_pLockedVolume, a_pBox, a_Flags);
@@ -2017,18 +1770,16 @@ static void t_IDirect3DVolumeTexture9_AddDirtyBox(CPU *c, void *self, uint32_t a
 }
 
 static void t_IDirect3DVolumeTexture9_GetLevelDesc(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Level = R32(a + 0);
+    uint32_t a_Level = R32(a + 0);
     uint32_t g_pDesc = R32(a + 4);
-    uint32_t a_Level = g_Level;
     void *a_pDesc = d3d9_out(c, g_pDesc, (uint64_t)(28));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *))D3D9_VTBL(self)[17])(self, a_Level, a_pDesc);
     c->eax = (uint32_t)hr;
 }
 
 static void t_IDirect3DVolumeTexture9_GetVolumeLevel(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Level = R32(a + 0);
+    uint32_t a_Level = R32(a + 0);
     uint32_t g_ppVolumeLevel = R32(a + 4);
-    uint32_t a_Level = g_Level;
     void *h_ppVolumeLevel = NULL, **a_ppVolumeLevel = d3d9_out_slot(c, g_ppVolumeLevel) ? &h_ppVolumeLevel : NULL;
     int32_t hr = ((int32_t (*)(void *, uint32_t, void **))D3D9_VTBL(self)[18])(self, a_Level, a_ppVolumeLevel);
     d3d9_child_out(c, g_ppVolumeLevel, h_ppVolumeLevel, D3D9_IDirect3DVolume9, self, 1);
@@ -2036,12 +1787,10 @@ static void t_IDirect3DVolumeTexture9_GetVolumeLevel(CPU *c, void *self, uint32_
 }
 
 static void t_IDirect3DVolumeTexture9_LockBox(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Level = R32(a + 0);
+    uint32_t a_Level = R32(a + 0);
     uint32_t g_pLockedVolume = R32(a + 4);
     uint32_t g_pBox = R32(a + 8);
-    uint32_t g_Flags = R32(a + 12);
-    uint32_t a_Level = g_Level;
-    uint32_t a_Flags = g_Flags;
+    uint32_t a_Flags = R32(a + 12);
     D3d9HostLocked h_pLockedVolume; void *a_pLockedVolume = d3d9_locked_in(c, g_pLockedVolume, &h_pLockedVolume, 12);
     void *a_pBox = d3d9_in(c, g_pBox, (uint64_t)(24));
     int32_t hr = ((int32_t (*)(void *, uint32_t, void *, void *, uint32_t))D3D9_VTBL(self)[19])(self, a_Level, a_pLockedVolume, a_pBox, a_Flags);
@@ -2050,8 +1799,7 @@ static void t_IDirect3DVolumeTexture9_LockBox(CPU *c, void *self, uint32_t a) {
 }
 
 static void t_IDirect3DVolumeTexture9_UnlockBox(CPU *c, void *self, uint32_t a) {
-    uint32_t g_Level = R32(a + 0);
-    uint32_t a_Level = g_Level;
+    uint32_t a_Level = R32(a + 0);
     int32_t hr = ((int32_t (*)(void *, uint32_t))D3D9_VTBL(self)[20])(self, a_Level);
     c->eax = (uint32_t)hr;
 }

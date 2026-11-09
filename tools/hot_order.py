@@ -13,14 +13,18 @@ import argparse
 import bisect
 import collections
 import subprocess
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import games  # noqa: E402
 
 TEXT_BASE = 0x100000000   # vmaddr de __TEXT (exécutable arm64 non PIE-décalé dans nm)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--binary', type=Path, default=Path('build/portal2-native'),
+    parser.add_argument('--binary', type=Path, default=games.ROOT / games.GAMES['portal2']['binary'],
                         help='build/hl2/hl2-native for Half-Life 2')
     parser.add_argument('-o', '--output', type=Path, required=True)
     parser.add_argument('profiles', nargs='+', type=Path)

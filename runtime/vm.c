@@ -78,9 +78,18 @@ int rt_munmap(uint32_t address, uint32_t length) {
     if (!length || address < RT_VM_BEGIN || address >= RT_VM_END || address % 4096 || length > RT_VM_END - address) { errno = EINVAL; return -1; }
     uint32_t size = align_up(length, 4096), end = address + size;
     if (end > RT_VM_END) { errno = EINVAL; return -1; }
+    // Une projection coupée en deux (au plus une : elles sont disjointes) a
+    // besoin d'une nouvelle entrée : allouée avant de toucher aux droits, pour
+    // qu'un échec laisse la table des droits et la liste cohérentes.
+    Mapping *tail = NULL;
+    for (Mapping *m = mappings; m && !tail; m = m->next)
+        if (m->address < address && m->address + m->size > end) {
+            tail = calloc(1, sizeof(*tail));
+            if (!tail) { errno = ENOMEM; return -1; }
+        }
     rt_pe_forget(address, size);   // greffon PE projeté ici : plus reconnu
     memset(rt_vm_permissions + ((address - RT_VM_BEGIN) >> 12), 0, size / 4096);
-    if (update_host_permissions(address, size, 1)) return -1;
+    if (update_host_permissions(address, size, 1)) { free(tail); return -1; }
     Mapping **link = &mappings;
     while (*link) {
         Mapping *m = *link; uint32_t last = m->address + m->size;
@@ -89,12 +98,12 @@ int rt_munmap(uint32_t address, uint32_t length) {
         else if (address <= m->address) { m->address = end; m->size = last - end; link = &m->next; }
         else if (end >= last) { m->size = address - m->address; link = &m->next; }
         else {
-            Mapping *tail = calloc(1, sizeof(*tail));
-            if (!tail) { errno = ENOMEM; return -1; }
             *tail = *m; tail->address = end; tail->size = last - end;
             m->size = address - m->address; m->next = tail; link = &tail->next;
+            tail = NULL;
         }
     }
+    free(tail);   // jamais utilisé si la liste a changé entre-temps (impossible sous la porte)
     return 0;
 }
 int rt_mprotect(uint32_t address, uint32_t length, int protection) {

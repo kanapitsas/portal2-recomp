@@ -111,6 +111,24 @@ class LazyInstructionTests(unittest.TestCase):
 
 
 
+class LayoutLoadingTests(unittest.TestCase):
+    def test_old_relative_image_paths_resolve_next_to_the_layout(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            prep = Path(tmp).resolve() / 'prep'
+            prep.mkdir()
+            (prep / 'libfake.so').write_bytes(b'\x7fELF')
+            modules = [dict(name='libfake.so', image='build/game/prep/libfake.so'),       # pre-November 2025 layout
+                       dict(name='libgone.so', image='build/game/prep/libgone.so'),       # not beside the layout
+                       dict(name='libabs.so', image=str(prep / 'libabs.so'))]
+            (prep / 'layout.json').write_text(json.dumps(dict(modules=modules, imports=[])))
+            layout = lift.load_layout(prep / 'layout.json')
+        images = [m['image'] for m in layout['modules']]
+        self.assertEqual(images[0], str(prep / 'libfake.so'))
+        self.assertEqual(images[1], str(ROOT / 'build/game/prep/libgone.so'))
+        self.assertEqual(images[2], str(prep / 'libabs.so'))
+
+
 class SymbolScopeTests(unittest.TestCase):
     def test_dlopened_modules_prefer_own_copy_over_sibling(self):
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
@@ -130,3 +148,29 @@ class SymbolScopeTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class GenerateReuseTests(unittest.TestCase):
+    def test_generate_is_called_the_same_way_by_the_ios_build(self):
+        # Regression: build_ios.py used to hand generate() an argparse-like bag that
+        # lacked `objdump` (AttributeError before any C was generated). With an
+        # up-to-date manifest the call returns without lifting anything.
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            image = tmp / 'image.bin'
+            image.write_bytes(b'\0' * 16)
+            layout = {'program': 'p', 'modules': [{'name': 'p', 'image': str(image)}]}
+            layout_path = tmp / 'layout.json'
+            layout_path.write_text(json.dumps(layout))
+            out = tmp / 'gen'
+            (out / 'src').mkdir(parents=True)
+            (out / 'src' / 'dispatch.c').write_text('')
+            specs = ['p:symbol:main']
+            key = build_game.generation_key(layout_path, layout, specs, True)
+            (out / 'manifest.json').write_text(json.dumps(
+                {'key': key, 'shards': {}, 'functions': 0, 'instructions': 0}))
+            manifest, seconds = build_game.generate(layout_path, layout, specs, out, jobs=1)
+            self.assertEqual((manifest['key'], seconds), (key, 0.0))
+            with self.assertRaises(TypeError):   # no positional surprises: options are keywords
+                build_game.generate(layout_path, layout, specs, out, True, 1)

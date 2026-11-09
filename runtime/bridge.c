@@ -4,6 +4,8 @@
 #include "rt.h"
 #include <pthread.h>
 #include <stdlib.h>
+#include <limits.h>
+#include <mach-o/dyld.h>
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static char **dynamic_names;
@@ -95,3 +97,68 @@ void *rt_handle_free(uint32_t handle, uint32_t kind) {
 // défini par runtime/gl.c. Cette version faible renvoie 0 (fonction absente)
 // tant que le pont GL n'est pas lié.
 __attribute__((weak)) uint32_t rt_gl_proc_address(const char *name) { (void)name; return 0; }
+
+void *rt_handle_require(CPU *c, uint32_t handle, uint32_t kind, const char *what) {
+    if (!handle) return NULL;
+    void *host = rt_handle_get(handle, kind);
+    if (!host) rt_trapf(c, "invalid %s handle %#x", what, handle);
+    return host;
+}
+
+uint32_t rt_guest_address(CPU *c, const void *host, const char *why) {
+    uintptr_t p = (uintptr_t)host, base = (uintptr_t)M;
+    if (!p) return 0;
+    if (p < base || p - base > UINT32_MAX) rt_trap(c, c->eip, why);
+    return (uint32_t)(p - base);
+}
+
+// Chaînes constantes internées : table de hachage par contenu, jamais libérée.
+typedef struct Interned { struct Interned *next; uint32_t guest; char text[]; } Interned;
+static Interned *interned[1024];
+static uint32_t intern_hash(const char *text, size_t length) {
+    uint32_t hash = 2166136261u;
+    for (size_t i = 0; i < length; ++i) hash = (hash ^ (uint8_t)text[i]) * 16777619u;
+    return hash;
+}
+uint32_t rt_intern_string(CPU *c, const char *text) {
+    if (!text) return 0;
+    size_t length = strlen(text);
+    pthread_mutex_lock(&lock);
+    Interned **bucket = &interned[intern_hash(text, length) % 1024], *item = *bucket;
+    while (item && strcmp(item->text, text)) item = item->next;
+    if (!item && length < UINT32_MAX && (item = malloc(sizeof(*item) + length + 1))) {
+        item->guest = rt_alloc((uint32_t)length + 1);
+        if (!item->guest) { free(item); item = NULL; }
+        else {
+            memcpy(item->text, text, length + 1);
+            memcpy(GPTR(item->guest), text, length + 1);
+            item->next = *bucket; *bucket = item;
+        }
+    }
+    uint32_t result = item ? item->guest : 0;
+    pthread_mutex_unlock(&lock);
+    if (!result) rt_trap(c, c->eip, "interned guest string allocation failed");
+    return result;
+}
+int rt_is_interned(uint32_t address) {
+    if (!address) return 0;
+    pthread_mutex_lock(&lock);
+    int found = 0;
+    for (unsigned b = 0; b < 1024 && !found; ++b)
+        for (Interned *item = interned[b]; item && !found; item = item->next) found = item->guest == address;
+    pthread_mutex_unlock(&lock);
+    return found;
+}
+
+const char *rt_executable_dir(void) {
+    static char directory[PATH_MAX];
+    static int state;   // 0 inconnu, 1 trouvé, -1 échec
+    if (!state) {
+        char exe[PATH_MAX];
+        uint32_t length = sizeof(exe);
+        char *slash;
+        if (_NSGetExecutablePath(exe, &length) || !realpath(exe, directory) || !(slash = strrchr(directory, '/'))) state = -1;
+        else { *slash = 0; state = 1; }
+    }
+    return state > 0 ? directory : NULL;
+}

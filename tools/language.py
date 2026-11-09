@@ -137,7 +137,10 @@ def main():
     args = parser.parse_args()
     launcher_args = args.arguments[1:] if args.arguments[:1] == ['--'] else args.arguments
     try: config = json.loads(args.config.read_text())
-    except (OSError, ValueError): config = {}
+    except FileNotFoundError: config = {}
+    except (OSError, ValueError) as exc:   # unreadable or malformed: say so rather than silently defaulting
+        print(f'language: {args.config}: {exc}; using the default language choice', file=sys.stderr)
+        config = {}
     words = language_args(config, launcher_args, explain=args.explain)
     if words: print(*words)
     return 0

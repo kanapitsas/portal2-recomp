@@ -23,11 +23,9 @@
 #include <stdlib.h>
 #include <xlocale.h>
 
-#define EILSEQ_LINUX 84
 #define BAD ((uint32_t)-1)
 #define INCOMPLETE ((uint32_t)-2)
 
-static uint32_t arg(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
 static int32_t W(uint32_t a) { return (int32_t)R32(a); }
 
 // Longueur d'une chaîne large invitée (accès mémoire vérifiés).
@@ -158,34 +156,34 @@ static int wide_class_shim(CPU *c, const char *name) {
     static const char *const names[] = {"iswalnum", "iswalpha", "iswblank", "iswcntrl", "iswdigit", "iswgraph",
                                         "iswlower", "iswprint", "iswpunct", "iswspace", "iswupper", "iswxdigit"};
     for (int i = 0; i < 12; ++i)
-        if (!strcmp(name, names[i])) { c->eax = (uint32_t)rt_wclass(arg(c, 0), i + 1, rt_locale_ctype_utf8()); return 1; }
+        if (!strcmp(name, names[i])) { c->eax = (uint32_t)rt_wclass(rt_arg32(c, 0), i + 1, rt_locale_ctype_utf8()); return 1; }
     return 0;
 }
 
 static int wchar_shim(CPU *c, const char *name) {
     static State mbrtowc_state, mbsrtowcs_state, mbsnrtowcs_state;
     uint32_t a = 0, b = 0, n = 0;
-    if (!strncmp(name, "wcs", 3) || !strncmp(name, "wmem", 4) || !strncmp(name, "__wcs", 5)) { a = arg(c, 0); b = arg(c, 1); }
+    if (!strncmp(name, "wcs", 3) || !strncmp(name, "wmem", 4) || !strncmp(name, "__wcs", 5)) { a = rt_arg32(c, 0); b = rt_arg32(c, 1); }
     if (!strcmp(name, "wcslen")) c->eax = wlen(c, a);
     else if (!strcmp(name, "wcscpy")) {
         n = wlen(c, b) + 1;
         memmove(wspan(c, a, n, 1), GPTR(b), (size_t)n * 4); c->eax = a;
     } else if (!strcmp(name, "wcsncpy")) {
-        n = arg(c, 2); wspan(c, a, n, 1);
+        n = rt_arg32(c, 2); wspan(c, a, n, 1);
         uint32_t i = 0;
         for (; i < n; ++i) { uint32_t wc = R32(b + 4 * i); W32(a + 4 * i, wc); if (!wc) break; }
         for (; i < n; ++i) W32(a + 4 * i, 0);
         c->eax = a;
     } else if (!strcmp(name, "wcscat") || !strcmp(name, "wcsncat")) {
-        uint32_t limit = name[3] == 'n' ? arg(c, 2) : UINT32_MAX, end = wlen(c, a), count = 0;
+        uint32_t limit = name[3] == 'n' ? rt_arg32(c, 2) : UINT32_MAX, end = wlen(c, a), count = 0;
         while (count < limit && R32(b + 4 * count)) ++count;
         wspan(c, a + 4 * end, (uint64_t)count + 1, 1);
         memmove(GPTR(a + 4 * end), GPTR(b), (size_t)count * 4);
         W32(a + 4 * (end + count), 0); c->eax = a;
     } else if (!strcmp(name, "wcscmp") || !strcmp(name, "wcscoll") || !strcmp(name, "__wcscoll_l") || !strcmp(name, "wcsncmp")) {
         // wchar_t est signé sur i386 ; C/C.UTF-8 : collation = ordre des points de code.
-        if (name[0] == '_') rt_locale_object_utf8(c, arg(c, 2));
-        uint32_t limit = name[3] == 'n' ? arg(c, 2) : UINT32_MAX;
+        if (name[0] == '_') rt_locale_object_utf8(c, rt_arg32(c, 2));
+        uint32_t limit = name[3] == 'n' ? rt_arg32(c, 2) : UINT32_MAX;
         int r = 0;
         for (uint32_t i = 0; i < limit && !r; ++i) {
             int32_t x = W(a + 4 * i), y = W(b + 4 * i);
@@ -194,7 +192,7 @@ static int wchar_shim(CPU *c, const char *name) {
         }
         c->eax = (uint32_t)r;
     } else if (!strcmp(name, "__wcsxfrm_l")) {
-        n = arg(c, 2); rt_locale_object_utf8(c, arg(c, 3));
+        n = rt_arg32(c, 2); rt_locale_object_utf8(c, rt_arg32(c, 3));
         uint32_t length = wlen(c, b);
         if (n) { uint32_t count = length + 1 < n ? length + 1 : n; memmove(wspan(c, a, count, 1), GPTR(b), (size_t)count * 4); }
         c->eax = length;
@@ -210,26 +208,26 @@ static int wchar_shim(CPU *c, const char *name) {
         for (uint32_t i = 0; i + nl <= hl; ++i)
             if (!memcmp(GPTR(a + 4 * i), GPTR(b), (size_t)nl * 4)) { c->eax = a + 4 * i; break; }
     } else if (!strcmp(name, "wmemchr")) {
-        n = arg(c, 2); wspan(c, a, n, 0); c->eax = 0;
+        n = rt_arg32(c, 2); wspan(c, a, n, 0); c->eax = 0;
         for (uint32_t i = 0; i < n; ++i) if (R32(a + 4 * i) == b) { c->eax = a + 4 * i; break; }
     } else if (!strcmp(name, "wmemcmp")) {
-        n = arg(c, 2); wspan(c, a, n, 0); wspan(c, b, n, 0);
+        n = rt_arg32(c, 2); wspan(c, a, n, 0); wspan(c, b, n, 0);
         int r = 0;
         for (uint32_t i = 0; i < n && !r; ++i) r = sign(W(a + 4 * i), W(b + 4 * i));
         c->eax = (uint32_t)r;
     } else if (!strcmp(name, "wmemcpy") || !strcmp(name, "wmemmove")) {
-        n = arg(c, 2);
+        n = rt_arg32(c, 2);
         void *d = wspan(c, a, n, 1), *s = wspan(c, b, n, 0);
         memmove(d, s, (size_t)n * 4); c->eax = a;
     } else if (!strcmp(name, "wmemset")) {
-        n = arg(c, 2); wspan(c, a, n, 1);
+        n = rt_arg32(c, 2); wspan(c, a, n, 1);
         for (uint32_t i = 0; i < n; ++i) W32(a + 4 * i, b);
         c->eax = a;
     } else if (!strcmp(name, "towlower") || !strcmp(name, "towupper")) {
-        c->eax = rt_wcase(arg(c, 0), name[3] == 'u', rt_locale_ctype_utf8());
+        c->eax = rt_wcase(rt_arg32(c, 0), name[3] == 'u', rt_locale_ctype_utf8());
     } else if (!strcmp(name, "wcstol")) {
-        a = arg(c, 0); b = arg(c, 1); int base = (int32_t)arg(c, 2);
-        if (base == 1 || base < 0 || base > 36) { rt_set_errno(c, 22); c->eax = 0; return 1; }
+        a = rt_arg32(c, 0); b = rt_arg32(c, 1); int base = (int32_t)rt_arg32(c, 2);
+        if (base == 1 || base < 0 || base > 36) { rt_set_errno(c, RT_EINVAL); c->eax = 0; return 1; }
         uint32_t start; char *text = narrow_number(c, a, &start), *end;
         errno = 0;
         long long value = strtoll_l(text, &end, base, host_c());
@@ -239,8 +237,8 @@ static int wchar_shim(CPU *c, const char *name) {
         if (b) W32(b, end == text ? a : start + 4 * (uint32_t)(end - text));
         free(text); c->eax = (uint32_t)(int32_t)value;
     } else if (!strcmp(name, "wcstoll")) {
-        a = arg(c, 0); b = arg(c, 1); int base = (int32_t)arg(c, 2);
-        if (base == 1 || base < 0 || base > 36) { rt_set_errno(c, 22); c->eax = c->edx = 0; return 1; }
+        a = rt_arg32(c, 0); b = rt_arg32(c, 1); int base = (int32_t)rt_arg32(c, 2);
+        if (base == 1 || base < 0 || base > 36) { rt_set_errno(c, RT_EINVAL); c->eax = c->edx = 0; return 1; }
         uint32_t start; char *text = narrow_number(c, a, &start), *end;
         errno = 0;
         long long value = strtoll_l(text, &end, base, host_c());
@@ -251,14 +249,14 @@ static int wchar_shim(CPU *c, const char *name) {
     } else if (!strcmp(name, "__wcsncpy_chk") || !strcmp(name, "__wcscat_chk") || !strcmp(name, "__wcstombs_chk")) {
         // _FORTIFY_SOURCE : taille de destination en wchar_t (en octets pour wcstombs), puis
         // l'opération normale ; les arguments de tête ont la même place.
-        uint32_t room = arg(c, !strcmp(name, "__wcscat_chk") ? 2 : 3), need;
-        if (!strcmp(name, "__wcsncpy_chk")) need = arg(c, 2);
-        else if (!strcmp(name, "__wcstombs_chk")) need = arg(c, 0) ? arg(c, 2) : 0;
-        else { uint32_t end = wlen(c, arg(c, 0)), add = wlen(c, arg(c, 1)); need = end + add + 1; }
+        uint32_t room = rt_arg32(c, !strcmp(name, "__wcscat_chk") ? 2 : 3), need;
+        if (!strcmp(name, "__wcsncpy_chk")) need = rt_arg32(c, 2);
+        else if (!strcmp(name, "__wcstombs_chk")) need = rt_arg32(c, 0) ? rt_arg32(c, 2) : 0;
+        else { uint32_t end = wlen(c, rt_arg32(c, 0)), add = wlen(c, rt_arg32(c, 1)); need = end + add + 1; }
         if (room < need) rt_trap(c, c->eip, "*** buffer overflow detected ***: terminated (__chk_fail)");
         return rt_shim(c, !strcmp(name, "__wcsncpy_chk") ? "wcsncpy" : !strcmp(name, "__wcscat_chk") ? "wcscat" : "wcstombs");
     } else if (!strcmp(name, "wcstod") || !strcmp(name, "wcstof")) {
-        a = arg(c, 0); b = arg(c, 1);
+        a = rt_arg32(c, 0); b = rt_arg32(c, 1);
         uint32_t start; char *text = narrow_number(c, a, &start), *end;
         errno = 0;
         double value = name[5] == 'f' ? (double)strtof_l(text, &end, host_c()) : strtod_l(text, &end, host_c());
@@ -266,52 +264,52 @@ static int wchar_shim(CPU *c, const char *name) {
         if (b) W32(b, end == text ? a : start + 4 * (uint32_t)(end - text));
         free(text); rt_return_st0(c, value);
     } else if (!strcmp(name, "wctob")) {
-        uint32_t wc = arg(c, 0); c->eax = wc < 0x80 ? wc : UINT32_MAX;
+        uint32_t wc = rt_arg32(c, 0); c->eax = wc < 0x80 ? wc : UINT32_MAX;
     } else if (!strcmp(name, "btowc")) {
-        int32_t ch = (int32_t)arg(c, 0); c->eax = ch >= 0 && ch < 0x80 ? (uint32_t)ch : UINT32_MAX;
+        int32_t ch = (int32_t)rt_arg32(c, 0); c->eax = ch >= 0 && ch < 0x80 ? (uint32_t)ch : UINT32_MAX;
     } else if (!strcmp(name, "mbrtowc")) {
-        uint32_t pwc = arg(c, 0), s = arg(c, 1), ps = arg(c, 3); n = arg(c, 2);
+        uint32_t pwc = rt_arg32(c, 0), s = rt_arg32(c, 1), ps = rt_arg32(c, 3); n = rt_arg32(c, 2);
         State st = mbrtowc_state; if (ps) load_state(ps, &st);
         uint32_t wc = 0, r;
         if (!s) { pwc = 0; st = (State){0, 0}; r = 0; }
         else r = decode(rt_locale_ctype_utf8(), &st, s, n, &wc);
-        if (r == BAD) rt_set_errno(c, EILSEQ_LINUX);
+        if (r == BAD) rt_set_errno(c, RT_EILSEQ);
         else if (r != INCOMPLETE && pwc) W32(pwc, wc);
         if (ps) store_state(ps, &st); else mbrtowc_state = st;
         c->eax = r;
     } else if (!strcmp(name, "wcrtomb")) {
-        uint32_t s = arg(c, 0), wc = arg(c, 1), ps = arg(c, 2);
+        uint32_t s = rt_arg32(c, 0), wc = rt_arg32(c, 1), ps = rt_arg32(c, 2);
         if (ps) store_state(ps, &(State){0, 0});
         uint8_t bytes[4];
         uint32_t k = encode(rt_locale_ctype_utf8(), s ? wc : 0, bytes);
-        if (k == BAD) rt_set_errno(c, EILSEQ_LINUX);
+        if (k == BAD) rt_set_errno(c, RT_EILSEQ);
         else if (s) memcpy(rt_write_span(c, s, k), bytes, k);
         c->eax = k;
     } else if (!strcmp(name, "mbstowcs")) {
-        uint32_t dst = arg(c, 0), src = arg(c, 1); n = arg(c, 2);
+        uint32_t dst = rt_arg32(c, 0), src = rt_arg32(c, 1); n = rt_arg32(c, 2);
         State st = {0, 0}; uint32_t used; int nul;
         c->eax = mb_to_wc(rt_locale_ctype_utf8(), &st, dst, n, src, readable(c, src, UINT32_MAX), &used, &nul);
-        if (c->eax == BAD) rt_set_errno(c, EILSEQ_LINUX);
+        if (c->eax == BAD) rt_set_errno(c, RT_EILSEQ);
     } else if (!strcmp(name, "mbsrtowcs") || !strcmp(name, "mbsnrtowcs")) {
         int bounded = name[3] == 'n';
-        uint32_t dst = arg(c, 0), srcp = arg(c, 1), nms = bounded ? arg(c, 2) : UINT32_MAX;
-        uint32_t len = arg(c, bounded ? 3 : 2), ps = arg(c, bounded ? 4 : 3);
+        uint32_t dst = rt_arg32(c, 0), srcp = rt_arg32(c, 1), nms = bounded ? rt_arg32(c, 2) : UINT32_MAX;
+        uint32_t len = rt_arg32(c, bounded ? 3 : 2), ps = rt_arg32(c, bounded ? 4 : 3);
         State *internal = bounded ? &mbsnrtowcs_state : &mbsrtowcs_state, st = *internal;
         if (ps) load_state(ps, &st);
         uint32_t src = R32(srcp), used; int nul;
         uint32_t r = mb_to_wc(rt_locale_ctype_utf8(), &st, dst, len, src, readable(c, src, nms), &used, &nul);
-        if (r == BAD) rt_set_errno(c, EILSEQ_LINUX);
+        if (r == BAD) rt_set_errno(c, RT_EILSEQ);
         if (dst) W32(srcp, nul ? 0 : src + used);
         if (ps) store_state(ps, &st); else *internal = st;
         c->eax = r;
     } else if (!strcmp(name, "wcstombs") || !strcmp(name, "wcsnrtombs")) {
         int bounded = name[3] == 'n';
-        uint32_t dst = arg(c, 0), srcp = bounded ? arg(c, 1) : 0, src = bounded ? R32(srcp) : arg(c, 1);
-        uint32_t nwc = bounded ? arg(c, 2) : UINT32_MAX, len = arg(c, bounded ? 3 : 2), used; int nul;
-        if (bounded && arg(c, 4)) store_state(arg(c, 4), &(State){0, 0});
+        uint32_t dst = rt_arg32(c, 0), srcp = bounded ? rt_arg32(c, 1) : 0, src = bounded ? R32(srcp) : rt_arg32(c, 1);
+        uint32_t nwc = bounded ? rt_arg32(c, 2) : UINT32_MAX, len = rt_arg32(c, bounded ? 3 : 2), used; int nul;
+        if (bounded && rt_arg32(c, 4)) store_state(rt_arg32(c, 4), &(State){0, 0});
         if (!src) rt_trap(c, c->eip, "null guest wide string");
         uint32_t r = wc_to_mb(rt_locale_ctype_utf8(), dst, len, src, nwc, &used, &nul);
-        if (r == BAD) rt_set_errno(c, EILSEQ_LINUX);
+        if (r == BAD) rt_set_errno(c, RT_EILSEQ);
         if (bounded && dst) W32(srcp, nul ? 0 : src + 4 * used);
         c->eax = r;
     } else return wide_class_shim(c, name);

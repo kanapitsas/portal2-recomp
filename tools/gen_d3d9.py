@@ -24,7 +24,9 @@ Argument kinds (one stack word each; d3d9 has no 64-bit argument):
   shared             HANDLE *pSharedHandle (must be NULL outside d3d9 Ex): NULL
   shared:EXPR        same, but when EXPR holds (a d3d9Ex system-memory create
                      that takes user memory) the guest HANDLE is the guest
-                     address of the pixels, handed over as a host pointer
+                     address of the pixels, handed over as a host pointer; the
+                     method must have Width, Height and Format scalars, which
+                     size the pixel validation (d3d9_user_memory_check)
   params, params_out D3DPRESENT_PARAMETERS (56 bytes i386, 64 arm64) in/out, out
   adapterid          D3DADAPTER_IDENTIFIER9 out (1100 / 1104)
   creation           D3DDEVICE_CREATION_PARAMETERS out (16 / 24)
@@ -464,12 +466,13 @@ def thunk(interfaces, method):
     by_name = {i.name: i for i in interfaces}
     lines = [f'static void t_{method.cname}(CPU *c, void *self, uint32_t a) {{']
     for i, p in enumerate(method.params):
-        lines.append(f'    uint32_t g_{p.name} = R32(a + {4 * i});')
+        if p.kind == 'u':         # lu directement dans a_<nom>
+            lines.append(f'    uint32_t a_{p.name} = R32(a + {4 * i});')
+        else:
+            lines.append(f'    uint32_t g_{p.name} = R32(a + {4 * i});')
     after, call_args, types = [], [], []
     for p in method.params:       # scalaires d'abord : les tailles les citent
-        if p.kind == 'u':
-            lines.append(f'    uint32_t a_{p.name} = g_{p.name};')
-        elif p.kind == 'i':
+        if p.kind == 'i':
             lines.append(f'    int32_t a_{p.name} = (int32_t)g_{p.name};')
         elif p.kind == 'f':
             lines.append(f'    float a_{p.name} = d3d9_f32(g_{p.name});')
@@ -497,6 +500,11 @@ def thunk(interfaces, method):
         elif p.kind == 'shared':
             user_memory = size_expr(method, p.extra) if p.extra else '0'
             lines.append(f'    void *h_{n} = NULL, *a_{n} = d3d9_shared(c, g_{n}, {user_memory}, &h_{n});')
+            if p.extra:
+                scalars = {q.name for q in method.params if q.scalar}
+                if not {'Width', 'Height', 'Format'} <= scalars:
+                    raise SystemExit(f'{method.full} : shared:EXPR sans Width/Height/Format pour valider les pixels')
+                lines.append(f'    d3d9_user_memory_check(c, a_{n}, a_Width, a_Height, a_Format);')
         elif p.kind in ('params', 'params_out'):
             lines.append(f'    D3d9HostParams h_{n}; void *a_{n} = d3d9_params_in(c, g_{n}, &h_{n}, {int(p.kind == "params")});')
             after.append(f'    if (hr >= 0) d3d9_params_out(c, g_{n}, &h_{n});')
@@ -523,9 +531,12 @@ def thunk(interfaces, method):
     call = f'(({signature})D3D9_VTBL(self)[{method.slot}])({", ".join(["self"] + call_args)})'
     if after and method.ret != 'HRESULT':
         raise SystemExit(f'{method.full} : sorties traduites sans HRESULT')
+    uses_c = any(not p.scalar for p in method.params)   # traduction d'un pointeur
     if rtype == 'void':
         lines.append(f'    {call};')
-        lines.append('    (void)c;' if method.params else '    (void)c; (void)a;')
+        unused = ([] if uses_c else ['(void)c;']) + ([] if method.params else ['(void)a;'])
+        if unused:
+            lines.append('    ' + ' '.join(unused))
     elif method.ret == 'HRESULT':
         lines.append(f'    int32_t hr = {call};')
         lines += after
@@ -549,8 +560,8 @@ def iid_bytes(text):
 
 
 HEADER = '''// GÉNÉRÉ par tools/gen_d3d9.py — ne pas éditer à la main.
-// Identifiants des interfaces Direct3D 9 du pont (runtime/d3d9.c) et
-// prototypes des méthodes écrites à la main.
+// Identifiants des interfaces Direct3D 9 du pont (runtime/d3d9.c), rangs de
+// vtable des méthodes et prototypes des méthodes écrites à la main.
 #pragma once
 #include "rt.h"
 '''
@@ -575,9 +586,12 @@ def generate():
     for iface in interfaces:
         header.append(f'#define D3D9_MASK_{iface.name} 0x{derived(interfaces, iface):x}u')
     header.append('')
+    header.append('// Rang de chaque méthode dans la vtable de l’interface qui la définit.')
+    for m in methods:
+        header.append(f'#define D3D9_SLOT_{m.cname} {m.slot}')
+    header.append('')
     for m in methods:
         if 'manual' in m.flags:
-            header.append(f'#define D3D9_SLOT_{m.cname} {m.slot}')
             header.append(f'void d3d9_manual_{m.cname}(CPU *c, void *self, uint32_t a);')
     source = [SOURCE]
     for m in methods:

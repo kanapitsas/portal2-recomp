@@ -60,13 +60,16 @@ Steamworks.NET 20.1.0's `NativeMethods.cs` (MIT) + the return type of the C# wra
 `GetISteam*` → proxy). `ISteamController` (absent from Steamworks.NET) reuses the
 signatures of the same-named `ISteamInput` methods (`Legacy_*`, `Init`/`RunFrame` with no arguments),
 checked against the argument count. Buffers: a pointer followed by a size (`cub*`, `cch*`…) or arrays of
-documented size (`STEAM_INPUT_MAX_*`). The table (`runtime/steam_generated.c`) has 1,088 methods over
-the 36 interface versions of both games; untranslated ones, and the slots with no flat function (`DEPRECATED` methods), trap with their name,
+documented size (`STEAM_INPUT_MAX_*`). The table (`runtime/steam_generated.c`) covers every interface version
+either game asks for (`tools/gen_steam.py` prints the counts); untranslated
+methods, and the slots with no flat function (`DEPRECATED` methods), trap with their name,
 slot and reason. `SteamGameCoordinator001` and `SteamGameStats001` (not in the SDK) have no
 flat functions: `virtual_bridge` in `steam.c` calls the host object's virtual methods directly
 (ARM64 C++ ABI) for `SendMessage`/`IsMessageAvailable`/`RetrieveMessage` and for the 13
 `ISteamGameStats` methods; the same path serves `ISteamUtils::GetCSERIPPort` (slot 7, no flat
-function). `SetWarningMessageHook` (`ISteamClient`, `ISteamUtils`) is bridged: the host hook
+function) and the three `SteamInput006` methods that return a structure by value (slots 17, 21
+and 29: digital and analog action data, motion data), where i386 passes a hidden result pointer
+and ARM64 uses its own structure-return ABI. `SetWarningMessageHook` (`ISteamClient`, `ISteamUtils`) is bridged: the host hook
 copies the message into guest memory, masks SteamIDs and calls the guest function.
 
 Notable trapping methods: `ISteamMatchmakingServers` (16/17, guest C++ response objects —

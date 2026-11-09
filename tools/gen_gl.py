@@ -189,30 +189,33 @@ def params(text):
 
 
 def reader(kind, slot):
+    """Scalar argument at stack slot `slot` (rt.h: rt_arg32/rt_arg64 by slot, floats by byte offset)."""
     if kind == 'f32':
-        return f'rt_gl_f32(c, {slot})'
+        return f'rt_arg_f32(c, {4 * slot})'
     if kind == 'f64':
-        return f'rt_gl_f64(c, {slot})'
+        return f'rt_arg_f64(c, {4 * slot})'
     if kind == 'u64':
-        return f'rt_gl_u64(c, {slot})'
+        return f'rt_arg64(c, {slot})'
     if kind == 'iptr':
-        return f'(intptr_t)(int32_t)rt_gl_u32(c, {slot})'
+        return f'(intptr_t)(int32_t)rt_arg32(c, {slot})'
     if kind == 'handle':
-        return f'rt_gl_handle_arg(rt_gl_u32(c, {slot}))'
-    return f'({CTYPE[kind]})rt_gl_u32(c, {slot})'
+        return f'rt_gl_handle_arg(rt_arg32(c, {slot}))'
+    if kind == 'u32':
+        return f'rt_arg32(c, {slot})'
+    return f'({CTYPE[kind]})rt_arg32(c, {slot})'
 
 
 def pointer(fn, name, slot):
     rule = RULES.get(fn, {}).get(name)
     if rule is None:
         raise SystemExit(f'{fn}: paramètre pointeur {name} sans règle')
-    raw = f'rt_gl_u32(c, {slot})'
+    raw = f'rt_arg32(c, {slot})'
     parts = rule.split(':')
     if parts[0] in ('in', 'out'):
         null = int(len(parts) > 2 and parts[2] == 'null')
         return f'rt_gl_{parts[0]}(c, {raw}, (uint64_t)({parts[1]}), {null})'
     if parts[0] == 'str':
-        return f'rt_gl_str(c, {raw})'
+        return f'rt_guest_cstr(c, {raw})'
     if parts[0] == 'array':
         return f'rt_gl_array(c, {raw})'
     if parts[0] == 'index':
@@ -268,33 +271,9 @@ def thunk(fn, ret, args):
 
 PREAMBLE = '''// GÉNÉRÉ par tools/gen_gl.py — ne pas éditer à la main.
 // Thunks i386 cdecl → OpenGL hôte pour les fonctions demandées par libtogl.
-// Les aides rt_gl_* (lecture d'arguments, validation et traduction des
-// pointeurs invités) sont dans runtime/gl.c.
-#include "rt.h"
-#include <stdint.h>
-
-uint32_t rt_gl_u32(CPU *c, unsigned slot);
-float rt_gl_f32(CPU *c, unsigned slot);
-double rt_gl_f64(CPU *c, unsigned slot);
-uint64_t rt_gl_u64(CPU *c, unsigned slot);
-uint64_t rt_gl_n(int64_t n);
-uint32_t rt_gl_get_count(uint32_t pname);
-uint32_t rt_gl_texparam_count(uint32_t pname);
-void *rt_gl_in(CPU *c, uint32_t ptr, uint64_t size, int nullable);
-void *rt_gl_out(CPU *c, uint32_t ptr, uint64_t size, int nullable);
-const char *rt_gl_str(CPU *c, uint32_t ptr);
-const void *rt_gl_array(CPU *c, uint32_t ptr);
-const void *rt_gl_indices(CPU *c, uint32_t ptr, int32_t count, uint32_t type);
-const void *rt_gl_unpack(CPU *c, uint32_t ptr, int32_t w, int32_t h, int32_t d, uint32_t format, uint32_t type, int nullable);
-const void *rt_gl_unpack_compressed(CPU *c, uint32_t ptr, int32_t size);
-void *rt_gl_pack_tex(CPU *c, uint32_t ptr, uint32_t target, int32_t level, uint32_t format, uint32_t type);
-void *rt_gl_pack_compressed(CPU *c, uint32_t ptr, uint32_t target, int32_t level);
-void *rt_gl_handle_arg(uint32_t handle);
-uint32_t rt_gl_handle_ret(CPU *c, void *handle);
-uint32_t rt_gl_iptr_ret(CPU *c, intptr_t value);
-
-typedef int (*rt_gl_thunk)(CPU *c, void *fn);
-typedef struct { const char *name; rt_gl_thunk thunk; } RtGlEntry;
+// Les aides rt_gl_* (validation et traduction des pointeurs invités) sont
+// déclarées dans runtime/gl_bridge.h et définies dans runtime/gl.c.
+#include "gl_bridge.h"
 '''
 
 

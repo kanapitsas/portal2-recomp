@@ -78,6 +78,11 @@ void d3d9_iface_out(CPU *c, uint32_t guest, void *host, unsigned iface);
 void d3d9_child_out(CPU *c, uint32_t guest, void *host, unsigned iface, const void *parent, int shared);
 void *d3d9_hwnd(CPU *c, uint32_t guest);
 void *d3d9_shared(CPU *c, uint32_t guest, int user_memory, void **slot);
+// Après d3d9_shared : valide toute l'image de la mémoire utilisateur (slot
+// rendu par d3d9_shared, NULL sinon) ; d3d9_image_bytes : sa taille, 0 si le
+// format est inconnu du pont (tests).
+void d3d9_user_memory_check(CPU *c, void *slot, uint32_t width, uint32_t height, uint32_t format);
+uint64_t d3d9_image_bytes(uint32_t width, uint32_t height, uint32_t format);
 void *d3d9_params_in(CPU *c, uint32_t guest, D3d9HostParams *host, int input);
 void d3d9_params_out(CPU *c, uint32_t guest, const D3d9HostParams *host);
 void *d3d9_adapter_id_in(CPU *c, uint32_t guest, D3d9HostAdapterId *host);

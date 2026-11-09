@@ -6,8 +6,6 @@
 #include <string.h>
 #include <stdio.h>
 
-int rt_paths_case_insensitive(void);   // paths.c
-
 int rt_native_enabled(const char *name, int *state) {
     int value = __atomic_load_n(state, __ATOMIC_RELAXED);
     if (value < 0) {

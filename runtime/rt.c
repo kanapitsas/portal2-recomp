@@ -105,7 +105,6 @@ int rt_init(void) {
     return 0;
 }
 
-void rt_native_destroy(void);   // native.c
 void rt_destroy(void) {
     rt_shims_destroy();
     rt_native_destroy();
@@ -121,21 +120,22 @@ int rt_map(uint32_t addr, uint64_t size) {
     return mprotect(M + lo, (size_t)(hi - lo), PROT_READ | PROT_WRITE);
 }
 
-int rt_load_segment(const char *directory, const char *name, uint32_t offset,
-                    uint32_t addr, uint32_t filesz, uint32_t memsz) {
-    if (filesz > memsz || !memsz) return -1;
+int rt_read_file_range(const char *directory, const char *name, uint32_t offset, void *dst, size_t size) {
     char path[4096];
     int n = snprintf(path, sizeof(path), "%s/%s", directory, name);
     if (n < 0 || (size_t)n >= sizeof(path)) return -1;
     FILE *file = fopen(path, "rb");
     if (!file) { perror(path); return -1; }
-    int failed = fseek(file, (long)offset, SEEK_SET) || rt_map(addr, memsz);
-    if (!failed) {
-        failed = fread(M + addr, 1, filesz, file) != filesz;
-        if (!failed) memset(M + (uint64_t)addr + filesz, 0, memsz - filesz);
-    }
+    int failed = fseek(file, (long)offset, SEEK_SET) || fread(dst, 1, size, file) != size;
     fclose(file);
     return failed ? -1 : 0;
+}
+int rt_load_segment(const char *directory, const char *name, uint32_t offset,
+                    uint32_t addr, uint32_t filesz, uint32_t memsz) {
+    if (filesz > memsz || !memsz) return -1;
+    if (rt_map(addr, memsz) || rt_read_file_range(directory, name, offset, M + addr, filesz)) return -1;
+    memset(M + (uint64_t)addr + filesz, 0, memsz - filesz);
+    return 0;
 }
 
 __attribute__((noreturn)) void rt_trap(CPU *c, uint32_t pc, const char *why) {
@@ -161,7 +161,8 @@ CPU *rt_shim_cpu(void) { return shim_cpu; }
 typedef struct { const char *name; RtShimRoute route; _Atomic uint64_t calls; } ImportRoute;
 // Diagnostic P2_IMPORT_COUNTS=1 : nombre d'appels par import (route mémorisée),
 // les 40 premiers écrits toutes les 10 s sur stderr.
-static int import_counts = -1;
+static _Atomic int import_counts = -1;
+static pthread_once_t import_counts_once = PTHREAD_ONCE_INIT;
 static ImportRoute *_Atomic counted_routes[8192];
 static _Atomic unsigned counted_count;
 static void *import_counts_writer(void *unused) {
@@ -186,12 +187,14 @@ static void *import_counts_writer(void *unused) {
     }
     return NULL;
 }
+static void import_counts_init(void) {
+    int enabled = getenv("P2_IMPORT_COUNTS") != NULL;
+    if (enabled) { pthread_t t; pthread_create(&t, NULL, import_counts_writer, NULL); pthread_detach(t); }
+    atomic_store_explicit(&import_counts, enabled, memory_order_release);
+}
 static void count_route(ImportRoute *entry) {
-    if (import_counts < 0) {
-        import_counts = getenv("P2_IMPORT_COUNTS") != NULL;
-        if (import_counts) { pthread_t t; pthread_create(&t, NULL, import_counts_writer, NULL); pthread_detach(t); }
-    }
-    if (!import_counts) return;
+    pthread_once(&import_counts_once, import_counts_init);
+    if (!atomic_load_explicit(&import_counts, memory_order_relaxed)) return;
     unsigned i = atomic_fetch_add(&counted_count, 1);
     if (i < 8192) atomic_store(&counted_routes[i], entry);
 }
@@ -233,7 +236,7 @@ void rt_dispatch(CPU *c, uint32_t target) {
     ImportRoute *cached = slot ? atomic_load_explicit(slot, memory_order_acquire) : NULL;
     // Route connue : même fournisseur que la chaîne complète (contrat dans
     // rt.h) ; s'il refuse malgré tout, la chaîne est reprise ci-dessous.
-    if (cached && import_counts > 0) atomic_fetch_add_explicit(&cached->calls, 1, memory_order_relaxed);
+    if (cached && atomic_load_explicit(&import_counts, memory_order_relaxed) > 0) atomic_fetch_add_explicit(&cached->calls, 1, memory_order_relaxed);
     if (cached && run_shim(c, cached->name, &cached->route, NULL)) { rt_return(c); return; }
     const char *name = cached ? cached->name : rt_import_name(target);
     if (!name) name = rt_dynamic_import_name(target);
@@ -262,7 +265,7 @@ void rt_call_import(CPU *c, uint32_t target, uint32_t expected_return) {
     RouteSlot *slot = route_slot(target, 0);
     ImportRoute *cached = slot ? atomic_load_explicit(slot, memory_order_acquire) : NULL;
     if (cached) {
-        if (__builtin_expect(import_counts > 0, 0)) atomic_fetch_add_explicit(&cached->calls, 1, memory_order_relaxed);
+        if (__builtin_expect(atomic_load_explicit(&import_counts, memory_order_relaxed) > 0, 0)) atomic_fetch_add_explicit(&cached->calls, 1, memory_order_relaxed);
         PUSH(c, expected_return);
         c->eip = target;
         if (run_shim(c, cached->name, &cached->route, NULL)) { rt_return(c); return; }
@@ -352,8 +355,7 @@ __attribute__((noreturn)) void rt_memory_trap(uint32_t address, uint64_t length,
     guest_backtrace();
     abort();
 }
-void rt_check_span(uint32_t address, uint64_t length, int mode) {
-    if (!length) return;
+void rt_check_span_slow(uint32_t address, uint64_t length, int mode) {
     uint64_t end = (uint64_t)address + length;
     if (end > (UINT64_C(1) << 32)) rt_memory_trap(address, length, mode);
     uint64_t lo = address < RT_VM_BEGIN ? RT_VM_BEGIN : address;

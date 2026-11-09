@@ -8,8 +8,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static uint32_t arg(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
-static const char *text(CPU *c, uint32_t address) { rt_string_length(c, address); return GPTR(address); }
 
 // Longueur lisible d'au plus n octets, NUL compris s'il est atteint (comme strncmp).
 static uint32_t bounded(CPU *c, uint32_t address, uint32_t n) {
@@ -18,7 +16,7 @@ static uint32_t bounded(CPU *c, uint32_t address, uint32_t n) {
 }
 
 static uint32_t token(CPU *c, uint32_t start, uint32_t delimiters, uint32_t *save) {
-    const char *delim = text(c, delimiters);
+    const char *delim = rt_guest_cstr(c, delimiters);
     uint32_t s = start ? start : *save;
     if (!s) return 0;
     rt_string_length(c, s);
@@ -41,10 +39,8 @@ static uint32_t known_message(int code) {
     if (!native) return 0;
     pthread_mutex_lock(&lock);
     if (!messages[code]) {
-        const char *message = strerror(native);
-        size_t size = strlen(message) + 1;
-        uint32_t copy = rt_alloc((uint32_t)size);
-        if (copy) { memcpy(GPTR(copy), message, size); messages[code] = copy; }
+        uint32_t copy = rt_guest_strdup(strerror(native));
+        if (copy) messages[code] = copy;
     }
     uint32_t result = messages[code];
     pthread_mutex_unlock(&lock);
@@ -78,22 +74,22 @@ void rt_strings_extra_destroy(void) {
 
 static int strings_extra(CPU *c, const char *name) {
     if (!strcmp(name, "memchr")) {
-        uint32_t s = arg(c, 0), n = arg(c, 2);
-        const uint8_t *p = rt_span(c, s, n), *hit = memchr(p, (int)(uint8_t)arg(c, 1), n);
+        uint32_t s = rt_arg32(c, 0), n = rt_arg32(c, 2);
+        const uint8_t *p = rt_span(c, s, n), *hit = memchr(p, (int)(uint8_t)rt_arg32(c, 1), n);
         c->eax = hit ? s + (uint32_t)(hit - p) : 0;
     } else if (!strcmp(name, "strncmp")) {
-        uint32_t a = arg(c, 0), b = arg(c, 1), n = arg(c, 2);
+        uint32_t a = rt_arg32(c, 0), b = rt_arg32(c, 1), n = rt_arg32(c, 2);
         uint32_t la = bounded(c, a, n), lb = bounded(c, b, n);
         c->eax = (uint32_t)strncmp(GPTR(a), GPTR(b), la < lb ? la : lb);
     } else if (!strcmp(name, "strspn")) {
-        c->eax = (uint32_t)strspn(text(c, arg(c, 0)), text(c, arg(c, 1)));
+        c->eax = (uint32_t)strspn(rt_guest_cstr(c, rt_arg32(c, 0)), rt_guest_cstr(c, rt_arg32(c, 1)));
     } else if (!strcmp(name, "strcspn")) {
-        c->eax = (uint32_t)strcspn(text(c, arg(c, 0)), text(c, arg(c, 1)));
+        c->eax = (uint32_t)strcspn(rt_guest_cstr(c, rt_arg32(c, 0)), rt_guest_cstr(c, rt_arg32(c, 1)));
     } else if (!strcmp(name, "strtok")) {
-        c->eax = token(c, arg(c, 0), arg(c, 1), &strtok_state);
+        c->eax = token(c, rt_arg32(c, 0), rt_arg32(c, 1), &strtok_state);
     } else if (!strcmp(name, "__rawmemchr")) {
         // Sans borne : l'octet doit exister ; chaque page parcourue doit être lisible.
-        uint32_t s = arg(c, 0), at = s; uint8_t wanted = (uint8_t)arg(c, 1);
+        uint32_t s = rt_arg32(c, 0), at = s; uint8_t wanted = (uint8_t)rt_arg32(c, 1);
         for (;;) {
             uint32_t chunk = 0x1000u - (at & 0xfffu);
             const uint8_t *p = rt_span(c, at, chunk), *hit = memchr(p, wanted, chunk);
@@ -102,7 +98,7 @@ static int strings_extra(CPU *c, const char *name) {
         }
     } else if (!strcmp(name, "__xpg_basename")) {
         // basename POSIX de la glibc : retire les '/' finaux en écrivant un NUL dans la chaîne.
-        uint32_t path = arg(c, 0);
+        uint32_t path = rt_arg32(c, 0);
         if (!dot) { dot = rt_alloc(4); slash = rt_alloc(4); if (!dot || !slash) rt_trap(c, c->eip, "cannot allocate basename strings");
                     W8(dot, '.'); W8(dot + 1, 0); W8(slash, '/'); W8(slash + 1, 0); }
         uint32_t length = path ? rt_string_length(c, path) : 0;
@@ -116,25 +112,25 @@ static int strings_extra(CPU *c, const char *name) {
         c->eax = path + start;
     } else if (!strcmp(name, "__xpg_strerror_r")) {
         // strerror_r XSI : renvoie 0, EINVAL (numéro inconnu, message quand même écrit) ou ERANGE.
-        int code = (int32_t)arg(c, 0);
-        uint32_t buffer = arg(c, 1), size = arg(c, 2), message = known_message(code);
+        int code = (int32_t)rt_arg32(c, 0);
+        uint32_t buffer = rt_arg32(c, 1), size = rt_arg32(c, 2), message = known_message(code);
         char unknown[64];
         const char *source = message ? (const char *)GPTR(message) : unknown;
         if (!message) snprintf(unknown, sizeof(unknown), "Unknown error %d", code);
         size_t length = strlen(source);
-        if (!size) { c->eax = 34; return 1; }
+        if (!size) { c->eax = RT_ERANGE; return 1; }
         uint32_t n = length + 1 <= size ? (uint32_t)length + 1 : size;
         uint8_t *to = rt_write_span(c, buffer, n);
         memcpy(to, source, n - 1); to[n - 1] = 0;
-        c->eax = length + 1 > size ? 34u : message ? 0u : 22u;
+        c->eax = length + 1 > size ? RT_ERANGE : message ? 0u : RT_EINVAL;
     } else if (!strcmp(name, "strtok_r") || !strcmp(name, "__strtok_r")) {
-        uint32_t save_address = arg(c, 2), save = R32(save_address);
+        uint32_t save_address = rt_arg32(c, 2), save = R32(save_address);
         rt_write_span(c, save_address, 4);
-        c->eax = token(c, arg(c, 0), arg(c, 1), &save);
+        c->eax = token(c, rt_arg32(c, 0), rt_arg32(c, 1), &save);
         W32(save_address, save);
     } else if (!strcmp(name, "strerror_r")) {
-        int code = (int32_t)arg(c, 0);
-        uint32_t buffer = arg(c, 1), size = arg(c, 2), message = known_message(code);
+        int code = (int32_t)rt_arg32(c, 0);
+        uint32_t buffer = rt_arg32(c, 1), size = rt_arg32(c, 2), message = known_message(code);
         if (message) { c->eax = message; return 1; }
         char unknown[64];
         int length = snprintf(unknown, sizeof(unknown), "Unknown error %d", code);
@@ -146,7 +142,7 @@ static int strings_extra(CPU *c, const char *name) {
         c->eax = buffer;
     } else if (!strcmp(name, "__realpath_chk")) {
         // glibc : le tampon fourni doit pouvoir contenir PATH_MAX octets.
-        if (arg(c, 1) && arg(c, 2) < 4096) rt_trap(c, c->eip, "*** buffer overflow detected ***: __realpath_chk");
+        if (rt_arg32(c, 1) && rt_arg32(c, 2) < 4096) rt_trap(c, c->eip, "*** buffer overflow detected ***: __realpath_chk");
         return rt_shim(c, "realpath");
     } else return 0;
     return 1;

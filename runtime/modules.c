@@ -107,10 +107,8 @@ int rt_initialize_module(CPU *c, const GuestModule *module) {
 static void loader_error(const char *prefix, const char *name) {
     char buffer[1024];
     snprintf(buffer, sizeof(buffer), "%s: %s", prefix, name);
-    size_t size = strlen(buffer) + 1;
     if (error_string) rt_free(error_string);
-    error_string = rt_alloc((uint32_t)size);
-    if (error_string) memcpy(GPTR(error_string), buffer, size);
+    error_string = rt_guest_strdup(buffer);
 }
 
 // Program headers of a module, read from its mapped image like ld.so does.
@@ -137,10 +135,7 @@ static uint32_t segment(CPU *c, const GuestModule *module, uint32_t type, uint32
 static uint32_t module_name(const GuestModule *module, size_t index) {
     if (!names[index]) {
         // The main program is reported with an empty name, as by glibc.
-        const char *text = rt_module_symbol(module, "main") ? "" : module->name;
-        size_t size = strlen(text) + 1;
-        names[index] = rt_alloc((uint32_t)size);
-        if (names[index]) memcpy(GPTR(names[index]), text, size);
+        names[index] = rt_guest_strdup(rt_module_symbol(module, "main") ? "" : module->name);
     }
     return names[index];
 }
@@ -222,12 +217,7 @@ static int guest_dladdr(CPU *c, uint32_t address, uint32_t info) {
             const GuestSymbol *symbol = &module->symbols[s];
             if (symbol->address <= address && (!best || symbol->address > best->address)) best = symbol;
         }
-        uint32_t sname = 0;
-        if (best) {
-            size_t size = strlen(best->name) + 1;
-            sname = rt_alloc((uint32_t)size);   // copie invitée, gardée (glibc pointe dans .dynstr)
-            if (sname) memcpy(GPTR(sname), best->name, size);
-        }
+        uint32_t sname = best ? rt_guest_strdup(best->name) : 0;   // copie invitée, gardée (glibc pointe dans .dynstr)
         rt_write_span(c, info, 16);
         W32(info, module_name(module, i)); W32(info + 4, module->base);
         W32(info + 8, sname); W32(info + 12, best ? best->address : 0);
@@ -286,22 +276,10 @@ int rt_loader_shim(CPU *c, const char *name) {
     } else if (!strcmp(name, "dl_iterate_phdr")) {
         return iterate_phdr(c);
     } else if (!strcmp(name, "__cxa_finalize")) {
-        uint32_t dso = R32(c->esp + 4);
         // Run matching handlers in reverse registration order; each one is
         // cleared before it runs and the scan restarts, so handlers registered
-        // meanwhile are honoured, as in glibc.
-        for (;;) {
-            size_t i = rt_atexit_count();
-            uint32_t function = 0, arg = 0, owner = 0;
-            while (i--) {
-                if (rt_atexit_get(i, &function, &arg, &owner)) rt_trap(c, c->eip, "atexit table changed");
-                if (function && (!dso || owner == dso)) break;
-            }
-            if (i == (size_t)-1) break;
-            rt_atexit_clear(i);
-            uint32_t argument[] = {arg};
-            rt_invoke(c, function, argument, 1);
-        }
+        // meanwhile are honoured, as in glibc (rt_run_atexit, shims.c).
+        rt_run_atexit(c, R32(c->esp + 4));
     } else if (!strcmp(name, "_Jv_RegisterClasses")) {
         // Weak libgcj hook called by crtstuff only for a non-empty .jcr list.
         // No Java runtime exists here: registering nothing is what a process

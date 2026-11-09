@@ -22,7 +22,6 @@
 #include <unistd.h>
 #include <utime.h>
 
-static uint32_t arg(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
 
 typedef struct { int32_t f[9]; int32_t gmtoff; uint32_t zone; } GTm;   // sec,min,hour,mday,mon,year,wday,yday,isdst
 enum { SEC, MIN, HOUR, MDAY, MON, YEAR, WDAY, YDAY, ISDST };
@@ -38,20 +37,8 @@ static void write_tm(CPU *c, uint32_t a, const GTm *t) {
     W32(a + 36, (uint32_t)t->gmtoff); W32(a + 40, t->zone);
 }
 
-// Noms de fuseau en mémoire invitée, internés (pointeurs stables).
-typedef struct Zone { char *name; uint32_t address; struct Zone *next; } Zone;
-static Zone *zones;
-static uint32_t zone_string(CPU *c, const char *name) {
-    if (!name) name = "";
-    for (Zone *z = zones; z; z = z->next) if (!strcmp(z->name, name)) return z->address;
-    Zone *z = calloc(1, sizeof(*z));
-    size_t size = strlen(name) + 1;
-    if (!z || !(z->name = strdup(name)) || !(z->address = rt_alloc((uint32_t)size)))
-        rt_trap(c, c->eip, "cannot allocate guest time zone name");
-    memcpy(GPTR(z->address), name, size);
-    z->next = zones; zones = z;
-    return z->address;
-}
+// Noms de fuseau en mémoire invitée, internés (pointeurs stables, rt_intern_string).
+static uint32_t zone_string(CPU *c, const char *name) { return rt_intern_string(c, name ? name : ""); }
 static void from_host(CPU *c, const struct tm *h, GTm *t, int utc) {
     int32_t v[9] = {h->tm_sec, h->tm_min, h->tm_hour, h->tm_mday, h->tm_mon, h->tm_year, h->tm_wday, h->tm_yday, h->tm_isdst};
     memcpy(t->f, v, sizeof(v));
@@ -67,7 +54,7 @@ static void to_host(const GTm *t, struct tm *h) {
 // Conversion time_t -> struct tm (0 si impossible, errno Linux posé).
 static int split(CPU *c, int32_t when, GTm *t, int utc) {
     time_t value = when; struct tm h;
-    if (!(utc ? gmtime_r(&value, &h) : localtime_r(&value, &h))) { rt_set_errno(c, 75); return 0; }
+    if (!(utc ? gmtime_r(&value, &h) : localtime_r(&value, &h))) { rt_set_errno(c, RT_EOVERFLOW); return 0; }
     from_host(c, &h, t, utc);
     return 1;
 }
@@ -77,7 +64,7 @@ static int join(CPU *c, GTm *t, int utc, int32_t *result) {
     errno = 0;
     time_t value = utc ? timegm(&h) : mktime(&h);
     if (value == (time_t)-1 && errno) { rt_save_errno(c); return 0; }
-    if (value < INT32_MIN || value > INT32_MAX) { rt_set_errno(c, 75); return 0; }
+    if (value < INT32_MIN || value > INT32_MAX) { rt_set_errno(c, RT_EOVERFLOW); return 0; }
     from_host(c, &h, t, utc);
     *result = (int32_t)value;
     return 1;
@@ -102,22 +89,20 @@ int rt_time_data_import(const char *name, uint32_t address) {
 const char *const rt_day_names[7] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 const char *const rt_month_names[12] = {"January", "February", "March", "April", "May", "June", "July",
                                         "August", "September", "October", "November", "December"};
-#define day_names rt_day_names
-#define month_names rt_month_names
 static int leap(int64_t year) { return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0); }
 
 // asctime glibc : "%.3s %.3s%3d %.2d:%.2d:%.2d %d\n".
 static uint32_t asctime_into(CPU *c, const GTm *t, uint32_t out, uint32_t size) {
-    if (t->f[YEAR] > INT_MAX - 1900) { rt_set_errno(c, 75); return 0; }
+    if (t->f[YEAR] > INT_MAX - 1900) { rt_set_errno(c, RT_EOVERFLOW); return 0; }
     char text[128];
     int n = snprintf(text, sizeof(text), "%.3s %.3s%3d %.2d:%.2d:%.2d %d\n",
-                     t->f[WDAY] < 0 || t->f[WDAY] >= 7 ? "???" : day_names[t->f[WDAY]],
-                     t->f[MON] < 0 || t->f[MON] >= 12 ? "???" : month_names[t->f[MON]],
+                     t->f[WDAY] < 0 || t->f[WDAY] >= 7 ? "???" : rt_day_names[t->f[WDAY]],
+                     t->f[MON] < 0 || t->f[MON] >= 12 ? "???" : rt_month_names[t->f[MON]],
                      t->f[MDAY], t->f[HOUR], t->f[MIN], t->f[SEC], 1900 + t->f[YEAR]);
     uint32_t count = (uint32_t)n + 1 < size ? (uint32_t)n + 1 : size;
     memcpy(rt_write_span(c, out, count), text, count);
     W8(out + count - 1, 0);
-    if ((uint32_t)n >= size) { rt_set_errno(c, 75); return 0; }
+    if ((uint32_t)n >= size) { rt_set_errno(c, RT_EOVERFLOW); return 0; }
     return out;
 }
 
@@ -201,13 +186,13 @@ static void format(CPU *c, const Fmt *f, const GTm *t, Buf *out) {
         case 't': put_text(out, "\t", width, pad, 0, 0); break;
         case 'a': case 'A': {
             char abbreviated[4];
-            const char *name = t->f[WDAY] < 0 || t->f[WDAY] > 6 ? "?" : day_names[t->f[WDAY]];
+            const char *name = t->f[WDAY] < 0 || t->f[WDAY] > 6 ? "?" : rt_day_names[t->f[WDAY]];
             if (u == 'a' && name[1]) { snprintf(abbreviated, sizeof(abbreviated), "%s", name); name = abbreviated; }
             put_text(out, name, width, pad, upper || swap, 0); break;
         }
         case 'b': case 'h': case 'B': {
             char abbreviated[4];
-            const char *name = t->f[MON] < 0 || t->f[MON] > 11 ? "?" : month_names[t->f[MON]];
+            const char *name = t->f[MON] < 0 || t->f[MON] > 11 ? "?" : rt_month_names[t->f[MON]];
             if (u != 'B' && name[1]) { snprintf(abbreviated, sizeof(abbreviated), "%s", name); name = abbreviated; }
             put_text(out, name, width, pad, upper || swap, 0); break;
         }
@@ -358,8 +343,8 @@ static int parse(CPU *c, uint32_t *rp, const char *fmt, GTm *t, Parse *s) {
         case 'a': case 'A': {
             int found = -1;
             for (int d = 0; d < 7 && found < 0; ++d) {
-                char abbreviated[4]; snprintf(abbreviated, sizeof(abbreviated), "%s", day_names[d]);
-                if (match_name(rp, day_names[d]) || match_name(rp, abbreviated)) found = d;
+                char abbreviated[4]; snprintf(abbreviated, sizeof(abbreviated), "%s", rt_day_names[d]);
+                if (match_name(rp, rt_day_names[d]) || match_name(rp, abbreviated)) found = d;
             }
             if (found < 0) return 0;
             t->f[WDAY] = found; s->have_wday = 1; break;
@@ -367,8 +352,8 @@ static int parse(CPU *c, uint32_t *rp, const char *fmt, GTm *t, Parse *s) {
         case 'b': case 'B': case 'h': {
             int found = -1;
             for (int m = 0; m < 12 && found < 0; ++m) {
-                char abbreviated[4]; snprintf(abbreviated, sizeof(abbreviated), "%s", month_names[m]);
-                if (match_name(rp, month_names[m]) || match_name(rp, abbreviated)) found = m;
+                char abbreviated[4]; snprintf(abbreviated, sizeof(abbreviated), "%s", rt_month_names[m]);
+                if (match_name(rp, rt_month_names[m]) || match_name(rp, abbreviated)) found = m;
             }
             if (found < 0) return 0;
             t->f[MON] = found; s->have_mon = 1; s->want_xday = 1; break;
@@ -499,9 +484,9 @@ static uint32_t strptime_guest(CPU *c, uint32_t input, const char *fmt, uint32_t
 
 static int time_shim(CPU *c, const char *name) {
     if (!strcmp(name, "nanosleep")) {   // timespec i386 : {int32 tv_sec, int32 tv_nsec}
-        uint32_t request = arg(c, 0), remain = arg(c, 1);
+        uint32_t request = rt_arg32(c, 0), remain = rt_arg32(c, 1);
         int32_t sec = (int32_t)R32(request), nsec = (int32_t)R32(request + 4);
-        if (sec < 0 || nsec < 0 || nsec > 999999999) { rt_set_errno(c, EINVAL); c->eax = UINT32_MAX; return 1; }
+        if (sec < 0 || nsec < 0 || nsec > 999999999) { rt_set_errno(c, RT_EINVAL); c->eax = UINT32_MAX; return 1; }
         struct timespec delay = {sec, nsec}, left = {0, 0};
         unsigned saved = rt_guest_suspend();
         int result = nanosleep(&delay, &left), error = errno;
@@ -512,14 +497,14 @@ static int time_shim(CPU *c, const char *name) {
     }
     if (!strcmp(name, "sleep")) {       // renvoie les secondes non dormies
         unsigned saved = rt_guest_suspend();
-        unsigned left = sleep(arg(c, 0));
+        unsigned left = sleep(rt_arg32(c, 0));
         rt_guest_resume(saved);
         c->eax = left;
         return 1;
     }
     if (!strcmp(name, "times")) {
         // struct tms i386 : 4 clock_t de 32 bits, en tops de sysconf(_SC_CLK_TCK) = 100 sous Linux.
-        uint32_t out = arg(c, 0);
+        uint32_t out = rt_arg32(c, 0);
         struct timespec user = {0, 0}, now;
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &user);
         clock_gettime(CLOCK_MONOTONIC, &now);
@@ -533,8 +518,8 @@ static int time_shim(CPU *c, const char *name) {
     }
     static uint32_t tmbuf, ascbuf;
     if (!strcmp(name, "time")) {
-        time_t now = time(NULL); uint32_t out = arg(c, 0);
-        if (now > INT32_MAX) { rt_set_errno(c, 75); c->eax = UINT32_MAX; return 1; }
+        time_t now = time(NULL); uint32_t out = rt_arg32(c, 0);
+        if (now > INT32_MAX) { rt_set_errno(c, RT_EOVERFLOW); c->eax = UINT32_MAX; return 1; }
         if (out) W32(out, (uint32_t)now);
         c->eax = (uint32_t)now;
     } else if (!strcmp(name, "clock")) {
@@ -542,32 +527,32 @@ static int time_shim(CPU *c, const char *name) {
         if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts)) { c->eax = UINT32_MAX; return 1; }
         c->eax = (uint32_t)((uint64_t)ts.tv_sec * 1000000u + (uint64_t)ts.tv_nsec / 1000u);   // CLOCKS_PER_SEC
     } else if (!strcmp(name, "difftime")) {
-        rt_return_st0(c, (double)(int32_t)arg(c, 0) - (double)(int32_t)arg(c, 1));
+        rt_return_st0(c, (double)(int32_t)rt_arg32(c, 0) - (double)(int32_t)rt_arg32(c, 1));
     } else if (!strcmp(name, "mktime") || !strcmp(name, "timegm")) {
-        uint32_t address = arg(c, 0); GTm t; int32_t result;
+        uint32_t address = rt_arg32(c, 0); GTm t; int32_t result;
         read_tm(c, address, &t);
         if (name[0] == 'm') refresh_zone();
         if (join(c, &t, name[0] == 't', &result)) { write_tm(c, address, &t); c->eax = (uint32_t)result; }
         else c->eax = UINT32_MAX;
     } else if (!strcmp(name, "gmtime") || !strcmp(name, "localtime") || !strcmp(name, "gmtime_r") || !strcmp(name, "localtime_r")) {
         int utc = name[0] == 'g', reentrant = name[strlen(name) - 1] == 'r';
-        uint32_t out = reentrant ? arg(c, 1) : tmbuf;
+        uint32_t out = reentrant ? rt_arg32(c, 1) : tmbuf;
         if (!out && !(out = tmbuf = rt_alloc(TM_SIZE))) rt_trap(c, c->eip, "cannot allocate guest tm buffer");
         if (!utc && !reentrant) refresh_zone();
         GTm t;
-        c->eax = split(c, (int32_t)R32(arg(c, 0)), &t, utc) ? (write_tm(c, out, &t), out) : 0;
+        c->eax = split(c, (int32_t)R32(rt_arg32(c, 0)), &t, utc) ? (write_tm(c, out, &t), out) : 0;
     } else if (!strcmp(name, "asctime") || !strcmp(name, "asctime_r") || !strcmp(name, "ctime") || !strcmp(name, "ctime_r")) {
         int reentrant = name[strlen(name) - 1] == 'r';
         if (!reentrant && !ascbuf && !(ascbuf = rt_alloc(114))) rt_trap(c, c->eip, "cannot allocate guest asctime buffer");
-        uint32_t out = reentrant ? arg(c, 1) : ascbuf, size = reentrant ? 26 : 114;
+        uint32_t out = reentrant ? rt_arg32(c, 1) : ascbuf, size = reentrant ? 26 : 114;
         GTm t;
         if (name[0] == 'a') {
-            if (!arg(c, 0)) { rt_set_errno(c, 22); c->eax = 0; return 1; }
-            read_tm(c, arg(c, 0), &t);
+            if (!rt_arg32(c, 0)) { rt_set_errno(c, RT_EINVAL); c->eax = 0; return 1; }
+            read_tm(c, rt_arg32(c, 0), &t);
         } else {
             // ctime = asctime(localtime(t)) : le tampon tm statique est aussi écrit.
             if (!reentrant) refresh_zone();
-            if (!split(c, (int32_t)R32(arg(c, 0)), &t, 0)) { c->eax = 0; return 1; }
+            if (!split(c, (int32_t)R32(rt_arg32(c, 0)), &t, 0)) { c->eax = 0; return 1; }
             if (!reentrant) {
                 if (!tmbuf && !(tmbuf = rt_alloc(TM_SIZE))) rt_trap(c, c->eip, "cannot allocate guest tm buffer");
                 write_tm(c, tmbuf, &t);
@@ -575,16 +560,16 @@ static int time_shim(CPU *c, const char *name) {
         }
         c->eax = asctime_into(c, &t, out, size);
     } else if (!strcmp(name, "strftime") || !strcmp(name, "__strftime_l") || !strcmp(name, "__wcsftime_l")) {
-        if (name[0] == '_') rt_locale_object_utf8(c, arg(c, 4));
-        c->eax = rt_strftime(c, arg(c, 0), arg(c, 1), arg(c, 2), arg(c, 3), name[2] == 'w');
+        if (name[0] == '_') rt_locale_object_utf8(c, rt_arg32(c, 4));
+        c->eax = rt_strftime(c, rt_arg32(c, 0), rt_arg32(c, 1), rt_arg32(c, 2), rt_arg32(c, 3), name[2] == 'w');
     } else if (!strcmp(name, "strptime")) {
-        uint32_t input = arg(c, 0), fmt = arg(c, 1);
+        uint32_t input = rt_arg32(c, 0), fmt = rt_arg32(c, 1);
         rt_string_length(c, input); rt_string_length(c, fmt);
-        c->eax = strptime_guest(c, input, GPTR(fmt), arg(c, 2));
+        c->eax = strptime_guest(c, input, GPTR(fmt), rt_arg32(c, 2));
     } else if (!strcmp(name, "tzset")) {
         refresh_zone();
     } else if (!strcmp(name, "utime")) {
-        uint32_t path = arg(c, 0), times = arg(c, 1);
+        uint32_t path = rt_arg32(c, 0), times = rt_arg32(c, 1);
         rt_string_length(c, path);
         // Métadonnées modifiées : jamais sur la copie originale du jeu.
         const char *resolved = rt_write_path(GPTR(path), 1);

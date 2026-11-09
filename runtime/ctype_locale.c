@@ -26,8 +26,6 @@
 #include <wctype.h>
 #include <xlocale.h>
 
-static uint32_t arg(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
-static const char *gstr(CPU *c, uint32_t a) { rt_string_length(c, a); return GPTR(a); }
 
 // --- Tables à un octet (bits glibc little-endian : _ISbit) -----------------
 enum {
@@ -108,22 +106,21 @@ uint32_t rt_wcase(uint32_t wc, int upper, int utf8) {
 }
 
 // --- Chaînes invitées stables ---------------------------------------------
-typedef struct Interned { char *text; int wide; uint32_t address; struct Interned *next; } Interned;
-static Interned *interned;
+// Étroites : table internée commune (rt_intern_string). Larges (wchar_t UTF-32,
+// nl_langinfo) : liste propre, le texte ASCII étant élargi à 4 octets.
+typedef struct Interned { char *text; uint32_t address; struct Interned *next; } Interned;
+static Interned *interned_wide;
 static uint32_t intern(CPU *c, const char *text, int wide) {
-    for (Interned *s = interned; s; s = s->next)
-        if (s->wide == wide && !strcmp(s->text, text)) return s->address;
+    if (!wide) return rt_intern_string(c, text);
+    for (Interned *s = interned_wide; s; s = s->next)
+        if (!strcmp(s->text, text)) return s->address;
     size_t length = strlen(text) + 1;
     Interned *s = calloc(1, sizeof(*s));
     if (!s || !(s->text = strdup(text))) rt_trap(c, c->eip, "cannot intern locale string");
-    s->wide = wide;
-    s->address = rt_alloc((uint32_t)(wide ? length * 4 : length));
+    s->address = rt_alloc((uint32_t)(length * 4));
     if (!s->address) rt_trap(c, c->eip, "cannot allocate guest locale string");
-    for (size_t i = 0; i < length; ++i) {
-        if (wide) W32(s->address + 4 * (uint32_t)i, (uint8_t)text[i]);
-        else W8(s->address + (uint32_t)i, (uint8_t)text[i]);
-    }
-    s->next = interned; interned = s;
+    for (size_t i = 0; i < length; ++i) W32(s->address + 4 * (uint32_t)i, (uint8_t)text[i]);
+    s->next = interned_wide; interned_wide = s;
     return s->address;
 }
 
@@ -244,14 +241,13 @@ static void publish(CPU *c, Locale *l) {
 }
 
 // --- nl_langinfo -----------------------------------------------------------
-#define days rt_day_names      // tables partagées avec asctime/strftime (time.c)
-#define months rt_month_names
+// rt_day_names/rt_month_names : tables partagées avec asctime/strftime (time.c).
 // Élément LC_TIME texte (index 0..49 étroits, 52..100 larges correspondants).
 static const char *time_item(unsigned index, char *scratch) {
-    if (index <= 6) { snprintf(scratch, 4, "%s", days[index]); return scratch; }
-    if (index <= 13) return days[index - 7];
-    if (index <= 25) { snprintf(scratch, 4, "%s", months[index - 14]); return scratch; }
-    if (index <= 37) return months[index - 26];
+    if (index <= 6) { snprintf(scratch, 4, "%s", rt_day_names[index]); return scratch; }
+    if (index <= 13) return rt_day_names[index - 7];
+    if (index <= 25) { snprintf(scratch, 4, "%s", rt_month_names[index - 14]); return scratch; }
+    if (index <= 37) return rt_month_names[index - 26];
     switch (index) {
     case 38: return "AM"; case 39: return "PM";
     case 40: return "%a %b %e %H:%M:%S %Y"; case 41: return "%m/%d/%y";
@@ -299,13 +295,7 @@ static Domain *domain(CPU *c, const char *name) {
     d->next = domains; domains = d;
     return d;
 }
-static uint32_t guest_copy(CPU *c, uint32_t source) {
-    uint32_t n = rt_string_length(c, source);
-    uint32_t copy = rt_alloc(n + 1);
-    if (!copy) rt_trap(c, c->eip, "cannot allocate gettext string");
-    memcpy(GPTR(copy), GPTR(source), (size_t)n + 1);
-    return copy;
-}
+static uint32_t guest_copy(CPU *c, uint32_t source) { return rt_guest_strdup_or_trap(c, rt_guest_cstr(c, source)); }
 
 static int classify_shim(CPU *c, const char *name) {
     static const char *const names[] = {"isalnum", "isalpha", "isblank", "iscntrl", "isdigit", "isgraph",
@@ -314,7 +304,7 @@ static int classify_shim(CPU *c, const char *name) {
                                     IS_LOWER, IS_PRINT, IS_PUNCT, IS_SPACE, IS_UPPER, IS_XDIGIT};
     for (unsigned i = 0; i < sizeof(names) / sizeof(*names); ++i) {
         if (strcmp(name, names[i])) continue;
-        int32_t value = (int32_t)arg(c, 0);
+        int32_t value = (int32_t)rt_arg32(c, 0);
         // Hors [-128, 255], glibc indexe hors de sa table : comportement indéfini.
         if (value < -128 || value > 255) rt_trap(c, c->eip, "ctype argument out of range");
         c->eax = ascii_class(value) & bits[i];
@@ -329,14 +319,14 @@ static int locale_shim(CPU *c, const char *name) {
     else if (!strcmp(name, "__ctype_toupper_loc")) c->eax = ctype_tables(c) + TABLE_POINTERS + 8;
     else if (!strcmp(name, "__ctype_get_mb_cur_max")) c->eax = rt_locale_ctype_utf8() ? 6 : 1;
     else if (!strcmp(name, "setlocale")) {
-        int category = (int32_t)arg(c, 0); uint32_t request = arg(c, 1);
+        int category = (int32_t)rt_arg32(c, 0); uint32_t request = rt_arg32(c, 1);
         ensure_global();
-        if (category < 0 || category >= CATEGORIES) { rt_set_errno(c, 22); c->eax = 0; return 1; }
+        if (category < 0 || category >= CATEGORIES) { rt_set_errno(c, RT_EINVAL); c->eax = 0; return 1; }
         if (request) {
             const char *wanted[CATEGORIES]; memcpy(wanted, global_names, sizeof(wanted));
             uint32_t mask = category == LC_ALL_INDEX ? ALL_MASK : 1u << category;
-            if (category != LC_ALL_INDEX && strchr(gstr(c, request), '=')) { rt_set_errno(c, 22); c->eax = 0; return 1; }
-            if (!resolve(gstr(c, request), mask, wanted)) { rt_set_errno(c, 2); c->eax = 0; return 1; }
+            if (category != LC_ALL_INDEX && strchr(rt_guest_cstr(c, request), '=')) { rt_set_errno(c, RT_EINVAL); c->eax = 0; return 1; }
+            if (!resolve(rt_guest_cstr(c, request), mask, wanted)) { rt_set_errno(c, RT_ENOENT); c->eax = 0; return 1; }
             memcpy(global_names, wanted, sizeof(wanted));
         }
         char all[512];
@@ -354,54 +344,54 @@ static int locale_shim(CPU *c, const char *name) {
         for (unsigned i = 40; i < 54; ++i) W8(lconv + i, 127);
         c->eax = lconv;
     } else if (!strcmp(name, "__newlocale")) {
-        uint32_t mask = arg(c, 0), request = arg(c, 1), base = arg(c, 2);
+        uint32_t mask = rt_arg32(c, 0), request = rt_arg32(c, 1), base = rt_arg32(c, 2);
         if (mask == 1u << LC_ALL_INDEX) mask = ALL_MASK;
-        if ((mask & ~ALL_MASK) || !request) { rt_set_errno(c, 22); c->eax = 0; return 1; }
+        if ((mask & ~ALL_MASK) || !request) { rt_set_errno(c, RT_EINVAL); c->eax = 0; return 1; }
         Locale *b = base ? find_locale(base) : NULL;
         if (base && !b) rt_trap(c, c->eip, "newlocale on unknown base locale_t");
         const char *wanted[CATEGORIES];
         for (int i = 0; i < CATEGORIES; ++i) wanted[i] = b ? b->names[i] : name_copy("C");
-        if (!resolve(gstr(c, request), mask, wanted)) { rt_set_errno(c, 2); c->eax = 0; return 1; }
+        if (!resolve(rt_guest_cstr(c, request), mask, wanted)) { rt_set_errno(c, RT_ENOENT); c->eax = 0; return 1; }
         if (!b) {
             b = calloc(1, sizeof(*b));
-            if (!b || !(b->address = rt_alloc(LOCALE_SIZE))) { free(b); rt_set_errno(c, 12); c->eax = 0; return 1; }
+            if (!b || !(b->address = rt_alloc(LOCALE_SIZE))) { free(b); rt_set_errno(c, RT_ENOMEM); c->eax = 0; return 1; }
             b->next = locales; locales = b;
         }
         memcpy(b->names, wanted, sizeof(wanted));
         publish(c, b); c->eax = b->address;
     } else if (!strcmp(name, "__duplocale")) {
-        const char *const *source = names_of(c, arg(c, 0));
+        const char *const *source = names_of(c, rt_arg32(c, 0));
         Locale *l = calloc(1, sizeof(*l));
-        if (!l || !(l->address = rt_alloc(LOCALE_SIZE))) { free(l); rt_set_errno(c, 12); c->eax = 0; return 1; }
+        if (!l || !(l->address = rt_alloc(LOCALE_SIZE))) { free(l); rt_set_errno(c, RT_ENOMEM); c->eax = 0; return 1; }
         memcpy(l->names, source, sizeof(l->names));
         l->next = locales; locales = l;
         publish(c, l); c->eax = l->address;
     } else if (!strcmp(name, "__freelocale")) {
-        uint32_t address = arg(c, 0);
+        uint32_t address = rt_arg32(c, 0);
         Locale **link = &locales;
         while (*link && (*link)->address != address) link = &(*link)->next;
         if (!*link || address == thread_locale) rt_trap(c, c->eip, "freelocale on unknown or active locale_t");
         Locale *l = *link; *link = l->next;
         rt_free(l->address); free(l);
     } else if (!strcmp(name, "__uselocale")) {
-        uint32_t next = arg(c, 0);
+        uint32_t next = rt_arg32(c, 0);
         c->eax = thread_locale ? thread_locale : RT_LC_GLOBAL_LOCALE;
         if (next == RT_LC_GLOBAL_LOCALE) thread_locale = 0;
         else if (next) { if (!find_locale(next)) rt_trap(c, c->eip, "uselocale on unknown locale_t"); thread_locale = next; }
     } else if (!strcmp(name, "__nl_langinfo_l")) {
-        uint32_t item = arg(c, 0);
-        if (!langinfo(c, item, rt_locale_object_utf8(c, arg(c, 1)), &c->eax)) {
+        uint32_t item = rt_arg32(c, 0);
+        if (!langinfo(c, item, rt_locale_object_utf8(c, rt_arg32(c, 1)), &c->eax)) {
             fprintf(stderr, "unimplemented nl_langinfo item %#x\n", item);
             rt_trap(c, c->eip, "unimplemented nl_langinfo item");
         }
     } else if (!strcmp(name, "strcoll") || !strcmp(name, "__strcoll_l")) {
         // C et C.UTF-8 : ordre des octets (= ordre des points de code en UTF-8).
-        if (name[0] == '_') names_of(c, arg(c, 2));
-        int r = strcmp(gstr(c, arg(c, 0)), gstr(c, arg(c, 1)));
+        if (name[0] == '_') names_of(c, rt_arg32(c, 2));
+        int r = strcmp(rt_guest_cstr(c, rt_arg32(c, 0)), rt_guest_cstr(c, rt_arg32(c, 1)));
         c->eax = (uint32_t)(r < 0 ? -1 : r > 0);
     } else if (!strcmp(name, "__strxfrm_l")) {
-        uint32_t dest = arg(c, 0), source = arg(c, 1), n = arg(c, 2);
-        names_of(c, arg(c, 3));
+        uint32_t dest = rt_arg32(c, 0), source = rt_arg32(c, 1), n = rt_arg32(c, 2);
+        names_of(c, rt_arg32(c, 3));
         uint32_t length = rt_string_length(c, source);
         if (n) {
             uint32_t count = length + 1 < n ? length + 1 : n;
@@ -409,35 +399,35 @@ static int locale_shim(CPU *c, const char *name) {
         }
         c->eax = length;
     } else if (!strcmp(name, "__wctype_l")) {
-        const char *property = gstr(c, arg(c, 0));
-        names_of(c, arg(c, 1));
+        const char *property = rt_guest_cstr(c, rt_arg32(c, 0));
+        names_of(c, rt_arg32(c, 1));
         c->eax = 0;   // descripteur opaque : 1..12, 0 = propriété inconnue
         for (uint32_t i = 1; i <= 12; ++i) if (!strcmp(property, class_names[i])) c->eax = i;
     } else if (!strcmp(name, "__iswctype_l")) {
-        uint32_t wc = arg(c, 0), descriptor = arg(c, 1);
-        int utf8 = rt_locale_object_utf8(c, arg(c, 2));
+        uint32_t wc = rt_arg32(c, 0), descriptor = rt_arg32(c, 1);
+        int utf8 = rt_locale_object_utf8(c, rt_arg32(c, 2));
         if (descriptor > 12) rt_trap(c, c->eip, "invalid wctype_t descriptor");
         c->eax = descriptor ? (uint32_t)rt_wclass(wc, (int)descriptor, utf8) : 0;
     } else if (!strcmp(name, "__towlower_l") || !strcmp(name, "__towupper_l")) {
-        c->eax = rt_wcase(arg(c, 0), name[5] == 'u', rt_locale_object_utf8(c, arg(c, 1)));
+        c->eax = rt_wcase(rt_arg32(c, 0), name[5] == 'u', rt_locale_object_utf8(c, rt_arg32(c, 1)));
     } else if (!strcmp(name, "gettext") || !strcmp(name, "dgettext") || !strcmp(name, "dcgettext")) {
         // Aucun catalogue : glibc renvoie le msgid (et préserve errno).
-        uint32_t msgid = arg(c, name[0] == 'g' ? 0 : 1);
+        uint32_t msgid = rt_arg32(c, name[0] == 'g' ? 0 : 1);
         if (msgid) rt_string_length(c, msgid);
         c->eax = msgid;
     } else if (!strcmp(name, "bindtextdomain") || !strcmp(name, "bind_textdomain_codeset")) {
-        uint32_t domain_name = arg(c, 0), value = arg(c, 1);
-        if (!domain_name || !*gstr(c, domain_name)) { c->eax = 0; return 1; }
-        Domain *d = domain(c, gstr(c, domain_name));
+        uint32_t domain_name = rt_arg32(c, 0), value = rt_arg32(c, 1);
+        if (!domain_name || !*rt_guest_cstr(c, domain_name)) { c->eax = 0; return 1; }
+        Domain *d = domain(c, rt_guest_cstr(c, domain_name));
         int directory = name[4] == 't';
         uint32_t *slot = directory ? &d->directory : &d->codeset;
         if (value) { if (*slot) rt_free(*slot); *slot = guest_copy(c, value); }
         c->eax = *slot;
         if (!c->eax && directory) c->eax = intern(c, "/usr/share/locale", 0);
     } else if (!strcmp(name, "textdomain")) {
-        uint32_t value = arg(c, 0);
+        uint32_t value = rt_arg32(c, 0);
         if (!current_domain) current_domain = intern(c, "messages", 0);
-        if (value) current_domain = *gstr(c, value) ? guest_copy(c, value) : intern(c, "messages", 0);
+        if (value) current_domain = *rt_guest_cstr(c, value) ? guest_copy(c, value) : intern(c, "messages", 0);
         c->eax = current_domain;
     } else return classify_shim(c, name);
     return 1;

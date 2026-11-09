@@ -92,11 +92,11 @@ typedef struct Environment { char *name; uint32_t value; struct Environment *nex
 static Environment *environment;
 static uint32_t environ_slots[4];
 static size_t environ_slot_count;
-static uint32_t argument(CPU *c, unsigned i) { return R32(c->esp + 4 + 4 * i); }
 
-// errno Darwin et Linux coïncident de 1 à 34 (sauf EAGAIN/EDEADLK : 11/35 inversés).
+// errno Darwin et Linux coïncident de 1 à 34 (sauf EAGAIN/EDEADLK : 11/35 inversés,
+// traités avant la table par rt_linux_errno/rt_darwin_errno).
 static const struct { int darwin, linux_value; } errno_table[] = {
-    {EDEADLK, 35}, {EAGAIN, 11}, {EINPROGRESS, 115}, {EALREADY, 114}, {ENOTSOCK, 88},
+    {EINPROGRESS, 115}, {EALREADY, 114}, {ENOTSOCK, 88},
     {EDESTADDRREQ, 89}, {EMSGSIZE, 90}, {EPROTOTYPE, 91}, {ENOPROTOOPT, 92},
     {EPROTONOSUPPORT, 93}, {ESOCKTNOSUPPORT, 94}, {ENOTSUP, 95}, {EOPNOTSUPP, 95},
     {EPFNOSUPPORT, 96}, {EAFNOSUPPORT, 97}, {EADDRINUSE, 98}, {EADDRNOTAVAIL, 99},
@@ -129,7 +129,6 @@ int rt_darwin_errno(int value) {
         if (errno_table[i].linux_value == value) return errno_table[i].darwin;
     return 0;
 }
-#define linux_errno rt_linux_errno
 static uint32_t errno_slot(CPU *c) {
     if (!errno_address) {
         errno_address = rt_alloc(4);
@@ -139,9 +138,7 @@ static uint32_t errno_slot(CPU *c) {
     return errno_address;
 }
 void rt_set_errno(CPU *c, int value) { W32(errno_slot(c), (uint32_t)value); }
-void rt_save_errno(CPU *c) { rt_set_errno(c, linux_errno(errno)); }
-#define save_errno rt_save_errno
-static const char *string(CPU *c, uint32_t address) { rt_string_length(c, address); return GPTR(address); }
+void rt_save_errno(CPU *c) { rt_set_errno(c, rt_linux_errno(errno)); }
 static int mode_writes(const char *mode) { return mode[0] == 'w' || mode[0] == 'a' || strchr(mode, '+') != NULL; }
 const char *rt_stream_path(const char *path, const char *mode) {
     return mode_writes(mode) ? rt_write_path(path, mode[0] != 'w') : rt_read_path(path);
@@ -376,30 +373,6 @@ void rt_libc_destroy(void) {
 }
 
 
-// Imports fréquents en jeu (P2_IMPORT_COUNTS) : corps partagés par
-// rt_libc_shim et par leurs routes directes (rt_libc_resolve).
-static void libc_case(CPU *c, int lower) {
-    int value = (int32_t)argument(c, 0);
-    if (value < -1 || value > 255) rt_trap(c, c->eip, "invalid ctype input");
-    c->eax = (uint32_t)(lower ? tolower(value) : toupper(value));
-}
-static void libc_casecmp(CPU *c, int whole) {
-    const char *lhs = string(c, argument(c, 0)), *rhs = string(c, argument(c, 1));
-    c->eax = (uint32_t)(whole ? strcasecmp(lhs, rhs) : strncasecmp(lhs, rhs, argument(c, 2)));
-}
-static int tolower_handler(CPU *c, const char *n, void *d) { (void)n; (void)d; libc_case(c, 1); return 1; }
-static int toupper_handler(CPU *c, const char *n, void *d) { (void)n; (void)d; libc_case(c, 0); return 1; }
-static int strcasecmp_handler(CPU *c, const char *n, void *d) { (void)n; (void)d; libc_casecmp(c, 1); return 1; }
-static int strncasecmp_handler(CPU *c, const char *n, void *d) { (void)n; (void)d; libc_casecmp(c, 0); return 1; }
-int rt_libc_resolve(const char *name, RtShimRoute *route) {
-    if (!strcmp(name, "tolower")) route->handler = tolower_handler;
-    else if (!strcmp(name, "toupper")) route->handler = toupper_handler;
-    else if (!strcmp(name, "strcasecmp")) route->handler = strcasecmp_handler;
-    else if (!strcmp(name, "strncasecmp")) route->handler = strncasecmp_handler;
-    else return 0;
-    return 1;
-}
-
 // Diagnostic P2_TRACE_FILES=<texte> : ouvertures, suppressions et renommages
 // invités dont le chemin contient ce texte (sans casse ; « 1 » : tous), avec
 // le chemin hôte et le résultat, sur la sortie d'erreur.
@@ -412,117 +385,63 @@ int rt_trace_files(const char *path) {
     if (!read) { filter = getenv("P2_TRACE_FILES"); read = 1; }
     return rt_trace_files_match(filter, path);
 }
-int rt_libc_shim(CPU *c, const char *name) {
+
+// Opérations de rt_libc_shim : la recherche par nom (table triée, bsearch)
+// n'a lieu qu'une fois par import, rt_libc_resolve mémorisant l'opération
+// dans la route (route->data) pour les appels suivants.
+enum {
+    // Flux (FILE invité)
+    OP_FOPEN, OP_FCLOSE, OP_FGETS, OP_FPUTS, OP_FPUTC, OP_FGETC, OP_FEOF, OP_FERROR, OP_CLEARERR,
+    OP_FILENO, OP_REWIND, OP_FTELL, OP_FTELLO64, OP_FSEEK, OP_FSEEKO64, OP_FFLUSH, OP_FREAD, OP_FWRITE,
+    // Descripteurs
+    OP_OPEN, OP_OPEN_2, OP_CLOSE, OP_READ, OP_WRITE, OP_LSEEK, OP_LSEEK64, OP_ACCESS, OP_READLINK,
+    // Répertoires
+    OP_CHDIR, OP_GETCWD, OP_OPENDIR, OP_CLOSEDIR, OP_READDIR, OP_READDIR64,
+    // Chaînes et caractères
+    OP_STRCHR, OP_STRRCHR, OP_STRPBRK, OP_STRSTR, OP_STRCASESTR, OP_STRCASECMP, OP_STRNCASECMP,
+    OP_STRDUP, OP_STRCAT, OP_STRNCAT, OP_STRTOD, OP_STRTOL, OP_STRTOUL, OP_STRERROR, OP_TOLOWER, OP_TOUPPER,
+    // Système
+    OP_ERRNO_LOCATION, OP_GETENV, OP_GETTIMEOFDAY, OP_SYSCALL, OP_CLOCK_GETTIME, OP_SYSCONF,
+    OP_MMAP, OP_MMAP64, OP_MUNMAP, OP_MPROTECT, OP_MADVISE, OP_USLEEP, OP_GETPPID,
+};
+typedef struct { const char *name; int op; } LibcName;
+// Triée par strcmp ('_' précède les lettres) ; vérifiée au démarrage.
+static const LibcName libc_names[] = {
+    {"__errno_location", OP_ERRNO_LOCATION}, {"__open64_2", OP_OPEN_2}, {"__open_2", OP_OPEN_2},
+    {"access", OP_ACCESS}, {"chdir", OP_CHDIR}, {"clearerr", OP_CLEARERR}, {"clock_gettime", OP_CLOCK_GETTIME},
+    {"close", OP_CLOSE}, {"closedir", OP_CLOSEDIR}, {"fclose", OP_FCLOSE}, {"feof", OP_FEOF}, {"ferror", OP_FERROR},
+    {"fflush", OP_FFLUSH}, {"fgetc", OP_FGETC}, {"fgets", OP_FGETS}, {"fileno", OP_FILENO},
+    {"fileno_unlocked", OP_FILENO}, {"fopen", OP_FOPEN}, {"fopen64", OP_FOPEN}, {"fputc", OP_FPUTC},
+    {"fputs", OP_FPUTS}, {"fread", OP_FREAD}, {"fseek", OP_FSEEK}, {"fseeko", OP_FSEEK}, {"fseeko64", OP_FSEEKO64},
+    {"ftell", OP_FTELL}, {"ftello", OP_FTELL}, {"ftello64", OP_FTELLO64}, {"fwrite", OP_FWRITE}, {"getc", OP_FGETC},
+    {"getcwd", OP_GETCWD}, {"getenv", OP_GETENV}, {"getppid", OP_GETPPID}, {"gettimeofday", OP_GETTIMEOFDAY},
+    {"lseek", OP_LSEEK}, {"lseek64", OP_LSEEK64}, {"madvise", OP_MADVISE}, {"mmap", OP_MMAP}, {"mmap64", OP_MMAP64},
+    {"mprotect", OP_MPROTECT}, {"munmap", OP_MUNMAP}, {"open", OP_OPEN}, {"open64", OP_OPEN}, {"opendir", OP_OPENDIR},
+    {"putc", OP_FPUTC}, {"read", OP_READ}, {"readdir", OP_READDIR}, {"readdir64", OP_READDIR64},
+    {"readlink", OP_READLINK}, {"rewind", OP_REWIND}, {"strcasecmp", OP_STRCASECMP}, {"strcasestr", OP_STRCASESTR},
+    {"strcat", OP_STRCAT}, {"strchr", OP_STRCHR}, {"strdup", OP_STRDUP}, {"strerror", OP_STRERROR},
+    {"strncasecmp", OP_STRNCASECMP}, {"strncat", OP_STRNCAT}, {"strpbrk", OP_STRPBRK}, {"strrchr", OP_STRRCHR},
+    {"strstr", OP_STRSTR}, {"strtod", OP_STRTOD}, {"strtol", OP_STRTOL}, {"strtoul", OP_STRTOUL},
+    {"syscall", OP_SYSCALL}, {"sysconf", OP_SYSCONF}, {"tolower", OP_TOLOWER}, {"toupper", OP_TOUPPER},
+    {"usleep", OP_USLEEP}, {"write", OP_WRITE},
+};
+enum { LIBC_NAME_COUNT = sizeof(libc_names) / sizeof(*libc_names) };
+static int libc_name_compare(const void *key, const void *entry) { return strcmp(key, ((const LibcName *)entry)->name); }
+static int libc_op(const char *name) {
+    const LibcName *found = bsearch(name, libc_names, LIBC_NAME_COUNT, sizeof(*libc_names), libc_name_compare);
+    return found ? found->op : -1;
+}
+__attribute__((constructor)) static void libc_names_check(void) {
+    for (size_t i = 1; i < LIBC_NAME_COUNT; ++i)
+        if (strcmp(libc_names[i - 1].name, libc_names[i].name) >= 0) { fputs("libc_names is not sorted\n", stderr); abort(); }
+}
+
+// --- Flux invités (FILE) ----------------------------------------------------
+static void libc_stream(CPU *c, int op) {
     uint32_t a, b, n;
-    if (!strcmp(name, "__errno_location")) c->eax = errno_slot(c);
-    else if (!strcmp(name, "getenv")) {
-        const char *key = string(c, argument(c, 0));
-        const char *value = getenv(key);
-        c->eax = 0;
-        if (value) {
-            Environment *item = environment;
-            while (item && strcmp(item->name, key)) item = item->next;
-            if (!item) {
-                item = calloc(1, sizeof(*item));
-                if (!item) return 1;
-                item->name = strdup(key);
-                if (!item->name) { free(item); return 1; }
-                item->next = environment; environment = item;
-            }
-            size_t size = strlen(value) + 1;
-            if (!item->value || strcmp(GPTR(item->value), value)) {
-                uint32_t copy = size > UINT32_MAX ? 0 : rt_alloc((uint32_t)size);
-                if (copy) { memcpy(GPTR(copy), value, size); item->value = copy; }
-            }
-            c->eax = item->value;
-        }
-    } else if (!strcmp(name, "gettimeofday")) {
-        a = argument(c, 0); b = argument(c, 1);
-        struct timeval tv; struct timezone tz;
-        int result = gettimeofday(&tv, b ? &tz : NULL);
-        if (!result && (tv.tv_sec > INT32_MAX || tv.tv_sec < INT32_MIN)) { errno = EOVERFLOW; result = -1; }
-        if (!result && a) { rt_span(c, a, 8); W32(a, (uint32_t)tv.tv_sec); W32(a + 4, (uint32_t)tv.tv_usec); }
-        if (!result && b) { rt_span(c, b, 8); W32(b, (uint32_t)tz.tz_minuteswest); W32(b + 4, (uint32_t)tz.tz_dsttime); }
-        if (result) save_errno(c);
-        c->eax = (uint32_t)result;
-    } else if (!strcmp(name, "syscall")) {
-        uint32_t number = argument(c, 0);
-        if (number == 355) { // i386 SYS_getrandom
-            a = argument(c, 1); n = argument(c, 2); b = argument(c, 3);
-            if (b & ~7u) { errno = EINVAL; save_errno(c); c->eax = UINT32_MAX; }
-            else { arc4random_buf(rt_write_span(c, a, n), n); c->eax = n; }
-        } else if (number == 224) {
-            c->eax = !c->tid || c->tid==1 ? (uint32_t)getpid() : 0x40000000u+c->tid;
-        } else if (number == 240) {
-            int result=rt_futex(c,argument(c,1),argument(c,2),argument(c,3),argument(c,4));
-            if(result<0)save_errno(c);
-            c->eax=(uint32_t)result;
-        } else {
-            fprintf(stderr, "unimplemented i386 syscall %u\n", number);
-            rt_trap(c, c->eip, "unimplemented i386 syscall");
-        }
-    } else if (!strcmp(name, "clock_gettime")) {
-        int id = (int32_t)argument(c, 0); b = argument(c, 1);
-        clockid_t native;
-        switch (id) {
-        case 0: case 5: native = CLOCK_REALTIME; break;
-        case 1: case 6: case 7: native = CLOCK_MONOTONIC; break;
-        case 2: native = CLOCK_PROCESS_CPUTIME_ID; break;
-        case 3: native = CLOCK_THREAD_CPUTIME_ID; break;
-        case 4: native = CLOCK_MONOTONIC_RAW; break;
-        default: errno = EINVAL; save_errno(c); c->eax = UINT32_MAX; return 1;
-        }
-        struct timespec value;
-        int result = clock_gettime(native, &value);
-        if (!result && (value.tv_sec > INT32_MAX || value.tv_sec < INT32_MIN)) { result = -1; errno = EOVERFLOW; }
-        if (!result) { rt_span(c, b, 8); W32(b, (uint32_t)value.tv_sec); W32(b + 4, (uint32_t)value.tv_nsec); }
-        else save_errno(c);
-        c->eax = (uint32_t)result;
-    } else if (!strcmp(name, "sysconf")) {
-        int key = (int32_t)argument(c, 0); long result;
-        switch (key) {
-        case 2: result = sysconf(_SC_CLK_TCK); break;
-        case 4: result = sysconf(_SC_OPEN_MAX); break;
-        case 30: result = 4096; break; // virtual i386/Linux page size
-        case 83: case 84: result = (long)rt_guest_cpu_count(); break; // même topologie que CPUID et /proc
-        case 85: case 86: {
-            uint64_t memory = 0; size_t size = sizeof(memory);
-            if (sysctlbyname("hw.memsize", &memory, &size, NULL, 0)) result = -1;
-            else result = (long)((memory < UINT64_C(2147483648) ? memory : UINT64_C(2147483648)) / 4096);
-            break;
-        }
-        default: errno = EINVAL; result = -1;
-        }
-        if (result == -1) save_errno(c);
-        c->eax = (uint32_t)result;
-    } else if (!strcmp(name, "mmap") || !strcmp(name, "mmap64")) {
-        uint64_t offset = argument(c, 5);
-        if (!strcmp(name, "mmap64")) offset |= (uint64_t)argument(c, 6) << 32;
-        c->eax = rt_mmap(c, argument(c, 0), argument(c, 1), (int)argument(c, 2), argument(c, 3), (int32_t)argument(c, 4), offset);
-        if (c->eax == UINT32_MAX) {
-            save_errno(c);
-            if (getenv("P2_TRACE_MMAP"))
-                fprintf(stderr, "[mmap] échec hint=%#x len=%#x prot=%u flags=%#x fd=%d errno=%d (mappé %u Mio)\n",
-                        argument(c, 0), argument(c, 1), argument(c, 2), argument(c, 3), (int32_t)argument(c, 4), errno,
-                        rt_vm_mapped_bytes() >> 20);
-        }
-    } else if (!strcmp(name, "munmap") || !strcmp(name, "mprotect") || !strcmp(name, "madvise")) {
-        a = argument(c, 0); b = argument(c, 1); int result;
-        if (!strcmp(name, "munmap")) result = rt_munmap(a, b);
-        else if (!strcmp(name, "mprotect")) result = rt_mprotect(a, b, (int)argument(c, 2));
-        else result = rt_madvise(a, b, (int)argument(c, 2));
-        if (result) save_errno(c);
-        c->eax = (uint32_t)result;
-    } else if (!strcmp(name, "usleep")) {
-        uint32_t usec = argument(c, 0);
-        struct timespec delay = {usec / 1000000u, (long)(usec % 1000000u) * 1000};
-        unsigned saved=rt_guest_suspend();
-        int result = nanosleep(&delay, NULL);
-        int saved_errno=errno;rt_guest_resume(saved);errno=saved_errno;
-        if (result) save_errno(c);
-        c->eax = (uint32_t)result;
-    } else if (!strcmp(name, "fopen") || !strcmp(name, "fopen64")) {
-        const char *path = string(c, argument(c, 0)), *mode = string(c, argument(c, 1));
+    switch (op) {
+    case OP_FOPEN: {
+        const char *path = rt_guest_cstr(c, rt_arg32(c, 0)), *mode = rt_guest_cstr(c, rt_arg32(c, 1));
         FILE *file;
         {   // /proc/cpuinfo et les autres fichiers /proc viennent de procfs.c (rt_read_path)
             // Lecture d'un fichier que le cache sait absent : ENOENT sans fopen
@@ -536,74 +455,101 @@ int rt_libc_shim(CPU *c, const char *name) {
                 if (rt_trace_files(path)) { int kept = errno; fprintf(stderr, "[fichiers] fopen %s \"%s\" -> %s : %s\n", path, mode, resolved ? resolved : "(null)", file ? "ok" : strerror(errno)); errno = kept; }
             }
         }
-        if (!file) { save_errno(c); c->eax = 0; }
+        if (!file) { rt_save_errno(c); c->eax = 0; }
         else {
             c->eax = new_stream(file);
-            if (!c->eax) { fclose(file); errno = ENOMEM; save_errno(c); }
+            if (!c->eax) { fclose(file); errno = ENOMEM; rt_save_errno(c); }
         }
-    } else if (!strcmp(name, "fclose")) {
-        Stream *s = lookup(c, argument(c, 0), 0);
+        break;
+    }
+    case OP_FCLOSE: {
+        Stream *s = lookup(c, rt_arg32(c, 0), 0);
         // Flux standard : glibc ferme stderr pour de bon, mais le runtime garde
         // le FILE hôte (un fputs(stderr) ultérieur du jeu doit rester possible).
         int result = s->standard ? fflush(s->file) : fclose(s->file);
         if (!s->standard) s->file = NULL;
-        if (result) save_errno(c);
+        if (result) rt_save_errno(c);
         release_if_unused(s);
         c->eax = (uint32_t)result;
-    } else if (!strcmp(name, "fgets")) {
-        a = argument(c, 0); n = argument(c, 1);
-        Stream *s = lookup(c, argument(c, 2), 0);
+        break;
+    }
+    case OP_FGETS: {
+        a = rt_arg32(c, 0); n = rt_arg32(c, 1);
+        Stream *s = lookup(c, rt_arg32(c, 2), 0);
         rt_write_span(c, a, n);
         char *result = fgets(GPTR(a), (int)n, s->file);
-        if (!result && ferror(s->file)) save_errno(c);
+        if (!result && ferror(s->file)) rt_save_errno(c);
         c->eax = result ? a : 0;
-    } else if (!strcmp(name, "fputs")) {
-        const char *value = string(c, argument(c, 0));
-        Stream *s = lookup(c, argument(c, 1), 0);
-        int result = fputs(value, s->file); if (result == EOF) save_errno(c);
+        break;
+    }
+    case OP_FPUTS: {
+        const char *value = rt_guest_cstr(c, rt_arg32(c, 0));
+        Stream *s = lookup(c, rt_arg32(c, 1), 0);
+        int result = fputs(value, s->file); if (result == EOF) rt_save_errno(c);
         c->eax = (uint32_t)result;
-    } else if (!strcmp(name, "fputc") || !strcmp(name, "putc")) {
-        Stream *s = lookup(c, argument(c, 1), 0);
-        int result = fputc((int)argument(c, 0), s->file); if (result == EOF) save_errno(c);
+        break;
+    }
+    case OP_FPUTC: {
+        Stream *s = lookup(c, rt_arg32(c, 1), 0);
+        int result = fputc((int)rt_arg32(c, 0), s->file); if (result == EOF) rt_save_errno(c);
         c->eax = (uint32_t)result;
-    } else if (!strcmp(name, "fgetc") || !strcmp(name, "getc")) {
-        Stream *s = lookup(c, argument(c, 0), 0);
-        int result = fgetc(s->file); if (result == EOF && ferror(s->file)) save_errno(c);
+        break;
+    }
+    case OP_FGETC: {
+        Stream *s = lookup(c, rt_arg32(c, 0), 0);
+        int result = fgetc(s->file); if (result == EOF && ferror(s->file)) rt_save_errno(c);
         c->eax = (uint32_t)result;
-    } else if (!strcmp(name, "feof") || !strcmp(name, "ferror") || !strcmp(name, "clearerr") ||
-               !strcmp(name, "fileno") || !strcmp(name, "fileno_unlocked") || !strcmp(name, "rewind")) {
-        Stream *s=lookup(c,argument(c,0),0);
-        if(!strcmp(name,"feof"))c->eax=(uint32_t)feof(s->file);
-        else if(!strcmp(name,"ferror"))c->eax=(uint32_t)ferror(s->file);
-        else if(!strcmp(name,"clearerr"))clearerr(s->file);
-        else if(!strcmp(name,"rewind"))rewind(s->file);
-        else {int result=fileno(s->file);if(result<0)save_errno(c);c->eax=(uint32_t)result;}
-    } else if (!strcmp(name, "ftell") || !strcmp(name, "ftello") || !strcmp(name, "ftello64")) {
-        off_t result=ftello(lookup(c,argument(c,0),0)->file);
-        int wide=!strcmp(name,"ftello64");
+        break;
+    }
+    case OP_FEOF: case OP_FERROR: case OP_CLEARERR: case OP_FILENO: case OP_REWIND: {
+        Stream *s=lookup(c,rt_arg32(c,0),0);
+        if(op==OP_FEOF)c->eax=(uint32_t)feof(s->file);
+        else if(op==OP_FERROR)c->eax=(uint32_t)ferror(s->file);
+        else if(op==OP_CLEARERR)clearerr(s->file);
+        else if(op==OP_REWIND)rewind(s->file);
+        else {int result=fileno(s->file);if(result<0)rt_save_errno(c);c->eax=(uint32_t)result;}
+        break;
+    }
+    case OP_FTELL: case OP_FTELLO64: {
+        off_t result=ftello(lookup(c,rt_arg32(c,0),0)->file);
+        int wide=op==OP_FTELLO64;
         if(!wide && result>INT32_MAX){result=-1;errno=EOVERFLOW;}
-        if(result<0)save_errno(c);
+        if(result<0)rt_save_errno(c);
         c->eax=(uint32_t)result;if(wide)c->edx=(uint32_t)((uint64_t)result>>32);
-    } else if (!strcmp(name, "fseek") || !strcmp(name, "fseeko") || !strcmp(name, "fseeko64")) {
-        Stream *s=lookup(c,argument(c,0),0);
-        int wide=!strcmp(name,"fseeko64"), whence=(int)argument(c,wide?3:2);
-        int64_t offset=wide?(int64_t)(((uint64_t)argument(c,2)<<32)|argument(c,1)):(int32_t)argument(c,1);
-        int result=fseeko(s->file,offset,whence);if(result)save_errno(c);c->eax=(uint32_t)result;
-    } else if (!strcmp(name, "fflush")) {
-        a = argument(c, 0);
-        int result = fflush(a ? lookup(c, a, 0)->file : NULL); if (result) save_errno(c);
+        break;
+    }
+    case OP_FSEEK: case OP_FSEEKO64: {
+        Stream *s=lookup(c,rt_arg32(c,0),0);
+        int wide=op==OP_FSEEKO64, whence=(int)rt_arg32(c,wide?3:2);
+        int64_t offset=wide?(int64_t)(((uint64_t)rt_arg32(c,2)<<32)|rt_arg32(c,1)):(int32_t)rt_arg32(c,1);
+        int result=fseeko(s->file,offset,whence);if(result)rt_save_errno(c);c->eax=(uint32_t)result;
+        break;
+    }
+    case OP_FFLUSH: {
+        a = rt_arg32(c, 0);
+        int result = fflush(a ? lookup(c, a, 0)->file : NULL); if (result) rt_save_errno(c);
         c->eax = (uint32_t)result;
-    } else if (!strcmp(name, "fread") || !strcmp(name, "fwrite")) {
-        a = argument(c, 0); b = argument(c, 1); n = argument(c, 2);
-        Stream *s = lookup(c, argument(c, 3), 0);
-        void *buffer = !strcmp(name, "fread") ? rt_write_span(c, a, (uint64_t)b * n) : rt_span(c, a, (uint64_t)b * n);
+        break;
+    }
+    default: {   // OP_FREAD, OP_FWRITE
+        a = rt_arg32(c, 0); b = rt_arg32(c, 1); n = rt_arg32(c, 2);
+        Stream *s = lookup(c, rt_arg32(c, 3), 0);
+        void *buffer = op == OP_FREAD ? rt_write_span(c, a, (uint64_t)b * n) : rt_span(c, a, (uint64_t)b * n);
         // La porte invitée reste tenue pendant l'E/S disque (ici, read/write, stat.c) : la
         // relâcher exigerait de figer le tampon invité contre munmap/mprotect concurrents.
-        size_t count = !strcmp(name, "fread") ? fread(buffer, b, n, s->file) : fwrite(buffer, b, n, s->file);
-        if (count < n && ferror(s->file)) save_errno(c);
+        size_t count = op == OP_FREAD ? fread(buffer, b, n, s->file) : fwrite(buffer, b, n, s->file);
+        if (count < n && ferror(s->file)) rt_save_errno(c);
         c->eax = (uint32_t)count;
-    } else if (!strcmp(name, "open") || !strcmp(name, "open64") || !strcmp(name, "__open_2") || !strcmp(name, "__open64_2")) {
-        const char *path = string(c, argument(c, 0)); uint32_t flags = argument(c, 1);
+    }
+    }
+}
+
+// --- Descripteurs de fichiers -----------------------------------------------
+static void libc_fd(CPU *c, int op) {
+    uint32_t a, n;
+    switch (op) {
+    case OP_OPEN: case OP_OPEN_2: {
+        const char *path = rt_guest_cstr(c, rt_arg32(c, 0)); uint32_t flags = rt_arg32(c, 1);
         int native = (int)(flags & 3);
         if (flags & 0x40) native |= O_CREAT;
         if (flags & 0x80) native |= O_EXCL;
@@ -621,88 +567,112 @@ int rt_libc_shim(CPU *c, const char *name) {
         if (flags & 0x20000) native |= O_NOFOLLOW;
         if (flags & 0x80000) native |= O_CLOEXEC;
         uint32_t supported = 3u|0x40|0x80|0x100|0x200|0x400|0x800|0x1000|0x8000|0x10000|0x20000|0x80000|0x100000;
-        if (flags & ~supported) { errno = ENOTSUP; save_errno(c); c->eax = UINT32_MAX; return 1; }
+        if (flags & ~supported) { errno = ENOTSUP; rt_save_errno(c); c->eax = UINT32_MAX; return; }
         if (!(flags & (3u | 0x40)) && rt_access_cached(path, F_OK) == -1 && errno == ENOENT) {
-            save_errno(c); c->eax = UINT32_MAX; return 1;   // lecture d'un absent connu : ENOENT direct
+            rt_save_errno(c); c->eax = UINT32_MAX; return;   // lecture d'un absent connu : ENOENT direct
         }
-        if ((flags & 0x40) && strstr(name, "_2")) rt_trap(c,c->eip,"invalid fortified open flags");
-        mode_t mode = flags & 0x40 ? (mode_t)argument(c, 2) : 0;
+        if ((flags & 0x40) && op == OP_OPEN_2) rt_trap(c,c->eip,"invalid fortified open flags");
+        mode_t mode = flags & 0x40 ? (mode_t)rt_arg32(c, 2) : 0;
         if((flags & 0xc0)==0xc0) {
             const char *existing=rt_read_path(path);
             if(!existing || !access(existing,F_OK)) {
                 if(existing)errno=EEXIST;
-                save_errno(c);c->eax=UINT32_MAX;return 1;
+                rt_save_errno(c);c->eax=UINT32_MAX;return;
             }
         }
         const char *resolved=(flags & (3|0x40|0x200|0x400))?rt_write_path(path,!(flags & (0x80|0x200))):rt_read_path(path);
-        int result = resolved?open(resolved, native, mode):-1; if (result < 0) save_errno(c);
+        int result = resolved?open(resolved, native, mode):-1; if (result < 0) rt_save_errno(c);
         if (rt_trace_files(path)) { int kept = errno; fprintf(stderr, "[fichiers] open %s %#x -> %s : %s\n", path, flags, resolved ? resolved : "(null)", result >= 0 ? "ok" : strerror(errno)); errno = kept; }
         c->eax = (uint32_t)result;
-    } else if (!strcmp(name, "chdir")) {
-        const char *resolved=rt_read_path(string(c,argument(c,0)));
-        int result=resolved?chdir(resolved):-1;
-        if(result)save_errno(c);
+        break;
+    }
+    case OP_CLOSE: {
+        int result = close((int32_t)rt_arg32(c, 0)); if (result) rt_save_errno(c);
+        c->eax = (uint32_t)result;
+        break;
+    }
+    case OP_READ: case OP_WRITE: {
+        int fd = (int32_t)rt_arg32(c, 0); a=rt_arg32(c,1); n=rt_arg32(c,2);
+        if (n > 0x7ffff000u) n=0x7ffff000u;
+        ssize_t result;
+        if (op==OP_READ) result=read(fd,rt_write_span(c,a,n),n);
+        else result=write(fd,rt_span(c,a,n),n);
+        if (result < 0) rt_save_errno(c);
         c->eax=(uint32_t)result;
-    } else if (!strcmp(name, "getcwd")) {
-        a=argument(c,0); n=argument(c,1);
-        char *result=getcwd(NULL,0);
-        if(!result){save_errno(c);c->eax=0;}
-        else {
-            size_t length=strlen(result)+1;
-            // glibc : tampon fourni de taille 0 → EINVAL ; trop petit → ERANGE
-            // (aussi pour un tampon alloué de taille demandée, sans l'allouer).
-            int error=a && !n?EINVAL:n && length>n?ERANGE:0;
-            if(!error && !a){ a=rt_alloc(n?n:(uint32_t)length); if(!a)error=ENOMEM; }
-            if(error){errno=error;save_errno(c);c->eax=0;}
-            else {memcpy(rt_write_span(c,a,length),result,length);c->eax=a;}
-            free(result);
+        break;
+    }
+    case OP_LSEEK: case OP_LSEEK64: {
+        int fd=(int32_t)rt_arg32(c,0); int64_t offset=(int32_t)rt_arg32(c,1); int whence=(int)rt_arg32(c,2);
+        int wide=op==OP_LSEEK64;
+        if (wide) { offset=(int64_t)(((uint64_t)rt_arg32(c,2)<<32)|rt_arg32(c,1)); whence=(int)rt_arg32(c,3); }
+        off_t result=lseek(fd,(off_t)offset,whence);
+        if (!wide && result > INT32_MAX) { result=-1; errno=EOVERFLOW; }
+        if (result < 0) rt_save_errno(c);
+        c->eax=(uint32_t)result; if (wide) c->edx=(uint32_t)((uint64_t)result>>32);
+        break;
+    }
+    case OP_ACCESS: {
+        const char *path = rt_guest_cstr(c, rt_arg32(c, 0));
+        int result;
+        if ((result = rt_access_cached(path, (int)rt_arg32(c, 1))) == -2) {
+            const char *resolved=rt_read_path(path); result=resolved?access(resolved,(int)rt_arg32(c,1)):-1;
         }
-    } else if (!strcmp(name, "readlink")) {
-        const char *path=string(c,argument(c,0)); a=argument(c,1); n=argument(c,2);
+        if (result) rt_save_errno(c);
+        c->eax = (uint32_t)result;
+        break;
+    }
+    default: {   // OP_READLINK
+        const char *path=rt_guest_cstr(c,rt_arg32(c,0)); a=rt_arg32(c,1); n=rt_arg32(c,2);
         ssize_t result;
         char own_exe[48]; snprintf(own_exe,sizeof(own_exe),"/proc/%d/exe",(int)getpid());
         if(!strcmp(path,"/proc/self/exe") || !strcmp(path,own_exe)) {
             const char *program=rt_program_path(); size_t count=strlen(program);if(count>n)count=n;
             memcpy(rt_write_span(c,a,count),program,count);result=(ssize_t)count;
         } else {const char *resolved=rt_read_path(path);result=resolved?readlink(resolved,rt_write_span(c,a,n),n):-1;}
-        if(result<0)save_errno(c);
+        if(result<0)rt_save_errno(c);
         c->eax=(uint32_t)result;
-    } else if (!strcmp(name, "close")) {
-        int result = close((int32_t)argument(c, 0)); if (result) save_errno(c);
-        c->eax = (uint32_t)result;
-    } else if (!strcmp(name, "read") || !strcmp(name, "write")) {
-        int fd = (int32_t)argument(c, 0); a=argument(c,1); n=argument(c,2);
-        if (n > 0x7ffff000u) n=0x7ffff000u;
-        ssize_t result;
-        if (!strcmp(name,"read")) result=read(fd,rt_write_span(c,a,n),n);
-        else result=write(fd,rt_span(c,a,n),n);
-        if (result < 0) save_errno(c);
+    }
+    }
+}
+
+// --- Répertoires ------------------------------------------------------------
+static void libc_dir(CPU *c, int op) {
+    uint32_t a, n;
+    switch (op) {
+    case OP_CHDIR: {
+        const char *resolved=rt_read_path(rt_guest_cstr(c,rt_arg32(c,0)));
+        int result=resolved?chdir(resolved):-1;
+        if(result)rt_save_errno(c);
         c->eax=(uint32_t)result;
-    } else if (!strcmp(name, "lseek") || !strcmp(name, "lseek64")) {
-        int fd=(int32_t)argument(c,0); int64_t offset=(int32_t)argument(c,1); int whence=(int)argument(c,2);
-        int wide=!strcmp(name,"lseek64");
-        if (wide) { offset=(int64_t)(((uint64_t)argument(c,2)<<32)|argument(c,1)); whence=(int)argument(c,3); }
-        off_t result=lseek(fd,(off_t)offset,whence);
-        if (!wide && result > INT32_MAX) { result=-1; errno=EOVERFLOW; }
-        if (result < 0) save_errno(c);
-        c->eax=(uint32_t)result; if (wide) c->edx=(uint32_t)((uint64_t)result>>32);
-    } else if (!strcmp(name, "access")) {
-        const char *path = string(c, argument(c, 0));
-        int result;
-        if ((result = rt_access_cached(path, (int)argument(c, 1))) == -2) {
-            const char *resolved=rt_read_path(path); result=resolved?access(resolved,(int)argument(c,1)):-1;
+        break;
+    }
+    case OP_GETCWD: {
+        a=rt_arg32(c,0); n=rt_arg32(c,1);
+        char *result=getcwd(NULL,0);
+        if(!result){rt_save_errno(c);c->eax=0;}
+        else {
+            size_t length=strlen(result)+1;
+            // glibc : tampon fourni de taille 0 → EINVAL ; trop petit → ERANGE
+            // (aussi pour un tampon alloué de taille demandée, sans l'allouer).
+            int error=a && !n?EINVAL:n && length>n?ERANGE:0;
+            if(!error && !a){ a=rt_alloc(n?n:(uint32_t)length); if(!a)error=ENOMEM; }
+            if(error){errno=error;rt_save_errno(c);c->eax=0;}
+            else {memcpy(rt_write_span(c,a,length),result,length);c->eax=a;}
+            free(result);
         }
-        if (result) save_errno(c);
-        c->eax = (uint32_t)result;
-    } else if (!strcmp(name, "opendir")) {
+        break;
+    }
+    case OP_OPENDIR: {
         RtDirEntry *entries; size_t count;
-        if (rt_dir_entries(string(c, argument(c, 0)), &entries, &count)) { save_errno(c); c->eax = 0; return 1; }
+        if (rt_dir_entries(rt_guest_cstr(c, rt_arg32(c, 0)), &entries, &count)) { rt_save_errno(c); c->eax = 0; return; }
         Stream *s = new_stream_record();
-        if (!s) { rt_dir_entries_free(entries, count); errno = ENOMEM; save_errno(c); c->eax = 0; return 1; }
+        if (!s) { rt_dir_entries_free(entries, count); errno = ENOMEM; rt_save_errno(c); c->eax = 0; return; }
         s->directory = 1; s->entries = entries; s->entry_count = count;
         c->eax = s->handle;
-    } else if (!strcmp(name, "closedir")) {
-        Stream *s = lookup(c, argument(c, 0), 1);
+        break;
+    }
+    case OP_CLOSEDIR: {
+        Stream *s = lookup(c, rt_arg32(c, 0), 1);
         rt_dir_entries_free(s->entries, s->entry_count);
         s->entries = NULL; s->entry_count = 0; s->directory = 0;
         if (s->dirent) rt_free(s->dirent);
@@ -710,65 +680,77 @@ int rt_libc_shim(CPU *c, const char *name) {
         s->dirent = s->dirent64 = 0;
         c->eax = 0;
         release_if_unused(s);
-    } else if (!strcmp(name, "readdir") || !strcmp(name, "readdir64")) {
+        break;
+    }
+    default: {   // OP_READDIR, OP_READDIR64
         // Tampon invité par flux, de la taille d'un dirent à nom de 255 octets
         // (268 ou 280 octets, comme sizeof(struct dirent) glibc i386).
-        Stream *s = lookup(c, argument(c, 0), 1);
-        int wide = !strcmp(name, "readdir64");
+        Stream *s = lookup(c, rt_arg32(c, 0), 1);
+        int wide = op == OP_READDIR64;
         c->eax = 0;
-        if (s->position >= s->entry_count) return 1; // fin : errno inchangé
+        if (s->position >= s->entry_count) return; // fin : errno inchangé
         RtDirEntry *entry = &s->entries[s->position];
-        if (strlen(entry->name) > 255) { errno = ENAMETOOLONG; save_errno(c); return 1; }
-        if (!wide && entry->ino > UINT32_MAX) { ++s->position; errno = EOVERFLOW; save_errno(c); return 1; }
+        if (strlen(entry->name) > 255) { errno = ENAMETOOLONG; rt_save_errno(c); return; }
+        if (!wide && entry->ino > UINT32_MAX) { ++s->position; errno = EOVERFLOW; rt_save_errno(c); return; }
         uint32_t *slot = wide ? &s->dirent64 : &s->dirent;
         if (!*slot) *slot = rt_alloc(rt_dirent_size(wide, 255));
-        if (!*slot) { errno = ENOMEM; save_errno(c); return 1; }
+        if (!*slot) { errno = ENOMEM; rt_save_errno(c); return; }
         ++s->position;
         rt_write_dirent(*slot, wide, entry, s->position);
         c->eax = *slot;
-    } else if (!strcmp(name, "strpbrk") || !strcmp(name, "strstr") || !strcmp(name, "strcasestr") || !strcmp(name, "strchr") || !strcmp(name, "strrchr")) {
-        a = argument(c, 0); const char *source = string(c, a); const char *result;
-        if (!strcmp(name, "strchr")) result = strchr(source, (int)argument(c, 1));
-        else if (!strcmp(name, "strrchr")) result = strrchr(source, (int)argument(c, 1));
+    }
+    }
+}
+
+// --- Chaînes et caractères --------------------------------------------------
+static void libc_string(CPU *c, int op) {
+    uint32_t a, b;
+    switch (op) {
+    case OP_STRCHR: case OP_STRRCHR: case OP_STRPBRK: case OP_STRSTR: case OP_STRCASESTR: {
+        a = rt_arg32(c, 0); const char *source = rt_guest_cstr(c, a); const char *result;
+        if (op == OP_STRCHR) result = strchr(source, (int)rt_arg32(c, 1));
+        else if (op == OP_STRRCHR) result = strrchr(source, (int)rt_arg32(c, 1));
         else {
-            const char *other = string(c, argument(c, 1));
-            result = !strcmp(name, "strpbrk") ? strpbrk(source, other) : !strcmp(name, "strstr") ? strstr(source, other) : strcasestr(source, other);
+            const char *other = rt_guest_cstr(c, rt_arg32(c, 1));
+            result = op == OP_STRPBRK ? strpbrk(source, other) : op == OP_STRSTR ? strstr(source, other) : strcasestr(source, other);
         }
         c->eax = result ? a + (uint32_t)(result - source) : 0;
-    } else if (!strcmp(name, "strcasecmp") || !strcmp(name, "strncasecmp")) {
-        libc_casecmp(c, name[3] == 'c');
-    } else if (!strcmp(name, "strdup")) {
-        a = argument(c, 0); n = rt_string_length(c, a);
-        c->eax = rt_alloc(n + 1);
-        if (c->eax) memcpy(GPTR(c->eax), GPTR(a), (size_t)n + 1);
-        else { errno = ENOMEM; save_errno(c); }
-    } else if (!strcmp(name, "strcat") || !strcmp(name, "strncat")) {
-        a = argument(c, 0); b = argument(c, 1);
+        break;
+    }
+    case OP_STRCASECMP: case OP_STRNCASECMP: {
+        const char *lhs = rt_guest_cstr(c, rt_arg32(c, 0)), *rhs = rt_guest_cstr(c, rt_arg32(c, 1));
+        c->eax = (uint32_t)(op == OP_STRCASECMP ? strcasecmp(lhs, rhs) : strncasecmp(lhs, rhs, rt_arg32(c, 2)));
+        break;
+    }
+    case OP_STRDUP:
+        c->eax = rt_guest_strdup(rt_guest_cstr(c, rt_arg32(c, 0)));
+        if (!c->eax) { errno = ENOMEM; rt_save_errno(c); }
+        break;
+    case OP_STRCAT: case OP_STRNCAT: {
+        a = rt_arg32(c, 0); b = rt_arg32(c, 1);
         uint32_t destination_length = rt_string_length(c, a);
-        uint32_t count = rt_bounded_strnlen(c, b, !strcmp(name, "strcat") ? UINT32_MAX : argument(c, 2));
+        uint32_t count = rt_bounded_strnlen(c, b, op == OP_STRCAT ? UINT32_MAX : rt_arg32(c, 2));
         rt_write_span(c, a, (uint64_t)destination_length + count + 1);
         memmove(GPTR(a + destination_length), GPTR(b), count);
         W8(a + destination_length + count, 0); c->eax = a;
-    } else if (!strcmp(name, "strtod")) {
-        a = argument(c, 0); b = argument(c, 1);
-        const char *source = string(c, a); char *end;
+        break;
+    }
+    case OP_STRTOD: {
+        a = rt_arg32(c, 0); b = rt_arg32(c, 1);
+        const char *source = rt_guest_cstr(c, a); char *end;
         errno = 0; double value = strtod(source, &end);
         if (b) { uint32_t at = a + (uint32_t)(end - source); memcpy(rt_write_span(c, b, 4), &at, 4); }
-        if (errno) save_errno(c);
+        if (errno) rt_save_errno(c);
         fpush(c, value);
-    } else if (!strcmp(name, "strerror")) {
-        c->eax = rt_strerror_message((int32_t)argument(c, 0));
-    } else if (!strcmp(name, "tolower") || !strcmp(name, "toupper")) {
-        libc_case(c, name[2] == 'l');
-    } else if (!strcmp(name, "getppid")) {
-        c->eax = (uint32_t)getppid();
-    } else if (!strcmp(name, "strtol") || !strcmp(name, "strtoul")) {
-        a = argument(c, 0); b = argument(c, 1);
-        const char *source = string(c, a); char *end;
-        int base = (int32_t)argument(c, 2);
-        if (base && (base < 2 || base > 36)) { errno = EINVAL; save_errno(c); c->eax = 0; return 1; }
+        break;
+    }
+    case OP_STRTOL: case OP_STRTOUL: {
+        a = rt_arg32(c, 0); b = rt_arg32(c, 1);
+        const char *source = rt_guest_cstr(c, a); char *end;
+        int base = (int32_t)rt_arg32(c, 2);
+        if (base && (base < 2 || base > 36)) { errno = EINVAL; rt_save_errno(c); c->eax = 0; return; }
         errno = 0;
-        if (!strcmp(name, "strtol")) {
+        if (op == OP_STRTOL) {
             long value = strtol(source, &end, base);
             if (value > INT32_MAX) { value = INT32_MAX; errno = ERANGE; }
             if (value < INT32_MIN) { value = INT32_MIN; errno = ERANGE; }
@@ -780,9 +762,169 @@ int rt_libc_shim(CPU *c, const char *name) {
             if (errno == ERANGE || magnitude > UINT32_MAX) { c->eax = UINT32_MAX; errno = ERANGE; }
             else c->eax = (uint32_t)value;
         }
-        if (b) { rt_span(c, b, 4); W32(b, a + (uint32_t)(end - source)); }
-        if (errno) save_errno(c);
-    } else return 0;
+        if (b) { rt_write_span(c, b, 4); W32(b, a + (uint32_t)(end - source)); }
+        if (errno) rt_save_errno(c);
+        break;
+    }
+    case OP_STRERROR:
+        c->eax = rt_strerror_message((int32_t)rt_arg32(c, 0));
+        break;
+    default: {   // OP_TOLOWER, OP_TOUPPER
+        int value = (int32_t)rt_arg32(c, 0);
+        if (value < -1 || value > 255) rt_trap(c, c->eip, "invalid ctype input");
+        c->eax = (uint32_t)(op == OP_TOLOWER ? tolower(value) : toupper(value));
+    }
+    }
+}
+
+// --- Système ----------------------------------------------------------------
+static void libc_system(CPU *c, int op) {
+    uint32_t a, b, n;
+    switch (op) {
+    case OP_ERRNO_LOCATION: c->eax = errno_slot(c); break;
+    case OP_GETENV: {
+        const char *key = rt_guest_cstr(c, rt_arg32(c, 0));
+        const char *value = getenv(key);
+        c->eax = 0;
+        if (value) {
+            Environment *item = environment;
+            while (item && strcmp(item->name, key)) item = item->next;
+            if (!item) {
+                item = calloc(1, sizeof(*item));
+                if (!item) return;
+                item->name = strdup(key);
+                if (!item->name) { free(item); return; }
+                item->next = environment; environment = item;
+            }
+            if (!item->value || strcmp(GPTR(item->value), value)) {
+                uint32_t copy = rt_guest_strdup(value);
+                if (copy) item->value = copy;
+            }
+            c->eax = item->value;
+        }
+        break;
+    }
+    case OP_GETTIMEOFDAY: {
+        a = rt_arg32(c, 0); b = rt_arg32(c, 1);
+        struct timeval tv; struct timezone tz;
+        int result = gettimeofday(&tv, b ? &tz : NULL);
+        if (!result && (tv.tv_sec > INT32_MAX || tv.tv_sec < INT32_MIN)) { errno = EOVERFLOW; result = -1; }
+        if (!result && a) { rt_write_span(c, a, 8); W32(a, (uint32_t)tv.tv_sec); W32(a + 4, (uint32_t)tv.tv_usec); }
+        if (!result && b) { rt_write_span(c, b, 8); W32(b, (uint32_t)tz.tz_minuteswest); W32(b + 4, (uint32_t)tz.tz_dsttime); }
+        if (result) rt_save_errno(c);
+        c->eax = (uint32_t)result;
+        break;
+    }
+    case OP_SYSCALL: {
+        uint32_t number = rt_arg32(c, 0);
+        if (number == 355) { // i386 SYS_getrandom
+            a = rt_arg32(c, 1); n = rt_arg32(c, 2); b = rt_arg32(c, 3);
+            if (b & ~7u) { errno = EINVAL; rt_save_errno(c); c->eax = UINT32_MAX; }
+            else { arc4random_buf(rt_write_span(c, a, n), n); c->eax = n; }
+        } else if (number == 224) {
+            c->eax = !c->tid || c->tid==1 ? (uint32_t)getpid() : 0x40000000u+c->tid;
+        } else if (number == 240) {
+            int result=rt_futex(c,rt_arg32(c,1),rt_arg32(c,2),rt_arg32(c,3),rt_arg32(c,4));
+            if(result<0)rt_save_errno(c);
+            c->eax=(uint32_t)result;
+        } else {
+            fprintf(stderr, "unimplemented i386 syscall %u\n", number);
+            rt_trap(c, c->eip, "unimplemented i386 syscall");
+        }
+        break;
+    }
+    case OP_CLOCK_GETTIME: {
+        int id = (int32_t)rt_arg32(c, 0); b = rt_arg32(c, 1);
+        clockid_t native;
+        switch (id) {
+        case 0: case 5: native = CLOCK_REALTIME; break;
+        case 1: case 6: case 7: native = CLOCK_MONOTONIC; break;
+        case 2: native = CLOCK_PROCESS_CPUTIME_ID; break;
+        case 3: native = CLOCK_THREAD_CPUTIME_ID; break;
+        case 4: native = CLOCK_MONOTONIC_RAW; break;
+        default: errno = EINVAL; rt_save_errno(c); c->eax = UINT32_MAX; return;
+        }
+        struct timespec value;
+        int result = clock_gettime(native, &value);
+        if (!result && (value.tv_sec > INT32_MAX || value.tv_sec < INT32_MIN)) { result = -1; errno = EOVERFLOW; }
+        if (!result) { rt_write_span(c, b, 8); W32(b, (uint32_t)value.tv_sec); W32(b + 4, (uint32_t)value.tv_nsec); }
+        else rt_save_errno(c);
+        c->eax = (uint32_t)result;
+        break;
+    }
+    case OP_SYSCONF: {
+        int key = (int32_t)rt_arg32(c, 0); long result;
+        switch (key) {
+        case 2: result = sysconf(_SC_CLK_TCK); break;
+        case 4: result = sysconf(_SC_OPEN_MAX); break;
+        case 30: result = 4096; break; // virtual i386/Linux page size
+        case 83: case 84: result = (long)rt_guest_cpu_count(); break; // même topologie que CPUID et /proc
+        case 85: case 86: {
+            uint64_t memory = 0; size_t size = sizeof(memory);
+            if (sysctlbyname("hw.memsize", &memory, &size, NULL, 0)) result = -1;
+            else result = (long)((memory < UINT64_C(2147483648) ? memory : UINT64_C(2147483648)) / 4096);
+            break;
+        }
+        default: errno = EINVAL; result = -1;
+        }
+        if (result == -1) rt_save_errno(c);
+        c->eax = (uint32_t)result;
+        break;
+    }
+    case OP_MMAP: case OP_MMAP64: {
+        uint64_t offset = rt_arg32(c, 5);
+        if (op == OP_MMAP64) offset |= (uint64_t)rt_arg32(c, 6) << 32;
+        c->eax = rt_mmap(c, rt_arg32(c, 0), rt_arg32(c, 1), (int)rt_arg32(c, 2), rt_arg32(c, 3), (int32_t)rt_arg32(c, 4), offset);
+        if (c->eax == UINT32_MAX) {
+            rt_save_errno(c);
+            if (getenv("P2_TRACE_MMAP"))
+                fprintf(stderr, "[mmap] échec hint=%#x len=%#x prot=%u flags=%#x fd=%d errno=%d (mappé %u Mio)\n",
+                        rt_arg32(c, 0), rt_arg32(c, 1), rt_arg32(c, 2), rt_arg32(c, 3), (int32_t)rt_arg32(c, 4), errno,
+                        rt_vm_mapped_bytes() >> 20);
+        }
+        break;
+    }
+    case OP_MUNMAP: case OP_MPROTECT: case OP_MADVISE: {
+        a = rt_arg32(c, 0); b = rt_arg32(c, 1); int result;
+        if (op == OP_MUNMAP) result = rt_munmap(a, b);
+        else if (op == OP_MPROTECT) result = rt_mprotect(a, b, (int)rt_arg32(c, 2));
+        else result = rt_madvise(a, b, (int)rt_arg32(c, 2));
+        if (result) rt_save_errno(c);
+        c->eax = (uint32_t)result;
+        break;
+    }
+    case OP_USLEEP: {
+        uint32_t usec = rt_arg32(c, 0);
+        struct timespec delay = {usec / 1000000u, (long)(usec % 1000000u) * 1000};
+        int result = RT_BLOCKING(nanosleep(&delay, NULL));
+        if (result) rt_save_errno(c);
+        c->eax = (uint32_t)result;
+        break;
+    }
+    default:   // OP_GETPPID
+        c->eax = (uint32_t)getppid();
+    }
+}
+
+static void libc_run(CPU *c, int op) {
+    if (op <= OP_FWRITE) libc_stream(c, op);
+    else if (op <= OP_READLINK) libc_fd(c, op);
+    else if (op <= OP_READDIR64) libc_dir(c, op);
+    else if (op <= OP_TOUPPER) libc_string(c, op);
+    else libc_system(c, op);
+}
+// Route directe (rt_shim_route) : l'opération est dans route->data.
+static int libc_handler(CPU *c, const char *name, void *data) { (void)name; libc_run(c, (int)(intptr_t)data); return 1; }
+int rt_libc_resolve(const char *name, RtShimRoute *route) {
+    int op = libc_op(name);
+    if (op < 0) return 0;
+    route->handler = libc_handler; route->data = (void *)(intptr_t)op;
+    return 1;
+}
+int rt_libc_shim(CPU *c, const char *name) {
+    int op = libc_op(name);
+    if (op < 0) return 0;
+    libc_run(c, op);
     return 1;
 }
 
@@ -796,10 +938,9 @@ int rt_environ_sync(void) {
     uint32_t array = rt_alloc((uint32_t)((count + 1) * 4));
     if (!array) return -1;
     for (size_t i = 0; i < count; ++i) {
-        size_t length = strlen(environ[i]) + 1;
-        uint32_t copy = rt_alloc((uint32_t)length);
+        uint32_t copy = rt_guest_strdup(environ[i]);
         if (!copy) return -1;
-        memcpy(GPTR(copy), environ[i], length); W32(array + (uint32_t)i * 4, copy);
+        W32(array + (uint32_t)i * 4, copy);
     }
     W32(array + (uint32_t)count * 4, 0);
     for (size_t i = 0; i < environ_slot_count; ++i) W32(environ_slots[i], array);

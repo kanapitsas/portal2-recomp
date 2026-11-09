@@ -112,7 +112,7 @@ void rt_btds_candidate_add(rt_btds *ds, const rt_backtap *d, const rt_backtap_re
     unsigned slot = ds->nrecent++ % RT_BTDS_PENDING;
     ds->recent[slot].t = r->t; ds->recent[slot].strength = strength_of(ds, r);
     rt_btds_candidate *c = &ds->pending[ds->npending++];
-    c->r = *r; c->look = look; c->fired = 0; c->nwin = 0;
+    c->r = *r; c->look = look; c->nwin = 0;
     unsigned long first = d->count > RT_BACKTAP_RING ? d->count - RT_BACKTAP_RING : 0;
     for (unsigned long i = first; i < d->count; ++i) {
         const rt_backtap_sample *s = &d->ring[i % RT_BACKTAP_RING];
@@ -150,8 +150,6 @@ static const rt_btds_fire *fire_near(const rt_btds *ds, double t, int dir) {
     }
     return best;
 }
-
-static const rt_btds_fire *fire_near(const rt_btds *ds, double t, int dir);
 
 // Un autre candidat de [lo, hi] qui pourrait lui aussi être la tape manquée
 // (pas tiré, pas un rebond, au moins floor, loin d'un toucher si far_touch)

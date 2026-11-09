@@ -28,7 +28,8 @@ share them.
 **Portal 2**: fully playable.
 
 - **Mac**: on an M3 Pro, Metal (the default) runs a scene at 122 fps where
-  OpenGL gets 81 (2560×1440, MSAA 4×).
+  OpenGL gets 81 (2560×1440, MSAA 4×;
+  [measurements](STATUS.md#measurements)).
 - **iPhone**: steady 60 fps on an iPhone 15 Pro Max, with touch controls and
   portals fired by **tapping the back of the phone**.
 - **Controllers**: work on Mac and iPhone (tested with an 8BitDo SN30 Pro).

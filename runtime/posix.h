@@ -5,13 +5,9 @@
 #include <limits.h>
 #include <stdio.h>
 
-// Erreurs : errno Darwin -> errno Linux i386 et inverse (strerror).
-int rt_linux_errno(int darwin);
-int rt_darwin_errno(int linux_value);
 // Message strerror d'un errno Linux : chaîne invitée mémorisée par errno,
 // tampon statique pour « Unknown error N » (strings_extra.c). 0 si sans mémoire.
 uint32_t rt_strerror_message(int linux_value);
-void rt_strings_extra_destroy(void);   // oublie ces adresses invitées (rt_shims_destroy)
 // Signaux : numéros Linux i386 <-> Darwin. 0 si pas d'équivalent.
 int rt_linux_signal(int darwin);
 int rt_darwin_signal(int linux_value);
@@ -63,7 +59,7 @@ const char *rt_write_path_nofollow(const char *path);
 // Chemin canonique tel que l'invité le voit (realpath invité).
 int rt_guest_realpath(const char *path, char out[PATH_MAX]);
 
-// Statistiques du tas invité glibc (shims.c).
+// Statistiques du tas invité glibc (heap.c).
 void rt_heap_info(uint32_t *arena, uint32_t *used, uint32_t *free_bytes, uint32_t *free_blocks);
 
 int rt_path_windows_binary(const char *relative);   // .dll/.exe/.asi/.flt... de la copie Windows, sauf greffon traduit

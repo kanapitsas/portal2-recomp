@@ -3,9 +3,12 @@
 
 Each configuration sets the antialiasing (setting.mat_antialias of
 update/cfg/video.txt), the render scale (P2_IOS_RENDER_SCALE) and the matching
-resolution (932x430 points x scale on an iPhone 15 Pro Max), launches the game
-(Documents/launch.args picks the map), waits, then reports the in-game
+resolution (--points, 932x430 points x scale on an iPhone 15 Pro Max), launches
+the game (Documents/launch.args picks the map), waits, then reports the in-game
 P2_FRAME_LOG frame rates. The original video.txt is restored at the end.
+Game: --game, else P2_GAME, else config/local.json (tools/games.py selected);
+its app, Documents/<game>-userdata folder and <ios_dir>/device/bench output
+come from the profile.
 
 With --renderer opengl (default) frames are rendered but never presented
 (P2_IOS_NO_PRESENT=1), so the figures are uncapped. The Metal renderer
@@ -25,11 +28,14 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import games  # noqa: E402
+import localconfig  # noqa: E402
 from ios_bundle_id import bundle_id  # noqa: E402
 
-APP = bundle_id(game='portal2')   # Portal 2 only (build/ios/device, Portal2.app)
-VIDEO = 'Documents/portal2-userdata/update/cfg/video.txt'
-OUT = Path('build/ios/device/bench')
+APP = None      # bundle identifier of the game's app (main)
+VIDEO = None    # Documents/<game>-userdata/update/cfg/video.txt (runtime/ios/game_ios.c)
+OUT = None      # <ios_dir>/device/bench
+EXECUTABLE = None   # end of the process path: /<ios_app>/<ios_executable>
 
 
 def device():
@@ -62,7 +68,7 @@ def stop_game(udid):
     exit could rewrite video.txt with its own settings."""
     listing = devicectl(udid, 'device', 'info', 'processes', check=False).stdout
     for line in listing.splitlines():
-        if line.rstrip().endswith('/Portal2.app/portal2'):
+        if line.rstrip().endswith(EXECUTABLE):
             devicectl(udid, 'device', 'process', 'terminate', '--pid', line.split()[0], '--kill', check=False)
     time.sleep(2)
 
@@ -100,7 +106,15 @@ def main():
     ap.add_argument('--renderer', choices=['opengl', 'd3d9'], default='opengl',
                     help='P2_RENDERER; only opengl runs uncapped (P2_IOS_NO_PRESENT), d3d9 (Metal) is '
                          'capped by the display refresh rate')
+    games.add_argument(ap)
     args = ap.parse_args()
+    global APP, VIDEO, OUT, EXECUTABLE
+    config = localconfig.load()
+    game = games.profile(localconfig.game_config(config, args.game))
+    APP = bundle_id(game=game['name'], config=config)
+    VIDEO = f"Documents/{game['name']}-userdata/update/cfg/video.txt"
+    OUT = Path(game['ios_dir']) / 'device/bench'
+    EXECUTABLE = f"/{game['ios_app']}/{game['ios_executable']}"
     if args.renderer == 'd3d9':
         print('warning: the Metal renderer always presents: frame rates are capped by the display '
               '(P2_IOS_NO_PRESENT only applies to OpenGL)', file=sys.stderr)

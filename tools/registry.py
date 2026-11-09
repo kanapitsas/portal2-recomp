@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Emit host metadata for prepared guest modules; it contains no guest code."""
-import argparse
 import json
-from pathlib import Path
 
 
 def generate(layout):
@@ -29,11 +27,3 @@ def generate(layout):
     lines.extend(['};', 'const size_t rt_module_count = sizeof(rt_modules) / sizeof(*rt_modules);', ''])
     return '\n'.join(lines)
 
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--layout', type=Path, required=True)
-    parser.add_argument('--out', type=Path, required=True)
-    args = parser.parse_args()
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(generate(json.loads(args.layout.read_text())))

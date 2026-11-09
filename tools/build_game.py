@@ -28,6 +28,9 @@ import lift
 import localconfig
 import peprep
 
+ROOT = games.ROOT   # every path below is anchored here: the tools run from any working directory
+RUNTIME = ROOT / 'runtime'
+
 # Identique à HOST_CFLAGS/HOST_LIBS du Makefile (tools/bench.py les importe d'ici) ;
 # préfixe Homebrew ou bundle précompilé, voir localconfig.host_prefix.
 HOST_CFLAGS, HOST_LIBS = localconfig.host_flags()
@@ -39,8 +42,8 @@ DEBUG = {'full': '-g', 'lines': '-gline-tables-only', 'none': '-g0'}
 # __text at -O2 -DRT_FAST_MEMORY).
 GENERATED_TUNING = ['-mllvm', '-capture-tracking-max-uses-to-explore=100000']
 # Scripts whose content enters the generation keys (a change regenerates the C).
-GEN_TOOLS = ['tools/lift.py', 'tools/float_lift.py', 'tools/registry.py']
-PE_TOOLS = GEN_TOOLS + ['tools/peprep.py']
+GEN_TOOLS = [ROOT / 'tools' / name for name in ('lift.py', 'float_lift.py', 'registry.py')]
+PE_TOOLS = GEN_TOOLS + [ROOT / 'tools/peprep.py']
 # Greffons Windows que libMiles charge lui-même depuis bin/linux32 de la copie
 # du jeu (runtime/pe.c) : mssmp3 décode les voix MP3, mssvoice le chat vocal,
 # binkawin l'audio des vidéos Bink.
@@ -49,14 +52,16 @@ PE_PLUGINS = ('mssmp3.asi', 'mssvoice.asi', 'binkawin.asi', 'mssmixer.mix')
 KEEP_CONFIGURATIONS = 2   # objets conservés pour les deux derniers jeux d'options
 
 
-def roots(layout, roots_file='config/game-roots.json'):
-    program = layout.get('program', 'portal2_linux')
+def roots(layout, roots_file):
+    """Named roots of a game: main, the foundation constructors and the
+    game's roots file (relative to the checkout: config/game-roots.json)."""
+    program = layout['program']   # written by tools/elfprep.py (--program)
     result = [f'{program}:symbol:main']
     for module in layout['modules']:
         if module['name'] in ('libtier0.so', 'libvstdlib.so', program):
             if module['init']: result.append(f'{module["name"]}:init:dt')
             result += [f'{module["name"]}:init:{i}' for i in range(len(module['init_array']))]
-    extra = Path(roots_file)
+    extra = ROOT / roots_file
     if extra.exists(): result += json.loads(extra.read_text())
     return list(dict.fromkeys(result))
 
@@ -69,19 +74,21 @@ def digest(*parts):
     return h.hexdigest()
 
 
-def generation_key(layout_path, layout, specs, whole_game):
+def generation_key(layout_path, layout, specs, whole_game, objdump='objdump'):
     images = [(m['image'], Path(m['image']).stat().st_size, Path(m['image']).stat().st_mtime_ns)
               for m in layout['modules']]
-    objdump = shutil.which('objdump') or 'objdump'
+    objdump = shutil.which(objdump) or objdump
     return digest(*(Path(t).read_bytes() for t in GEN_TOOLS), layout_path.read_bytes(), images, specs,
                   whole_game, objdump, Path(objdump).stat().st_mtime_ns if Path(objdump).exists() else 0,
                   lift.SHARD_BITS, 'v1')
 
 
-def generate(args, layout, specs, out=Path('build/game/gen')):
+def generate(layout_path, layout, specs, out, *, whole_game=True, jobs=None, objdump='objdump'):
+    """Generated C of the game in `out` (<build_dir>/gen), reused when its key is unchanged.
+    Explicit parameters (not an argparse namespace): tools/build_ios.py calls it too."""
     out = Path(out)
     manifest_path = out / 'manifest.json'
-    key = generation_key(args.layout, layout, specs, args.all)
+    key = generation_key(layout_path, layout, specs, whole_game, objdump)
     manifest = read_manifest(manifest_path)
     sources = out / 'src'
     if manifest.get('key') == key and all((sources / n).exists() for n in manifest['shards']) \
@@ -90,7 +97,7 @@ def generate(args, layout, specs, out=Path('build/game/gen')):
               f'{manifest["instructions"]} instructions, {len(manifest["shards"])} files')
         return manifest, 0.0
     started = time.time()
-    manifest = lift.generate_sharded(layout, specs, args.all, 'objdump', Path('build/disasm-cache'), out, args.jobs)
+    manifest = lift.generate_sharded(layout, specs, whole_game, objdump, ROOT / 'build/disasm-cache', out, jobs)
     manifest['key'] = key
     lift._write_atomic(manifest_path, json.dumps(manifest).encode())   # never a truncated manifest
     return manifest, time.time() - started
@@ -105,7 +112,7 @@ def read_manifest(path):
     return manifest if isinstance(manifest, dict) and isinstance(manifest.get('shards'), dict) else {}
 
 
-def generate_plugins(config, out=Path('build/game/gen/pe'), log=print):
+def generate_plugins(config, out, log=print):
     """Relocatable C of the PE plugins in bin/linux32 (lift.generate_pe), in
     `out` (<build_dir>/gen/pe): one file per plugin, rewritten only when it
     changes. `config`: the game's merged config (localconfig.game_config)."""
@@ -188,7 +195,7 @@ def compile_units(units, cache, jobs, compiler_identity):
     index = SourceIndex(cache / 'source-digests.json')
     planned, objects = [], []
     for source, flags in units:
-        key = digest(compiler_identity, flags, *index.closure(source, [Path('runtime')]))
+        key = digest(compiler_identity, flags, *index.closure(source, [RUNTIME]))
         obj = cache / f'{key}.o'
         objects.append(obj)
         if not obj.exists():
@@ -201,8 +208,9 @@ def compile_units(units, cache, jobs, compiler_identity):
         source, flags, obj = item
         temporary = obj.with_name(f'.{obj.name}.{os.getpid()}.tmp')
         started = time.time()
+        # cwd: the flags keep their relative -Iruntime (part of the object keys).
         result = subprocess.run(['clang', '-c', *flags, str(source), '-o', str(temporary)],
-                                capture_output=True, text=True)
+                                capture_output=True, text=True, cwd=ROOT)
         if result.returncode:
             temporary.unlink(missing_ok=True)
             return source, result.stderr, time.time() - started
@@ -278,15 +286,16 @@ def main():
     parser.add_argument('--order-file', type=Path,
                         help='linker order file (tools/hot_order.py): hot code grouped together')
     parser.add_argument('--jobs', type=int, default=os.cpu_count() or 1)
+    parser.add_argument('--objdump', default='objdump', help='disassembler (LLVM objdump)')
     parser.add_argument('--stats', type=Path, help='default: <build_dir>/build-stats.json')
-    parser.add_argument('--config', type=Path, default=Path('config/local.json'),
+    parser.add_argument('--config', type=Path, default=localconfig.DEFAULT_PATH,
                         help='game_root: game copy holding bin/linux32/*.asi (PE plugins)')
     args = parser.parse_args()
     config = localconfig.game_config(localconfig.load(args.config), args.game)
     game = games.profile(config)
-    build_dir = Path(game['build_dir'])
+    build_dir = ROOT / game['build_dir']
     args.layout = args.layout or build_dir / 'prep/layout.json'
-    args.out = args.out or Path(game['binary'])
+    args.out = args.out or ROOT / game['binary']
     args.stats = args.stats or build_dir / 'build-stats.json'
     if not args.layout.exists():
         parser.exit(1, f'{args.layout} missing: run python3 tools/gameprep.py --game {game["name"]}\n')
@@ -294,12 +303,16 @@ def main():
         args.opt, args.fast_memory = '2', True
     sys.stdout.reconfigure(line_buffering=True)
     started = time.time()
-    layout = json.loads(args.layout.read_text())
+    layout = lift.load_layout(args.layout)
     try:
-        manifest, generation_time = generate(args, layout, roots(layout, game['roots']), build_dir / 'gen')
+        manifest, generation_time = generate(args.layout, layout, roots(layout, game['roots']), build_dir / 'gen',
+                                             whole_game=args.all, jobs=args.jobs, objdump=args.objdump)
     except lift.Unsupported as exc:
         parser.exit(1, f'game lift: {exc}\n')
-    plugin_sources, plugin_stats = generate_plugins(config, build_dir / 'gen/pe')
+    try:
+        plugin_sources, plugin_stats = generate_plugins(config, build_dir / 'gen/pe')
+    except (peprep.PeError, OSError) as exc:
+        parser.exit(1, f'PE plugins: {exc}\n')
     imports = lift.import_map(layout)
     unimplemented = sorted({imports[a] for a in manifest['used_imports']} - lift.SHIMS)
     if unimplemented:
@@ -318,9 +331,9 @@ def main():
     runtime_flags = [f'-O{args.runtime_opt or args.opt}', '-g', *WARNINGS, *memory, *profile, '-Iruntime', *HOST_CFLAGS]
     generated_flags = [f'-O{args.opt}', DEBUG[args.debug], *GENERATED_TUNING, *WARNINGS, *memory, *profile, '-Iruntime']
     sources = build_dir / 'gen/src'
-    units = [(str(p), runtime_flags) for p in sorted(Path('runtime').glob('*.c'))]
-    program = layout.get('program', 'portal2_linux')
-    units.append(('src/main.c', [*runtime_flags, f'-DRT_GAME_PROGRAM="{program}"']))
+    units = [(str(p), runtime_flags) for p in sorted(RUNTIME.glob('*.c'))]
+    program = layout['program']
+    units.append((str(ROOT / 'src/main.c'), [*runtime_flags, f'-DRT_GAME_PROGRAM="{program}"']))
     units += [(str(sources / name), generated_flags) for name in sorted(manifest['shards'])]
     units.append((str(sources / 'dispatch.c'), generated_flags))
     units += [(str(p), generated_flags) for p in plugin_sources]

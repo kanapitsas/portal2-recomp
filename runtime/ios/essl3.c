@@ -21,6 +21,7 @@
 // Chaque appel « f( samplerN, ... ) » devient « p2_f( N, samplerN, ... ) ».
 #include <ctype.h>
 #include <stdio.h>
+#include "env_ios.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -360,24 +361,9 @@ char *rt_essl1_to_essl3(const char *source, int is_fragment, int emulate) {
         if (puts_(&out, "}\n")) goto fail;
     }
     if (!is_fragment) out.data = initialize_unwritten_outputs(out.data);
-    if (!is_fragment && !(getenv("P2_IOS_BGRA") && !strcmp(getenv("P2_IOS_BGRA"), "0"))) return bgra_attributes(out.data);
+    if (!is_fragment && rt_ios_env_flag("P2_IOS_BGRA", 1)) return bgra_attributes(out.data);
     return out.data;
 fail:
     free(out.data);
     return NULL;
 }
-
-#ifdef RT_ESSL3_TEST
-#include <stdio.h>
-int main(void) {
-    const char *fs = "#version 100\n#extension GL_EXT_shader_non_constant_global_initializers : enable\n"
-                     "vec4 gl4es_ClipVertex;\nprecision highp float;\nuniform sampler3D sampler15;\n"
-                     "uniform sampler2DShadow sampler3;\nuniform sampler2D sampler1;\nvarying vec4 otex;\nvoid main()\n{\nvec4 r0 = texture3D( sampler15, otex.xyz );\n"
-                     "r0 *= texture2D(sampler1, vec2(max(otex.x, 0.5), otex.y)) /* (x) */;\n"
-                     "r0 += shadow2D(sampler3, otex.xyz) * 2.0e-1;\ngl_FragColor = r0;\n}\n";
-    char *s = rt_essl1_to_essl3(fs, 1, 1);
-    puts(s ? s : "(null)");
-    free(s);
-    return 0;
-}
-#endif

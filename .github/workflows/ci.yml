@@ -22,12 +22,10 @@ jobs:
           python-version: '3.11'
       - name: Install host libraries
         run: brew install sdl2 freetype fontconfig
-      - name: Python tests
-        run: python -m unittest discover -s tests -p 'test_*.py' -v
-      - name: Runtime checks (abi-smoke)
-        run: make PYTHON=python build/abi-smoke && ./build/abi-smoke
+      - name: make check (Python tests, runtime checks against the generated fixtures)
+        run: make -j4 PYTHON=python check
       - name: Runtime checks under UBSan
-        run: make PYTHON=python build/abi-smoke-ubsan && ./build/abi-smoke-ubsan
+        run: make -j4 PYTHON=python build/abi-smoke-ubsan && ./build/abi-smoke-ubsan
   # The tools support Python 3.9 (setup.sh's minimum): Python tests only, no host libraries.
   python-3-9:
     runs-on: macos-15
