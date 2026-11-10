@@ -456,3 +456,79 @@ RT_CHECK(futex_relative_timeout_expires_on_time) {
     W32(timeout + 4, 0);
     assert(rt_futex(&c, word, 128, 0, timeout) == -1 && errno == ETIMEDOUT);
 }
+
+// Registres en tables de hachage : beaucoup de mutex, et deux adresses qui se
+// disputaient la même case de l'ancien cache direct (slot = a>>2 ^ a>>12, 1024).
+RT_CHECK(many_mutexes_and_old_cache_conflicts) {
+    CPU c; main_cpu(&c); rt_guest_enter();
+    enum { COUNT = 3000 };   // pas de 4 dans DATA+0x1000..DATA+0x3ee0 (région projetée limitée)
+    uint32_t base = DATA + 0x1000, args[2] = {0, 0};
+    for (unsigned i = 0; i < COUNT; ++i) { args[0] = base + 4 * i; assert(call(&c, "pthread_mutex_init", args, 2) == 0); }
+    for (unsigned i = 0; i < COUNT; ++i) {
+        args[0] = base + 4 * i;
+        assert(call(&c, "pthread_mutex_lock", args, 1) == 0 && call(&c, "pthread_mutex_unlock", args, 1) == 0);
+    }
+    for (unsigned i = 0; i < COUNT; ++i) { args[0] = base + 4 * i; assert(call(&c, "pthread_mutex_destroy", args, 1) == 0); }
+    // __kind = UINT32_MAX après destruction : pas un initialiseur statique.
+    args[0] = base + 4 * 1234; assert(call(&c, "pthread_mutex_lock", args, 1) == 22);
+    uint32_t a = DATA + 0xb00, b = a ^ 0x1004;
+    assert(((a >> 2 ^ a >> 12) & 1023) == ((b >> 2 ^ b >> 12) & 1023));
+    uint32_t pair[2] = {a, b};
+    for (unsigned i = 0; i < 2; ++i) { args[0] = pair[i]; assert(call(&c, "pthread_mutex_init", args, 2) == 0); }
+    for (unsigned round = 0; round < 3; ++round)
+        for (unsigned i = 0; i < 2; ++i) {
+            args[0] = pair[i];
+            assert(call(&c, "pthread_mutex_lock", args, 1) == 0 && call(&c, "pthread_mutex_unlock", args, 1) == 0);
+        }
+    for (unsigned i = 0; i < 2; ++i) { args[0] = pair[i]; assert(call(&c, "pthread_mutex_destroy", args, 1) == 0); }
+    rt_guest_leave();
+}
+
+// PTHREAD_COND_INITIALIZER (48 octets nuls) adopté sans pthread_cond_init ;
+// détruit, il n'est plus réadopté ; init après destruction fonctionne.
+RT_CHECK(static_condition_is_adopted) {
+    CPU c; main_cpu(&c); rt_guest_enter();
+    uint32_t cond = DATA + 0xb40, m = DATA + 0xb80, ts = DATA + 0xbc0, args[3] = {m, 0};
+    memset(rt_write_span(&c, cond, 48), 0, 48);
+    assert(call(&c, "pthread_mutex_init", args, 2) == 0);
+    args[0] = cond;
+    assert(routed(&c, "pthread_cond_signal", args, 1) == 0);
+    assert(call(&c, "pthread_cond_broadcast", args, 1) == 0);
+    W32(ts, 0); W32(ts + 4, 0); args[1] = m; args[2] = ts;
+    assert(call(&c, "pthread_mutex_lock", args + 1, 1) == 0);
+    assert(routed(&c, "pthread_cond_timedwait", args, 3) == 110);
+    assert(call(&c, "pthread_mutex_unlock", args + 1, 1) == 0);
+    assert(call(&c, "pthread_cond_destroy", args, 1) == 0);
+    assert(routed(&c, "pthread_cond_signal", args, 1) == 22);
+    assert(call(&c, "pthread_cond_destroy", args, 1) == 22);
+    args[1] = 0; assert(call(&c, "pthread_cond_init", args, 2) == 0);
+    assert(routed(&c, "pthread_cond_signal", args, 1) == 0);
+    assert(call(&c, "pthread_cond_destroy", args, 1) == 0);
+    // Statique jamais utilisée : destruction acceptée, comme glibc.
+    memset(rt_write_span(&c, cond, 48), 0, 48);
+    assert(call(&c, "pthread_cond_destroy", args, 1) == 0);
+    assert(call(&c, "pthread_cond_signal", args, 1) == 22);
+    args[0] = m; assert(call(&c, "pthread_mutex_destroy", args, 1) == 0);
+    rt_guest_leave();
+}
+
+// pthread_once : la routine tourne une fois ; ensuite le mot vaut 2 et l'appel
+// répond sans registre (un mot à 2 inconnu du registre ne déclenche pas de trap).
+static atomic_int once_calls;
+static int once_probe(CPU *c, const char *name) {
+    if (strcmp(name, "__test_once_routine")) return 0;
+    atomic_fetch_add(&once_calls, 1); c->eax = 0;
+    return 1;
+}
+RT_SHIM_PROVIDER(once_probe)
+RT_CHECK(pthread_once_fast_path_after_completion) {
+    CPU c; main_cpu(&c); rt_guest_enter();
+    uint32_t control = DATA + 0xc00, other = DATA + 0xc04;
+    uint32_t args[2] = {control, rt_dynamic_import("__test_once_routine")};
+    W32(control, 0);
+    assert(call(&c, "pthread_once", args, 2) == 0 && atomic_load(&once_calls) == 1 && R32(control) == 2);
+    assert(call(&c, "pthread_once", args, 2) == 0 && atomic_load(&once_calls) == 1);
+    W32(other, 2); args[0] = other;
+    assert(call(&c, "pthread_once", args, 2) == 0 && atomic_load(&once_calls) == 1);
+    rt_guest_leave();
+}
