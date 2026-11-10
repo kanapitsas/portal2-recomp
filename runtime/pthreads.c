@@ -28,15 +28,17 @@ typedef struct Attr {
 #define KEYS_MAX 1024u
 typedef struct Key { int used; uint32_t destructor; pthread_key_t native; } Key;
 typedef struct Cond { uint32_t address; pthread_cond_t native; struct Cond *next; } Cond;
-typedef struct Once { uint32_t address; pthread_once_t native; struct Once *next; } Once;
+typedef struct Once { uint32_t address; int done; pthread_once_t native; struct Once *next; } Once;
 static Key keys[KEYS_MAX];
 static Key *find_key(uint32_t id) { return id && id <= KEYS_MAX && keys[id - 1].used ? &keys[id - 1] : NULL; }
 static _Thread_local CPU *once_cpu;
 static _Thread_local uint32_t once_function, once_address;
+static _Thread_local Once *once_item;
 static void once_bridge(void) {
     rt_guest_enter();
     rt_invoke(once_cpu, once_function, NULL, 0);
     W32(once_address, 2);
+    once_item->done = 1;
     rt_guest_leave();
 }
 static Attr *attributes;
@@ -244,13 +246,17 @@ static int pthread_objects(CPU *c, const char *name) {
             item = calloc(1,sizeof(*item)); if (!item) { c->eax=ENOMEM; return 1; }
             pthread_once_t initial = PTHREAD_ONCE_INIT; item->native = initial;
             item->address=address; item->next=onces[bucket(address)]; onces[bucket(address)]=item;
+        } else if (item->done && !R32(address)) {
+            // Entrée terminée mais mot remis à 0 : mémoire réutilisée pour un
+            // nouveau contrôle. Personne n'attend un once terminé : on réarme.
+            pthread_once_t initial = PTHREAD_ONCE_INIT; item->native = initial; item->done = 0;
         }
-        CPU *old_cpu=once_cpu; uint32_t old_function=once_function, old_address=once_address;
-        once_cpu=c; once_function=rt_arg32(c,1); once_address=address;
+        CPU *old_cpu=once_cpu; uint32_t old_function=once_function, old_address=once_address; Once *old_item=once_item;
+        once_cpu=c; once_function=rt_arg32(c,1); once_address=address; once_item=item;
         unsigned saved=rt_guest_suspend();
         error=pthread_once(&item->native,once_bridge);
         rt_guest_resume(saved);
-        once_cpu=old_cpu; once_function=old_function; once_address=old_address;
+        once_cpu=old_cpu; once_function=old_function; once_address=old_address; once_item=old_item;
     } else if (!strcmp(name, "pthread_mutexattr_init")) {
         if (!address || find_attr(address)) error = EINVAL;
         else {

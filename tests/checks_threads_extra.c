@@ -532,3 +532,15 @@ RT_CHECK(pthread_once_fast_path_after_completion) {
     assert(call(&c, "pthread_once", args, 2) == 0 && atomic_load(&once_calls) == 1);
     rt_guest_leave();
 }
+// Mot de contrôle terminé puis mémoire réutilisée (remis à 0) : la nouvelle
+// routine doit tourner, malgré l'entrée restée au registre.
+RT_CHECK(pthread_once_reused_control_word) {
+    CPU c; main_cpu(&c); rt_guest_enter();
+    uint32_t control = DATA + 0xc08, args[2] = {control, rt_dynamic_import("__test_once_routine")};
+    W32(control, 0); int before = atomic_load(&once_calls);
+    assert(call(&c, "pthread_once", args, 2) == 0 && atomic_load(&once_calls) == before + 1 && R32(control) == 2);
+    W32(control, 0);
+    assert(call(&c, "pthread_once", args, 2) == 0 && atomic_load(&once_calls) == before + 2 && R32(control) == 2);
+    assert(call(&c, "pthread_once", args, 2) == 0 && atomic_load(&once_calls) == before + 2);
+    rt_guest_leave();
+}
