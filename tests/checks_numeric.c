@@ -2,6 +2,7 @@
 // simulés avec une pile invitée cdecl i386 dans 0x20000000-0x20020000.
 #include "checks.h"
 #include <errno.h>
+#include <fcntl.h>
 #include <math.h>
 #include <signal.h>
 #include <stdio.h>
@@ -285,4 +286,38 @@ RT_CHECK(swprintf_utf32_and_truncation) {
     assert(k.cpu.eax == UINT32_MAX);
     begin(&k); p32(&k, OUT); p32(&k, 16); p32(&k, put_wide(DATA, "%p %%|%.3s|")); p32(&k, 0); p32(&k, 0); invoke(&k, "swprintf");
     assert(wide_equals(OUT, "(nil) %||") && k.cpu.eax == 9);
+}
+
+// DIV/IDIV 8 et 16 bits ; DX:AX = 0x80000000 / -1 doit piéger (#DE), sans UB.
+static int narrow_div_traps(uint32_t eax, uint32_t edx, uint32_t divisor, int width, int is_signed) {
+    fflush(NULL);
+    pid_t pid = fork();
+    assert(pid >= 0);
+    if (!pid) {
+        int devnull = open("/dev/null", 1);
+        if (devnull >= 0) dup2(devnull, 2);
+        CPU c; rt_cpu_reset(&c); c.eax = eax; c.edx = edx;
+        rt_div_narrow(&c, divisor, width, is_signed, 0);
+        _exit(0);
+    }
+    int status = 0;
+    assert(waitpid(pid, &status, 0) == pid);
+    return WIFSIGNALED(status);
+}
+
+RT_CHECK(numeric_narrow_division) {
+    CPU c; rt_cpu_reset(&c);
+    c.eax = 0xabcd0064u; rt_div_narrow(&c, 7, 8, 0, 0);                     // 100 / 7
+    assert(c.eax == 0xabcd020eu);
+    c.eax = 0xabcdff9cu; rt_div_narrow(&c, 7, 8, 1, 0);                     // -100 / 7
+    assert(c.eax == 0xabcdfef2u);
+    c.eax = 0x1111e240u; c.edx = 0x22220001u; rt_div_narrow(&c, 1000, 16, 0, 0);   // 123456 / 1000
+    assert(c.eax == 0x1111007bu && c.edx == 0x222201c8u);
+    c.eax = 0x11111dc0u; c.edx = 0x2222fffeu; rt_div_narrow(&c, 1000, 16, 1, 0);   // -123456 / 1000
+    assert(c.eax == 0x1111ff85u && c.edx == 0x2222fe38u);
+    assert(narrow_div_traps(0, 0x8000, 0xffff, 16, 1));                     // INT32_MIN / -1
+    assert(narrow_div_traps(0x8000, 0xffff, 0xffff, 16, 1));                // -32768 / -1
+    assert(narrow_div_traps(0xff80, 0, 0xff, 8, 1));                        // -128 / -1
+    assert(narrow_div_traps(0, 1, 1, 16, 0));                               // quotient > 0xffff
+    assert(!narrow_div_traps(0x0004, 0, 0xfffe, 16, 1));                    // 4 / -2 : correct
 }
