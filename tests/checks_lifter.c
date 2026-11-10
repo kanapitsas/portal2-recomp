@@ -326,6 +326,9 @@ RT_CHECK(lifter_loader) {
     assert(handle == 0xcc000700u && !strcmp(log_text(), "IC"));                       // DT_INIT, then init_array
     assert(CALL("dlopen", path, 2) == handle && !strcmp(log_text(), "IC"));           // initialised once
     assert(CALL("dlsym", handle, symbol) == 0x2001c400u);
+    assert(CALL("dladdr", 0x2001c404u, data) == 1 && !strcmp(GPTR(R32(data + 8)), "fake_symbol"));
+    uint32_t sname = R32(data + 8);
+    assert(CALL("dladdr", 0x2001c404u, data) == 1 && R32(data + 8) == sname);         // same guest copy
 
     assert(CALL("dl_iterate_phdr", callback, data) == 0 && R32(data + 28) == 1);
     assert(R32(data) == 0x2001c000u && R32(data + 8) == 0x2001c034u && R32(data + 12) == 3);
