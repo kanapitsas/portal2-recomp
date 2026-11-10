@@ -17,6 +17,8 @@ int rt_futex(CPU *c,uint32_t address,uint32_t operation,uint32_t value,uint32_t 
     if(command==1 && (int32_t)value<0){errno=EINVAL;return -1;}
     rt_guest_enter();
     Futex *f=futexes;while(f && f->address!=address)f=f->next;
+    // FUTEX_WAKE sans attendeur connu : rien à réveiller, pas d'entrée créée.
+    if(!f && command==1){rt_guest_leave();return 0;}
     if(!f){
         f=calloc(1,sizeof(*f));if(!f){rt_guest_leave();errno=ENOMEM;return -1;}
         if(pthread_mutex_init(&f->mutex,NULL)){free(f);rt_guest_leave();errno=ENOMEM;return -1;}
@@ -66,6 +68,9 @@ int rt_futex(CPU *c,uint32_t address,uint32_t operation,uint32_t value,uint32_t 
     }
     pthread_mutex_unlock(&f->mutex);rt_guest_leave();
     if(error){errno=error;return -1;}return result;
+}
+size_t rt_futex_count(void) {   // pour les tests
+    rt_guest_enter();size_t count=0;for(Futex *f=futexes;f;f=f->next)++count;rt_guest_leave();return count;
 }
 void rt_futex_destroy(void) {
     while(futexes){Futex *next=futexes->next;if(futexes->waiters)abort();pthread_mutex_destroy(&futexes->mutex);free(futexes);futexes=next;}
