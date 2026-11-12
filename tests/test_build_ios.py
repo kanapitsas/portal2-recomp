@@ -16,10 +16,15 @@ import ios_bundle_id  # noqa: E402
 import ios_game  # noqa: E402
 import localconfig  # noqa: E402
 
-# Portal 2's keys at the top level, Half-Life 2's in its section (setup.sh).
+# Portal 2's keys at the top level, the other games' in their section (setup.sh).
 BOTH = {'game_root': '/p2', 'linux_root': '/p2-linux', 'ios_bundle_id': 'local.portal2recomp.team',
         'games': {'hl2': {'game_root': '/hl2', 'linux_root': '/hl2-linux',
                           'ios_bundle_id': 'local.hl2recomp.team'}}}
+THREE = {'game_root': '/p2', 'linux_root': '/p2-linux', 'ios_bundle_id': 'local.portal2recomp.team',
+         'games': {'hl2': {'game_root': '/hl2', 'linux_root': '/hl2-linux',
+                           'ios_bundle_id': 'local.hl2recomp.team'},
+                   'portal1': {'game_root': '/p1', 'linux_root': '/p1-linux',
+                               'ios_bundle_id': 'local.portal1recomp.team'}}}
 
 
 def no_bundle_env():
@@ -29,16 +34,20 @@ def no_bundle_env():
 
 class IosPaths(unittest.TestCase):
     def test_app_folders(self):
-        p2, hl2 = games.GAMES['portal2'], games.GAMES['hl2']
-        self.assertTrue(p2['ios'] and hl2['ios'])
+        p2, hl2, p1 = games.GAMES['portal2'], games.GAMES['hl2'], games.GAMES['portal1']
+        self.assertTrue(p2['ios'] and hl2['ios'] and p1['ios'])
         # Portal 2 keeps the paths of existing docs and tools.
         self.assertEqual(games.ios_app(p2, 'sim'), Path('build/ios/sim/Portal2.app'))
         self.assertEqual(games.ios_app(p2, 'device'), Path('build/ios/device/Portal2.app'))
         self.assertEqual(games.ios_app(hl2, 'sim'), Path('build/hl2/ios/sim/HalfLife2.app'))
         self.assertEqual(games.ios_app(hl2, 'device'), Path('build/hl2/ios/device/HalfLife2.app'))
+        self.assertEqual(games.ios_app(p1, 'sim'), Path('build/portal1/ios/sim/Portal.app'))
+        self.assertEqual(games.ios_app(p1, 'device'), Path('build/portal1/ios/device/Portal.app'))
         # Each iPhone build stays inside its game's build tree (make clean, uninstall).
-        self.assertNotEqual(games.ios_app(p2, 'sim').parent, games.ios_app(hl2, 'sim').parent)
-        self.assertTrue(str(games.ios_app(hl2, 'sim')).startswith(hl2['build_dir'] + '/'))
+        parents = [games.ios_app(g, 'sim').parent for g in (p2, hl2, p1)]
+        self.assertEqual(len(set(parents)), 3)
+        for game in (hl2, p1):
+            self.assertTrue(str(games.ios_app(game, 'sim')).startswith(game['build_dir'] + '/'))
 
     def test_shell_view_uses_each_games_keys(self):
         with no_bundle_env():
@@ -57,6 +66,18 @@ class IosPaths(unittest.TestCase):
         with no_bundle_env():
             alone = ios_game.values('hl2', 'sim', {'game_root': '/p2', 'linux_root': '/p2-linux'})
         self.assertEqual((alone['GAME_ROOT'], alone['LINUX_ROOT']), ('', ''))
+        with no_bundle_env():
+            p1 = ios_game.values('portal1', 'device', THREE)
+        self.assertEqual((p1['GAME_ROOT'], p1['LINUX_ROOT'], p1['PREP'], p1['IOS_DIR'], p1['IOS_APP'], p1['MOD']),
+                         ('/p1', '/p1-linux', 'build/portal1/prep', 'build/portal1/ios/device',
+                          'build/portal1/ios/device/Portal.app', 'portal'))
+        self.assertEqual(p1['APP_ID'], 'local.portal1recomp.team')
+        self.assertEqual(p1['IOS_DATA'].split(), list(games.GAMES['portal1']['ios_data']))
+        # Portal 1 not set up: empty folders, never Portal 2's.
+        with no_bundle_env():
+            alone = ios_game.values('portal1', 'sim', {'game_root': '/p2', 'linux_root': '/p2-linux'})
+        self.assertEqual((alone['GAME_ROOT'], alone['LINUX_ROOT'], alone['APP_ID']),
+                         ('', '', 'com.example.portal1-recomp'))
 
 
 class BundleIds(unittest.TestCase):
@@ -69,6 +90,8 @@ class BundleIds(unittest.TestCase):
             # (installing it would replace Portal 2's app).
             p2_only = {'ios_bundle_id': 'local.portal2recomp.team'}
             self.assertEqual(ios_bundle_id.bundle_id(game='hl2', config=p2_only), 'com.example.hl2-recomp')
+            self.assertEqual(ios_bundle_id.bundle_id(game='portal1', config=THREE), 'local.portal1recomp.team')
+            self.assertEqual(ios_bundle_id.bundle_id(game='portal1', config=p2_only), 'com.example.portal1-recomp')
             self.assertEqual(ios_bundle_id.bundle_id(game='portal2', config={}), ios_bundle_id.DEFAULT)
             # The game of the config when none is given (games.selected).
             self.assertEqual(ios_bundle_id.bundle_id(config=dict(BOTH, game='hl2')), 'local.hl2recomp.team')

@@ -107,6 +107,33 @@ class UninstallTests(unittest.TestCase):
         config['games'] = {'hl2': {'game_root': str(self.hl2_game), 'linux_root': str(self.home / 'depot_224')}}
         self.config.write_text(json.dumps(config))
 
+    def add_portal1(self):
+        self.p1_app = self.home / 'Applications/Portal Natif.app'
+        (self.p1_app / 'Contents/MacOS').mkdir(parents=True)
+        self.p1_log = self.home / 'Library/Logs/PortalNatif.log'
+        self.p1_log.write_text('log')
+        self.p1_support = self.home / 'Library/Application Support/Portal Natif'
+        (self.p1_support / 'userdata/portal/SAVE').mkdir(parents=True)
+        self.p1_game = self.home / 'Steam/steamapps/common/Portal'
+        self.p1_game.mkdir(parents=True)
+        config = json.loads(self.config.read_text())
+        config['games']['portal1'] = {'game_root': str(self.p1_game), 'linux_root': str(self.home / 'depot_404')}
+        self.config.write_text(json.dumps(config))
+
+    def test_every_game_in_one_run(self):
+        self.add_hl2()
+        self.add_portal1()
+        out = self.run_script('y\ny\ny\ny\ny\ny\n')
+        for path in (self.app, self.log, self.support, self.explicit, self.hl2_app, self.hl2_log, self.hl2_support,
+                     self.p1_app, self.p1_log, self.p1_support):
+            self.assertFalse(path.exists(), path)
+        for dropped in ('.Trash/Half-Life 2 Natif', '.Trash/Portal Natif', '.Trash/Portal 2 Natif'):
+            self.assertTrue((self.home / dropped).is_dir(), dropped)
+        for path in (self.game, self.hl2_game, self.p1_game):
+            self.assertTrue(path.exists(), path)
+        self.assertIn('Portal game files', out)
+        self.assertIn('depot 404', out)
+
     def test_both_games_in_one_run(self):
         self.add_hl2()
         out = self.run_script('y\ny\ny\ny\n')
