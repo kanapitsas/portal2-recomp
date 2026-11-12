@@ -74,6 +74,9 @@ let allGames = [
     Game(id: "hl2", title: "Half-Life 2", appID: 220, dataDepot: 221, linuxDepot: 224, linuxSize: "about 320 MB",
          marker: "hl2_complete", markerFile: "hl2_complete/gameinfo.txt", installFolder: "Half-Life 2",
          linuxFiles: ["hl2_linux", "bin/engine.so", "hl2_complete/bin/server.so"], minutes: 20),
+    Game(id: "portal1", title: "Portal", appID: 400, dataDepot: 401, linuxDepot: 404, linuxSize: "about 150 MB",
+         marker: "portal", markerFile: "portal/gameinfo.txt", installFolder: "Portal",
+         linuxFiles: ["bin/engine.so", "portal/bin/server.so"], minutes: 10),
 ]
 
 // MARK: - Detection (same rules as setup.sh)
@@ -473,7 +476,7 @@ struct PathLine: View {
     }
 }
 
-let windowTitle = "Portal 2 and Half-Life 2 for Apple silicon"
+let windowTitle = "Portal 2, Half-Life 2 and Portal for Apple silicon"
 
 /// One game: a checkbox, then where its files are or how to get them.
 struct GameRow: View {
@@ -551,7 +554,7 @@ struct ContentView: View {
                 StepRow(number: 2, title: "Games to build", ok: !model.chosen.isEmpty) {
                     VStack(alignment: .leading, spacing: 14) {
                         ForEach(allGames) { GameRow(model: model, game: $0) }
-                        Text("Half-Life 2 is experimental: it plays on Mac, with fewer hours of testing.")
+                        Text("Half-Life 2 and Portal are experimental: they play on Mac, with fewer hours of testing.")
                             .font(.caption)
                     }
                 }
@@ -646,6 +649,8 @@ func snapshot(to path: String, state: String) {
     if state != "empty" {
         model.states["portal2"] = GameState(game: steamSupport.appendingPathComponent("steamapps/common/Portal 2"),
                                             linux: state == "missing" ? nil : URL(fileURLWithPath: "/depot_661"), selected: state != "missing")
+        model.states["portal1"] = GameState(game: steamSupport.appendingPathComponent("steamapps/common/Portal"),
+                                           linux: findDepot(400, 404), selected: true)
         model.states["hl2"] = GameState(game: steamSupport.appendingPathComponent("steamapps/common/Half-Life 2"),
                                         linux: state == "missing" ? nil : URL(fileURLWithPath: "/depot_224"), selected: state != "missing")
     }
@@ -657,7 +662,7 @@ func snapshot(to path: String, state: String) {
         model.step = "Recompiling Portal 2 (about 10 minutes the first time, seconds afterwards)"; model.progress = 0.25
         model.showLog = true; model.log = ["==> Preparing the Linux modules of Portal 2", "[lift] engine.so: 41 233 functions", "[cc] 312/1024"]
     case "done": model.phase = .done
-        for id in ["portal2", "hl2"] { model.states[id]?.built = true }
+        for id in ["portal2", "hl2", "portal1"] { model.states[id]?.built = true }
     case "failed": model.phase = .failed("Half-Life 2: lib/libSDL2.dylib not found")
     default: break
     }

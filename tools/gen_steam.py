@@ -41,8 +41,9 @@ VERSIONS_PORTAL2 = {
     'ISteamInput': 'SteamInput006', 'ISteamGameServer': 'SteamGameServer014',
     'ISteamGameServerStats': 'SteamGameServerStats001',
 }
-# Versions demandées par Half-Life 2 (mise à jour des 20 ans) en plus de celles de Portal 2 :
-# SDK 1.60, sauf ISteamTimeline que client.so demande en V004 (SDK 1.61, voir SOURCES).
+# Versions demandées par Half-Life 2 (mise à jour des 20 ans) et Portal 1, en plus de celles
+# de Portal 2 : SDK 1.60, sauf ISteamTimeline que client.so de HL2 demande en V004 (SDK 1.61,
+# voir SOURCES) ; Portal 1 n'utilise pas Timeline (docs/steam.md).
 VERSIONS_HL2 = {
     'ISteamClient': 'SteamClient021', 'ISteamUser': 'SteamUser023', 'ISteamUGC': 'STEAMUGC_INTERFACE_VERSION020',
     'ISteamVideo': 'STEAMVIDEO_INTERFACE_V007', 'ISteamGameServer': 'SteamGameServer015',

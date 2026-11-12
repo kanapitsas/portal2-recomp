@@ -121,7 +121,8 @@ backtap)
   ;;
 saves)
   # tools/save_sync.py knows Portal 2's folders only (portal2-userdata/portal2).
-  [ "$MOD" = portal2 ] || { echo "saves: Portal 2 only for now ($MOD saves are in Documents/hl2-userdata on the device)"; exit 2; }
+  userdata=""; case "$MOD" in portal2) userdata=portal2-userdata ;; portal) userdata=portal-userdata ;; hl2_complete) userdata=hl2-userdata ;; esac
+  [ "$MOD" = portal2 ] || { echo "saves: Portal 2 only for now ($MOD saves are in Documents/$userdata on the device)"; exit 2; }
   action=${2:-status}; shift; shift || true
   case "$action" in status|pull|push) ;; *) echo "saves status|pull|push [--force] [--dry-run]"; exit 2 ;; esac
   if [ "$action" = pull ] && pgrep -x portal2-native >/dev/null && [[ " $* " != *" --force "* ]]; then

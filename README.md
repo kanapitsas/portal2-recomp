@@ -1,4 +1,4 @@
-# Portal 2 and Half-Life 2, statically recompiled for Apple silicon
+# Portal 2, Half-Life 2 and Portal, statically recompiled for Apple silicon
 
 [![Portal 2 running natively on iPhone (video)](https://img.youtube.com/vi/YWX2BeMnlQI/maxresdefault.jpg)](https://youtu.be/YWX2BeMnlQI)
 
@@ -10,7 +10,8 @@
 </p>
 
 This project builds native Mac and iPhone apps from your own copies of
-Portal 2 and Half-Life 2 (with Episode One, Episode Two and Lost Coast). It
+Portal 2, Half-Life 2 (with Episode One, Episode Two and Lost Coast) and
+Portal. It
 translates the x86 code of the Linux versions into C, then compiles it for
 Apple silicon. No emulator, no Wine, no Rosetta.
 
@@ -49,11 +50,17 @@ share them.
 - **iPhone**: 60 fps on an iPhone 15 Pro Max, with touch controls and gyro
   aiming, in a short test.
 
-**Both games**
+**Portal** (experimental, [details](#portal-experimental)):
+
+- **Mac**: the first chambers are playable; the build uses the same
+  recompiler as Portal 2, with its own indirect call roots.
+- **iPhone**: the app installs, starts and renders; a short session only.
+
+**All three games**
 
 - **Install**: the Natif Installer app from the
   [releases](https://github.com/kanapitsas/source-recomp/releases), or one
-  command, `setup.sh`, for either game or both. Only the Xcode command line
+  command, `setup.sh`, for one game or all. Only the Xcode command line
   tools are required.
 - **Multiplayer**: only Portal 2's LAN co-op. No Steam invites or online
   play, and Half-Life 2: Deathmatch is not supported.
@@ -101,6 +108,10 @@ share them.
     with Steam, or use `download_depot 220 221` in the Steam console;
   - the Linux binaries: `download_depot 220 224` (about 320 MB).
   Wait for “Depot download complete” for each download.
+- And/or Portal on Steam:
+  - the game data (the one with `portal/` and `platform/`): install it
+    with Steam, or use `download_depot 400 401` in the Steam console;
+  - the Linux binaries: `download_depot 400 404` (about 150 MB).
 - Optional: Rust 1.99 or newer from [rustup](https://rustup.rs) builds the
   Metal renderer from source instead of using the prebuilt one; the iPhone
   app needs it for Metal (Homebrew's `rust` has no iOS target).
@@ -116,8 +127,8 @@ share them.
 unzip it and open **Natif Installer**. It is signed; if macOS refuses to
 open it, go to System Settings > Privacy & Security and click **Open
 Anyway**. The installer checks the Xcode command
-line tools (and offers to install them), finds Portal 2, Half-Life 2 and
-their Linux binaries (with the Steam console commands to paste when they are
+line tools (and offers to install them), finds Portal 2, Half-Life 2,
+Portal and their Linux binaries (with the Steam console commands to paste when they are
 missing), lets you tick the games to build, then runs `setup.sh` for you.
 Its copy of the code and the builds (about 5 GB per game) live in
 `~/Library/Application Support/Portal 2 Natif Build`, as with the first
@@ -129,8 +140,8 @@ Portal 2 installer, so an update rebuilds only what changed; its log is
 ```sh
 git clone https://github.com/kanapitsas/source-recomp.git
 cd source-recomp
-./setup.sh                    # every game found: Portal 2, Half-Life 2 or both
-./setup.sh --game hl2         # one game (portal2, hl2), or --game all for both
+./setup.sh                    # every game found: Portal 2, Half-Life 2, Portal
+./setup.sh --game hl2         # one game (portal2, hl2, portal1), or --game all
 ./setup.sh "/path/to/Portal 2" "/path/to/depot_661"   # folders Steam did not put in the usual place
 ```
 
@@ -138,15 +149,16 @@ Without paths, `setup.sh` looks where Steam usually puts the games and their
 Linux binaries, and builds each game it finds complete (`./setup.sh --detect`
 lists them without building). It downloads Valve's `libsteam_api.dylib`
 (from Steamworks.NET, SHA-256 checked), builds each game (about 10 minutes
-for Portal 2 and 10 to 20 for Half-Life 2 the first time) and creates
-`~/Applications/Portal 2 Natif.app` and/or `Half-Life 2 Natif.app`.
-Re-running it is safe and quick, and adding the second game later does not
-rebuild the first. "Natif" is French for native; the name is kept so
+for Portal 2, 10 to 20 for Half-Life 2 and about 10 for Portal the first
+time) and creates `~/Applications/Portal 2 Natif.app`,
+`Half-Life 2 Natif.app` and/or `Portal Natif.app`.
+Re-running it is safe and quick, and adding a game later does not rebuild
+the others. "Natif" is French for native; the name is kept so
 existing installs are updated in place.
 
 Each app contains its own executable and libraries; the game files stay
 where Steam put them. After a rebuild or a change to `config/local.json`, run
-`python3 tools/make_app.py` (`--game hl2` for Half-Life 2) to update the app
+`python3 tools/make_app.py` (`--game hl2|portal1` for another game) to update the app
 (`--dest` for another folder).
 Downloads and iOS libraries go to `deps/` (`P2_DEPS` overrides it).
 `P2_HOST_DEPS=homebrew` or `bundle` forces where the host libraries come
@@ -162,9 +174,10 @@ Manage Certificates > + > Apple Development), then:
 ```
 
 It builds, signs and installs each app and copies the game data (once:
-about 11.5 GB for Portal 2, 10 GB for Half-Life 2; `tools/ios_device.sh
-data` copies it again after a reinstall). Half-Life 2's iPhone app is
-experimental ([docs/hl2.md](docs/hl2.md#iphone)).
+about 11.5 GB for Portal 2, 10 GB for Half-Life 2, 4 GB for Portal;
+`tools/ios_device.sh data` copies it again after a reinstall). Half-Life 2's
+and Portal's iPhone apps are experimental
+([docs/hl2.md](docs/hl2.md#iphone), [docs/portal1.md](docs/portal1.md#iphone)).
 On the phone, trust your account in Settings > General > VPN & Device
 Management. With a free account, re-run `./setup.sh --ios` every 7 days.
 `P2_TEAM_ID` sets the team when it cannot be read from the certificate;
@@ -174,7 +187,8 @@ More in [docs/ios.md](docs/ios.md).
 ## Play
 
 On Mac, open Steam with the account that owns the game, then open
-**Portal 2 Natif** or **Half-Life 2 Natif** (it starts Steam if needed). The game language follows
+**Portal 2 Natif**, **Half-Life 2 Natif** or **Portal Natif** (it starts
+Steam if needed). The game language follows
 your `-language` argument, `P2_LANGUAGE`, `config/local.json`, then Steam
 and macOS ([details](docs/usage.md#game-language)).
 
@@ -182,9 +196,10 @@ On iPhone: left stick to move, right half of the screen to look, buttons to
 jump, crouch, use and pause, and a tap on the back of the phone (left or
 right) to fire a portal. Everything is tunable in Settings > Portal 2. The
 iPhone version has no Steam, but it can join a Mac in LAN co-op. Half-Life 2
-has its own touch layout ([docs/hl2.md](docs/hl2.md#iphone)).
+has its own touch layout ([docs/hl2.md](docs/hl2.md#iphone)); Portal keeps
+Portal 2's, with both portal buttons and back taps firing.
 
-**Controllers** work on both. On Mac, turn Steam Input off for Portal 2 in
+**Controllers** work on all three. On Mac, turn Steam Input off for Portal 2 in
 Steam (Properties > Controller), otherwise Steam keeps the controller to
 itself ([why](docs/usage.md#controllers)). On iPhone, the on-screen controls
 hide themselves when a controller connects.
@@ -258,6 +273,35 @@ checkout as Portal 2: each game has its own build folder. It creates
 
 Details, manual setup and measurements: [docs/hl2.md](docs/hl2.md).
 
+## Portal (experimental)
+
+The same recompiler also turns the Linux version of **Portal** (Steam app 400,
+the Source 2013 build) into a native Mac and iPhone app. **You must own
+Portal**; as for Portal 2, nothing from Valve is in this repository.
+
+Install Portal with Steam, or fetch its game data from the Steam console with
+`download_depot 400 401`. Also fetch its Linux binaries with
+`download_depot 400 404` (about 150 MB). Wait for “Depot download complete”
+for each download. Then tick it in the installer, or run `./setup.sh` (or
+`./setup.sh --game portal1`) in the same checkout as Portal 2: each game has
+its own build folder (`build/portal1`). It creates
+`~/Applications/Portal Natif.app`, with its own saves folder.
+
+- **Tested**: the menu and `testchmb_a_00`, and `testchmb_a_01`–`a_05` plus
+  the later `testchmb_a_10` started with `+map` and left running 70 s without
+  trapping (see [docs/portal1.md](docs/portal1.md#what-was-tested)); the
+  indirect call roots are still being discovered, so later chambers may trap.
+- **iPhone**: `./setup.sh --game portal1 --ios` builds the app; it installs,
+  starts and renders (short session only).
+- **Touch**: Portal 2's layout, both portal buttons, back taps fire the
+  portal; the Settings page is Portal 2's.
+- **Not yet**: a full playthrough, later chambers (energy balls), performance
+  measurements. A crash ending with `target not recompiled` is one more root
+  to add: please report it with the log, `~/Library/Logs/PortalNatif.log`.
+
+Details, manual setup and what differs from Portal 2:
+[docs/portal1.md](docs/portal1.md).
+
 ## Troubleshooting
 
 - **"Portal 2 game data is incomplete"**: the game needs
@@ -279,11 +323,12 @@ Details, manual setup and measurements: [docs/hl2.md](docs/hl2.md).
 - **No music or voices**: `setup.sh` warns when `bin/linux32/mssmp3.asi`,
   `mssvoice.asi` or `binkawin.asi` is missing from the game folder (Miles
   decodes the MP3 voice lines with them). They come with the Linux game data
-  (`download_depot 620 621`); a Windows copy may lack them.
+  (`download_depot 620 621`); a Windows copy may lack them. Portal's come with
+  its Linux depot (`download_depot 400 404`).
 - **iPhone app stops launching after a week**: free Apple accounts give
   7-day profiles and allow 3 sideloaded apps; re-run `./setup.sh --ios`.
 - **Logs**: Mac, `~/Library/Logs/Portal2Natif.log` (and
-  `HalfLife2Natif.log`); iPhone,
+  `HalfLife2Natif.log`, `PortalNatif.log`); iPhone,
   `Documents/game.log` in the app's files once the Journal setting is on
   (`tools/ios_device.sh run` pulls it back).
 - Diagnostics variables: [docs/usage.md](docs/usage.md#diagnostics) (Mac) and
@@ -292,8 +337,8 @@ Details, manual setup and measurements: [docs/hl2.md](docs/hl2.md).
 ## Roadmap and limits
 
 Each game is built and tested against one release of its Linux binaries
-(Portal 2: depot 661, manifest 8940703274703023246; Half-Life 2: depot 224);
-another release may need new indirect call roots. iOS has no Steam features (achievements, invites, cloud saves); co-op
+(Portal 2: depot 661, manifest 8940703274703023246; Half-Life 2: depot 224;
+Portal: depot 404); another release may need new indirect call roots. iOS has no Steam features (achievements, invites, cloud saves); co-op
 there is LAN only. A free Apple account allows 3 sideloaded apps and 7-day
 profiles.
 
@@ -324,6 +369,8 @@ profiles.
 | Half-Life 2 | Mac app from the same recompiler, installer and checkout as Portal 2, main game played for a few hours | 🚧 |
 | Half-Life 2 | iPhone app: 60 fps on an iPhone 15 Pro Max in a first short test (`./setup.sh --game hl2 --ios`, [details](docs/hl2.md#iphone)) | 🚧 |
 | Half-Life 2 | The episodes and Lost Coast: first maps load and render, not played through | 🚧 |
+| Portal | Mac app from the same recompiler and checkout: menu and first chambers, more roots needed for later chambers | 🚧 |
+| Portal | iPhone app: installs, starts and renders in a short session (`./setup.sh --game portal1 --ios`, [details](docs/portal1.md#iphone)) | 🚧 |
 | Rendering | Ray-traced lighting with Metal on M3 and A17 Pro GPUs, in the spirit of Portal with RTX (NVIDIA's RTX Remix is Windows and NVIDIA only, so it cannot be reused) | 💡 |
 
 ## Repository layout
@@ -337,11 +384,13 @@ profiles.
   into `abi-smoke`.
 - `ios/`: app shell, Settings bundle, dependency build, signing project.
 - `installer/`: the Mac installer app (SwiftUI, one file).
-- `config/`: `game-roots.json` and `hl2-roots.json` (indirect call roots
-  of Portal 2 and Half-Life 2); `local.json` is yours and ignored by git.
+- `config/`: `game-roots.json`, `hl2-roots.json` and `portal1-roots.json`
+  (indirect call roots of Portal 2, Half-Life 2 and Portal); `local.json` is
+  yours and ignored by git.
 - `docs/`: the documents listed below. `experiments/`: the Steam init probe and the HID controller probe.
 - `build/` and `deps/`: generated, ignored by git. Portal 2 builds in
-  `build/game` (and `build/ios`), Half-Life 2 in `build/hl2`.
+  `build/game` (and `build/ios`), Half-Life 2 in `build/hl2`, Portal in
+  `build/portal1`.
 
 ## Development and tests
 
@@ -363,6 +412,7 @@ profiles.
 
 - [docs/usage.md](docs/usage.md): language, controllers, LAN co-op, manual build, diagnostics
 - [docs/hl2.md](docs/hl2.md): Half-Life 2 (experimental)
+- [docs/portal1.md](docs/portal1.md): Portal (experimental)
 - [docs/ios.md](docs/ios.md): iOS port, controls, settings, back taps
 - [docs/backtap.md](docs/backtap.md): back-tap detector, recordings and dataset
 - [docs/d3d9-bridge.md](docs/d3d9-bridge.md): Metal renderer (Direct3D 9 bridge)
@@ -392,4 +442,4 @@ his direction. The history and [STATUS.md](STATUS.md) show the whole process.
 
 Copyright (C) 2026 Raphaël Kanapitsas and contributors.
 
-[GNU GPL v3.0](LICENSE). It does not cover Portal 2, Half-Life 2 or any Valve material.
+[GNU GPL v3.0](LICENSE). It does not cover Portal 2, Half-Life 2, Portal or any Valve material.

@@ -26,14 +26,28 @@ class GameProfiles(unittest.TestCase):
         with self.assertRaises(SystemExit):
             games.profile({'game': 'quake'})
 
+    def test_portal1_profile(self):
+        game = games.profile({'game': 'portal1'})
+        self.assertEqual(game['program'], 'hl2_linux')
+        self.assertEqual(game['lib_dirs'], ('bin', 'portal/bin'))
+        self.assertEqual(game['mod'], 'portal')
+        self.assertEqual((game['steam_appid'], game['depot_id']), (400, 404))
+        self.assertEqual(game['roots'], 'config/portal1-roots.json')
+        self.assertEqual((game['ios_name'], game['ios_app']), ('Portal', 'Portal.app'))
+        # Source 2013 takes the Miles plugins from the Linux depot, like HL2.
+        self.assertNotIn('bin', game['ios_data'])
+        self.assertIn('portal', game['ios_data'])
+
     def test_build_paths(self):
-        # Portal 2 keeps the paths of single-game checkouts; Half-Life 2 lives under build/hl2.
-        portal2, hl2 = games.GAMES['portal2'], games.GAMES['hl2']
+        # Portal 2 keeps the paths of single-game checkouts; HL2 and Portal 1 live under build/<game>.
+        portal2, hl2, portal1 = games.GAMES['portal2'], games.GAMES['hl2'], games.GAMES['portal1']
         self.assertEqual((portal2['build_dir'], portal2['binary'], portal2['ios_dir'], portal2['executable']),
                          ('build/game', 'build/portal2-native', 'build/ios', 'portal2-native'))
         self.assertEqual((hl2['build_dir'], hl2['binary'], hl2['ios_dir'], hl2['executable']),
                          ('build/hl2', 'build/hl2/hl2-native', 'build/hl2/ios', 'hl2-native'))
-        self.assertEqual(games.EXECUTABLES, ('portal2-native', 'hl2-native'))
+        self.assertEqual((portal1['build_dir'], portal1['binary'], portal1['ios_dir'], portal1['executable']),
+                         ('build/portal1', 'build/portal1/portal1-native', 'build/portal1/ios', 'portal1-native'))
+        self.assertEqual(games.EXECUTABLES, ('portal2-native', 'hl2-native', 'portal1-native'))
         # No two games share a build tree, binary or data folder.
         for key in ('build_dir', 'binary', 'ios_dir', 'executable', 'app_name', 'log_name', 'bundle_id'):
             self.assertEqual(len({g[key] for g in games.GAMES.values()}), len(games.GAMES), key)
@@ -104,14 +118,16 @@ class IosProfiles(unittest.TestCase):
         # Portal 2 keeps the folder of existing installs.
         self.assertEqual(table['portal2'][2], 'portal2-userdata')
         self.assertEqual(table['hl2'][5], 'RT_IOS_LAYOUT_HL2')
+        self.assertEqual(table['portal1'][5], 'RT_IOS_LAYOUT_PORTAL2')
+        self.assertEqual(table['portal1'][4], '1')   # back taps on, like Portal 2
 
-    def test_hl2_settings_page_has_no_portals(self):
+    def test_settings_page_follows_the_game(self):
         import plistlib
         import shutil
         import tempfile
         import build_ios
         with tempfile.TemporaryDirectory() as tmp:
-            for game in ('portal2', 'hl2'):
+            for game in ('portal2', 'portal1', 'hl2'):
                 path = Path(tmp) / f'{game}.plist'
                 shutil.copy(self.ROOT / 'ios/Settings.bundle/Root.plist', path)
                 build_ios.settings_for_game(path, game)
@@ -122,7 +138,7 @@ class IosProfiles(unittest.TestCase):
                 gyro = next(i for i in items if i.get('Key') == 'P2Gyro')
                 self.assertEqual(gyro['DefaultValue'], game == 'hl2')
                 self.assertIn('P2GyroSpeed', keys)
-                if game == 'portal2':
+                if game in ('portal2', 'portal1'):
                     self.assertIn('P2BackTap', keys)
                     self.assertIn('P2PortalButtons', keys)
                 else:

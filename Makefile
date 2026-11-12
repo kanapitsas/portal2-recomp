@@ -98,7 +98,7 @@ clean:
 .PHONY: progress sanitize game
 # Whole game: every known function, C split and compiled in parallel with an
 # object cache (build/game/obj; build/hl2/obj for GAME=hl2). GAME_OPT=0 for a
-# diagnostic binary. GAME=portal2|hl2 (default: P2_GAME, then "game" of
+# diagnostic binary. GAME=portal2|hl2|portal1 (default: P2_GAME, then "game" of
 # config/local.json, then portal2; tools/games.py).
 GAME_OPT ?= 1
 GAME ?=

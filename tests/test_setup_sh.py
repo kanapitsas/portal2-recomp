@@ -78,6 +78,14 @@ class GameDetectionTests(unittest.TestCase):
             self.touch(linux / 'bin/linux32/engine.so', linux / 'portal2/bin/linux32/server.so')
         return game
 
+    def install_portal1(self, depot=True):
+        game = self.steam / 'steamapps/common/Portal'
+        self.touch(game / 'portal/gameinfo.txt', game / 'platform/x')
+        if depot:
+            linux = self.steam / 'steamapps/content/app_400/depot_404'
+            self.touch(linux / 'bin/engine.so', linux / 'portal/bin/server.so')
+        return game
+
     def install_hl2(self, depot=True):
         game = self.steam / 'steamapps/common/Half-Life 2'
         self.touch(game / 'hl2/hl2_pak_dir.vpk', game / 'hl2_complete/gameinfo.txt', game / 'platform/x')
@@ -140,9 +148,43 @@ class GameDetectionTests(unittest.TestCase):
     def test_every_installed_game_is_built(self):
         self.install_portal2()
         self.install_hl2()
-        self.assert_builds(self.detect(), 'portal2 hl2')
-        self.assert_builds(self.detect('--game', 'all'), 'portal2 hl2')
+        self.install_portal1()
+        self.assert_builds(self.detect(), 'portal2 hl2 portal1')
+        self.assert_builds(self.detect('--game', 'all'), 'portal2 hl2 portal1')
         self.assert_builds(self.detect('--game', 'hl2'), 'hl2')
+        self.assert_builds(self.detect('--game', 'portal1'), 'portal1')
+
+    def test_portal1_alone_is_built(self):
+        self.install_portal1()
+        self.assert_builds(self.detect(), 'portal1')
+        # A folder with portal/ and platform/ is Portal 1 without --game.
+        game = self.steam / 'steamapps/common/Portal'
+        linux = self.steam / 'steamapps/content/app_400/depot_404'
+        self.assert_builds(self.detect(str(game), str(linux)), 'portal1')
+
+    def test_portal1_data_depot_is_found_without_a_steam_install(self):
+        installed = self.install_portal1()
+        depot = self.steam / 'steamapps/content/app_400/depot_401'
+        shutil.move(str(installed), str(depot))
+        result = self.detect('--game', 'portal1')
+        self.assert_builds(result, 'portal1')
+        self.assertIn(f'game data:      {depot}', result.stdout)
+
+    def test_portal1_missing_data_explains_the_data_download(self):
+        result = self.detect('--game', 'portal1')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('download_depot 400 401', result.stderr)
+
+    def test_portal1_without_linux_binaries_is_skipped_with_a_hint(self):
+        self.install_portal1(depot=False)
+        self.install_portal2()
+        self.install_hl2()
+        result = self.detect()
+        self.assert_builds(result, 'portal2 hl2')
+        self.assertIn('download_depot 400 404', result.stderr)
+        result = self.detect('--game', 'all')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Portal's Linux binaries not found", result.stderr)
 
     def test_game_without_linux_binaries_is_skipped_with_a_hint(self):
         # Many Portal 2 players have HL2 in Steam: that must not stop Portal 2.
@@ -237,6 +279,11 @@ class GameDetectionTests(unittest.TestCase):
         self.install_portal2()
         for args, line in ((('--ios',), 'portal2 hl2'), (('--ios', '--game', 'hl2'), 'hl2'),
                            (('--ios', '--game', 'portal2'), 'portal2')):
+            result = self.detect(*args)
+            self.assert_builds(result, line)
+            self.assertIn(f'iPhone apps: {line}', result.stdout)
+        self.install_portal1()
+        for args, line in ((('--ios',), 'portal2 hl2 portal1'), (('--ios', '--game', 'portal1'), 'portal1')):
             result = self.detect(*args)
             self.assert_builds(result, line)
             self.assertIn(f'iPhone apps: {line}', result.stdout)

@@ -2,9 +2,11 @@
 # One-shot setup and build: checks the tools, downloads Valve's macOS
 # libsteam_api.dylib (inside Steamworks.NET), writes config/local.json,
 # recompiles each game and creates its app in ~/Applications:
-# "Portal 2 Natif.app" and/or "Half-Life 2 Natif.app" (experimental, docs/hl2.md).
+# "Portal 2 Natif.app", "Half-Life 2 Natif.app" and/or "Portal Natif.app"
+# (the last two experimental: docs/hl2.md, docs/portal1.md).
 # With --ios, also builds, signs and installs the iPhone app of each of those
-# games (build/ios/device/Portal2.app, build/hl2/ios/device/HalfLife2.app).
+# games (build/ios/device/Portal2.app, build/hl2/ios/device/HalfLife2.app,
+# build/portal1/ios/device/Portal.app).
 # Host libraries (SDL2, FreeType, Fontconfig) come from Homebrew when it has
 # them all, else from a prebuilt bundle downloaded from this project's GitHub
 # releases (SHA-256 checked; tools/build_host_deps.sh makes it).
@@ -12,18 +14,20 @@
 # is built when Rust (https://rustup.rs) is installed, else taken prebuilt from
 # the same bundle. P2_NO_METAL=1 skips it: the game then uses OpenGL.
 #
-# usage: ./setup.sh [--game portal2|hl2|all] [--ios]
+# usage: ./setup.sh [--game portal2|hl2|portal1|all] [--ios]
 #        ./setup.sh [--ios] ["/path/to/Portal 2" ["/path/to/depot_661"]]
 #        ./setup.sh --game hl2 ["/path/to/Half-Life 2" ["/path/to/depot_224"]]
+#        ./setup.sh --game portal1 ["/path/to/Portal" ["/path/to/depot_404"]]
 #        ./setup.sh --detect [--game ...]   prints the games it would build, changes nothing
 #
 # Without --game, every game found on this Mac is built: the ones already in
 # config/local.json, and the ones where Steam puts them (the game installed by
 # Steam, and its Linux binaries fetched with the Steam console's
 # download_depot command). --game all requires both. One checkout holds both
-# games (build/game for Portal 2, build/hl2 for Half-Life 2): adding one never
-# rebuilds the other. Paths are for one game; without --game, a folder with
-# hl2_complete/ is taken for Half-Life 2.
+# games (build/game for Portal 2, build/hl2 for Half-Life 2, build/portal1 for
+# Portal 1): adding one never rebuilds another. Paths are for one game; without
+# --game, a folder with hl2_complete/ is taken for Half-Life 2, one with
+# portal/gameinfo.txt for Portal 1, anything else for Portal 2.
 #
 # P2_APP_DIR puts the apps elsewhere than ~/Applications.
 # Re-running is safe: finished steps are skipped and unchanged code is not
@@ -53,7 +57,7 @@ while [ $# -gt 0 ]; do
     case "$a" in
         --ios) IOS=1 ;;
         --detect) DETECT=1 ;;
-        --game) [ $# -gt 0 ] || { echo "--game needs a value: portal2, hl2 or all" >&2; exit 2; }
+        --game) [ $# -gt 0 ] || { echo "--game needs a value: portal2, hl2, portal1 or all" >&2; exit 2; }
                 GAME_OPT="$1"; shift ;;
         --game=*) GAME_OPT="${a#--game=}" ;;
         -h|--help) awk 'NR > 1 && !/^#/ {exit} NR > 1 {sub(/^# ?/, ""); print}' "$0"; exit 0 ;;  # leading comment block
@@ -65,11 +69,11 @@ GIVEN_GAME="${ARGS[0]:-}"
 GIVEN_LINUX="${ARGS[1]:-}"
 [ ${#ARGS[@]} -le 2 ] || { echo "too many arguments: at most the game folder and the Linux binaries folder" >&2; exit 2; }
 case "$GAME_OPT" in
-    ""|portal2|hl2|all) ;;
-    *) echo "unknown game $GAME_OPT: use --game portal2, hl2 or all" >&2; exit 2 ;;
+    ""|portal2|hl2|portal1|all) ;;
+    *) echo "unknown game $GAME_OPT: use --game portal2, hl2, portal1 or all" >&2; exit 2 ;;
 esac
 if [ "$GAME_OPT" = all ] && [ -n "$GIVEN_GAME" ]; then
-    echo "paths are for one game: use --game portal2 or --game hl2 with them" >&2; exit 2
+    echo "paths are for one game: use --game portal2, --game hl2 or --game portal1 with them" >&2; exit 2
 fi
 
 # Per game: title, Steam app and depots (tools/games.py), and the
@@ -83,6 +87,10 @@ game_info() {  # game id -> TITLE APPID LINUX_DEPOT STEAMWORKS_* APP_NAME LOG_NA
     hl2)
         TITLE="Half-Life 2"; APPID=220; LINUX_DEPOT=224
         STEAMWORKS_VERSION=2024.8.0   # SDK 1.60: HL2's client.so asks for newer interfaces (docs/steam.md)
+        STEAMWORKS_SHA256="0a8e9b8c95760e81fcb16477a8962a4c230ea887b3731b1f9bc0690677f6f087" ;;
+    portal1)
+        TITLE="Portal"; APPID=400; LINUX_DEPOT=404
+        STEAMWORKS_VERSION=2024.8.0   # SDK 1.60: engine.so asks SteamUser023/SteamClient021 (docs/steam.md)
         STEAMWORKS_SHA256="0a8e9b8c95760e81fcb16477a8962a4c230ea887b3731b1f9bc0690677f6f087" ;;
     esac
     APP_NAME="$TITLE Natif"
@@ -165,7 +173,10 @@ unescape_path() {
 [ -n "$GIVEN_LINUX" ] && GIVEN_LINUX="$(unescape_path "$GIVEN_LINUX")"
 # Paths without --game: a Half-Life 2 folder has hl2_complete/.
 if [ -z "$GAME_OPT" ] && [ -n "$GIVEN_GAME" ]; then
-    if [ -d "$GIVEN_GAME/hl2_complete" ]; then GAME_OPT=hl2; else GAME_OPT=portal2; fi
+    if [ -d "$GIVEN_GAME/hl2_complete" ]; then GAME_OPT=hl2
+    elif [ -d "$GIVEN_GAME/portal" ] && [ -d "$GIVEN_GAME/platform" ]; then GAME_OPT=portal1
+    else GAME_OPT=portal2
+    fi
 fi
 
 portal2_data_ready() {
@@ -193,7 +204,7 @@ locate() {  # game id [game folder [Linux folder]] -> FOUND_GAME FOUND_LINUX (em
                     && { FOUND_LINUX="$c"; break; }
             done
         fi
-    else   # hl2: Steam install or data depot 221, Linux binaries from depot 224
+    elif [ "$1" = hl2 ]; then   # Steam install or data depot 221, Linux binaries from depot 224
         if [ -z "$FOUND_GAME" ]; then
             for c in "$(config_get hl2 game_root)" "$STEAM_SUPPORT/steamapps/common/Half-Life 2" "$(find_depot 220 221)"; do
                 [ -n "$c" ] && [ -f "$c/hl2_complete/gameinfo.txt" ] && { FOUND_GAME="$c"; break; }
@@ -202,6 +213,18 @@ locate() {  # game id [game folder [Linux folder]] -> FOUND_GAME FOUND_LINUX (em
         if [ -z "$FOUND_LINUX" ]; then
             for c in "$(config_get hl2 linux_root)" "$(find_depot 220 224)"; do
                 [ -n "$c" ] && [ -f "$c/hl2_linux" ] && [ -f "$c/bin/engine.so" ] && [ -f "$c/hl2_complete/bin/server.so" ] \
+                    && { FOUND_LINUX="$c"; break; }
+            done
+        fi
+    else   # portal1: Steam install or data depot 401, Linux binaries from depot 404
+        if [ -z "$FOUND_GAME" ]; then
+            for c in "$(config_get portal1 game_root)" "$STEAM_SUPPORT/steamapps/common/Portal" "$(find_depot 400 401)"; do
+                [ -n "$c" ] && [ -f "$c/portal/gameinfo.txt" ] && { FOUND_GAME="$c"; break; }
+            done
+        fi
+        if [ -z "$FOUND_LINUX" ]; then
+            for c in "$(config_get portal1 linux_root)" "$(find_depot 400 404)"; do
+                [ -n "$c" ] && [ -f "$c/bin/engine.so" ] && [ -f "$c/portal/bin/server.so" ] \
                     && { FOUND_LINUX="$c"; break; }
             done
         fi
@@ -229,7 +252,7 @@ check_game() {  # game id -> dies unless FOUND_GAME and FOUND_LINUX are that gam
   'Depot download complete', then re-run (or pass that folder as the second argument)."
         [ -f "$FOUND_LINUX/bin/linux32/engine.so" ] && [ -f "$FOUND_LINUX/portal2/bin/linux32/server.so" ] \
             || die "$FOUND_LINUX does not look like depot 661 (no bin/linux32/engine.so or portal2/bin/linux32/server.so)"
-    else
+    elif [ "$1" = hl2 ]; then
         [ -n "$FOUND_GAME" ] || die "Half-Life 2 data not found. Install it with Steam (the current version, with hl2_complete/),
   pass the game folder (the one with hl2/, hl2_complete/ and platform/), or fetch it:
   open steam://open/console, type: download_depot 220 221, wait for
@@ -245,6 +268,21 @@ check_game() {  # game id -> dies unless FOUND_GAME and FOUND_LINUX are that gam
         for f in mssmp3.asi binkawin.asi mssmixer.mix; do
             [ -f "$FOUND_LINUX/bin/linux32/$f" ] || warn "$FOUND_LINUX/bin/linux32/$f is missing: some audio may be silent"
         done
+    else   # portal1
+        [ -n "$FOUND_GAME" ] || die "Portal data not found. Install Portal with Steam (the version with portal/ and platform/),
+  pass the game folder, or fetch it:
+  open steam://open/console, type: download_depot 400 401, wait for
+  'Depot download complete', then re-run."
+        [ -f "$FOUND_GAME/portal/gameinfo.txt" ] && [ -d "$FOUND_GAME/platform" ] \
+            || die "$FOUND_GAME does not look like Portal (no portal/gameinfo.txt or platform/)"
+        [ -n "$FOUND_LINUX" ] || die "Portal's Linux binaries not found. Fetch them with your Steam account:
+  open steam://open/console, type: download_depot 400 404   (about 150 MB), wait for
+  'Depot download complete', then re-run (or pass that folder as the second argument)."
+        [ -f "$FOUND_LINUX/bin/engine.so" ] && [ -f "$FOUND_LINUX/portal/bin/server.so" ] \
+            || die "$FOUND_LINUX does not look like depot 404 (no bin/engine.so or portal/bin/server.so)"
+        for f in mssmp3.asi binkawin.asi mssmixer.mix; do
+            [ -f "$FOUND_LINUX/bin/linux32/$f" ] || warn "$FOUND_LINUX/bin/linux32/$f is missing: some audio may be silent"
+        done
     fi
     return 0
 }
@@ -254,8 +292,8 @@ check_game() {  # game id -> dies unless FOUND_GAME and FOUND_LINUX are that gam
 # warning, unless it is the only one found (then the error says what to fetch).
 SELECTED=(); GAME_DIRS=(); LINUX_DIRS=(); SKIPPED=()
 case "$GAME_OPT" in
-    portal2|hl2) WANTED=("$GAME_OPT") ;;
-    all) WANTED=(portal2 hl2) ;;
+    portal2|hl2|portal1) WANTED=("$GAME_OPT") ;;
+    all) WANTED=(portal2 hl2 portal1) ;;
     *) WANTED=() ;;
 esac
 if [ ${#WANTED[@]} -gt 0 ]; then
@@ -265,7 +303,7 @@ if [ ${#WANTED[@]} -gt 0 ]; then
         SELECTED+=("$id"); GAME_DIRS+=("$FOUND_GAME"); LINUX_DIRS+=("$FOUND_LINUX")
     done
 else
-    for id in portal2 hl2; do
+    for id in portal2 hl2 portal1; do
         locate "$id"
         if [ -n "$FOUND_GAME" ] && [ -n "$FOUND_LINUX" ] && { [ "$id" != portal2 ] || portal2_data_ready "$FOUND_GAME"; }; then
             check_game "$id"
@@ -277,7 +315,7 @@ else
     if [ ${#SELECTED[@]} -eq 0 ]; then
         id="${SKIPPED[0]:-portal2}"
         locate "$id"
-        [ -n "$FOUND_GAME" ] || die "no game found. Install Portal 2 or Half-Life 2 with Steam and fetch its Linux binaries
+        [ -n "$FOUND_GAME" ] || die "no game found. Install Portal 2, Half-Life 2 or Portal with Steam and fetch its Linux binaries
   (README.md), or pass the game folder: ./setup.sh \"/path/to/Portal 2\" \"/path/to/depot_661\""
         check_game "$id"   # says what is missing
     fi
@@ -307,7 +345,7 @@ if [ $DETECT = 1 ]; then
     exit 0
 fi
 
-# --- Steamworks.NET (20.1.0, 2024.8.0 for HL2): steam_api.bundle ----------
+# --- Steamworks.NET (20.1.0, 2024.8.0 for HL2 and Portal 1): steam_api.bundle
 steam_dylib() {  # game id -> DYLIB, Valve's libsteam_api.dylib for that game
     game_info "$1"
     local default bundle sw got t d p rel
@@ -587,7 +625,7 @@ if [ $IOS = 1 ]; then
             # The marker lives on the iPhone: a reinstalled app has an empty container.
             # Older Portal 2 setups only left a local marker; trust it if the game folder is there.
             OLD_MARK="build/ios/device/data-copied-$DEVICE"
-            SIZE="about 11.5 GB"; [ "$id" = hl2 ] && SIZE="about 10 GB"
+            SIZE="about 11.5 GB"; [ "$id" = hl2 ] && SIZE="about 10 GB"; [ "$id" = portal1 ] && SIZE="about 4 GB"
             if P2_DEVICE="$DEVICE" tools/ios_device.sh --game "$id" has-data; then :
             elif [ "$id" = portal2 ] && [ -f "$OLD_MARK" ] &&
                  ! P2_DEVICE="$DEVICE" tools/ios_device.sh --game "$id" has-mark &&
@@ -620,7 +658,7 @@ done
 cat <<EOF
 - Renderer: ${RENDERER}
 - Each app carries its own copy of the game binary, libraries and prepared
-  modules; after a rebuild, run python3 tools/make_app.py [--game hl2] to update it.
+  modules; after a rebuild, run python3 tools/make_app.py [--game hl2|portal1] to update it.
   The game files stay where Steam put them.
 - Keep the builds to yourself: they are made from Valve's games.
 - To remove the apps (and, if you confirm, the saves): ./uninstall.sh

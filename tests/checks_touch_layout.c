@@ -10,6 +10,12 @@
 
 RT_CHECK(ios_game_profile_from_plist_key) {
     const rt_ios_game *hl2 = rt_ios_game_named("hl2"), *p2 = rt_ios_game_named("portal2");
+    // Portal 1 : Source 2013 comme HL2 (même ICvar), mais les deux boutons de
+    // portail et les tapes au dos de Portal 2.
+    const rt_ios_game *p1 = rt_ios_game_named("portal1");
+    assert(p1 != p2 && !strcmp(p1->mod, "portal") && !strcmp(p1->app_id, "400"));
+    assert(!strcmp(p1->userdata, "portal-userdata") && p1->layout == RT_IOS_LAYOUT_PORTAL2);
+    assert(p1->back_taps && !strcmp(p1->cvar_interface, "VEngineCvar004") && p1->find_command_base == 10);
     assert(!strcmp(hl2->mod, "hl2_complete") && !strcmp(hl2->app_id, "220"));
     assert(!strcmp(hl2->userdata, "hl2-userdata") && hl2->layout == RT_IOS_LAYOUT_HL2);
     assert(!hl2->back_taps && !strcmp(hl2->cvar_interface, "VEngineCvar004") && hl2->find_command_base == 10);
