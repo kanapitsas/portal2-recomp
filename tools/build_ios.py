@@ -172,7 +172,7 @@ def settings_for_game(root_plist, game):
     """Half-Life 2 has no portals: the Portals group of the settings page (back
     taps, portal buttons, vibration when firing) is left out, back taps stay
     off (runtime/ios/game_ios.c), and gyro aiming is shown on, its default there."""
-    if game == 'portal2':
+    if game in ('portal2', 'portal1'):
         return
     with open(root_plist, 'rb') as f:
         root = plistlib.load(f)

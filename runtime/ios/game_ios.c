@@ -24,6 +24,11 @@ static const rt_ios_game games[] = {
     // « VEngineCvar004 », 5 incrémente un compteur, 10 et 11 parcourent la
     // liste des commandes par GetCommands, 16 et 17).
     {"hl2", "hl2_complete", "hl2-userdata", "220", 0, RT_IOS_LAYOUT_HL2, "VEngineCvar004", 10},
+    // Portal 1 : même Source 2013 que Half-Life 2 (ICvar VEngineCvar004, base 10).
+    // La disposition tactile de Portal 2 convient : elle a les deux boutons de
+    // portail, que le pistolet double de Portal 1 utilise aussi. Tapes au dos :
+    // le tir du portail, comme Portal 2.
+    {"portal1", "portal", "portal-userdata", "400", 1, RT_IOS_LAYOUT_PORTAL2, "VEngineCvar004", 10},
 };
 
 const rt_ios_game *rt_ios_game_named(const char *name) {

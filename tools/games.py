@@ -1,9 +1,9 @@
 """Per-game layout of the Linux depot: which modules to prepare and how the
 program is named, plus what setup.sh and tools/make_app.py need to install it
 (Steam depot, Steamworks.NET release, app name, data folder), and where its
-build lives in this checkout. One checkout builds both games side by side:
+build lives in this checkout. One checkout builds every game side by side:
 Portal 2 keeps its historical paths (build/game, build/portal2-native,
-build/ios), Half-Life 2 lives under build/hl2.
+build/ios), Half-Life 2 lives under build/hl2, Portal 1 under build/portal1.
 
 Which game a tool works on: its --game option, else the P2_GAME environment
 variable, else "game" in config/local.json, else the only game configured
@@ -91,6 +91,43 @@ GAMES = {
         # hl2_complete mounts the VPKs of hl2, episodic and ep2 (gameinfo.txt);
         # lostcoast for its map. hl2mp and the macOS launcher are not needed.
         ios_data=('bin', 'platform', 'hl2', 'episodic', 'ep2', 'lostcoast', 'hl2_complete'),
+    ),
+    # Portal 1 (Steam app 400, data depot 401, Linux depot 404): the Source 2013
+    # Linux build, the same generation as Half-Life 2's (shaderapivk/DXVK, CEF,
+    # mimalloc kept out like there). Experimental: brought up from this checkout,
+    # see docs/portal1.md.
+    'portal1': dict(
+        program='hl2_linux',
+        # bin/ and portal/bin/ for the modules; the Miles plugins come from the
+        # Linux depot (bin/linux32) like Half-Life 2's.
+        lib_dirs=('bin', 'portal/bin'),
+        mod='portal',
+        excluded=_COMMON_EXCLUDED | {'vtex_dll.so', 'libcef.so', 'chromehtml.so', 'libffmpegsumo.so',
+                                     'ffmpegsumo.so', 'libTelemetryX64.so', 'libTelemetryX86.so',
+                                     'libmimalloc.so', 'libfreetype.so', 'libfontconfig.so', 'libharfbuzz.so',
+                                     'sourcevr.so', 'libprofiler.so.0'},
+        roots='config/portal1-roots.json',
+        steam_appid=400,
+        depot_id=404,
+        app_name='Portal Natif',
+        log_name='PortalNatif.log',
+        bundle_id='fr.kanapitsas.portal-native',
+        icon='portal/resource/game.icns',
+        renderer=None,   # Metal when libd3d9metal is there, as for Portal 2
+        build_dir='build/portal1',
+        binary='build/portal1/portal1-native',
+        executable='portal1-native',
+        ios_dir='build/portal1/ios',
+        ios=True,
+        ios_name='Portal',
+        ios_executable='portal',
+        ios_app='Portal.app',
+        # bin/ is left out on purpose: Portal 1 is Source 2013, so libMiles takes
+        # its plugins (mssmp3.asi, mssmixer.mix, binkawin.asi) from the Linux
+        # depot (bin/linux32), which ios_device.sh data copies wholly as
+        # Documents/linux and runtime/paths.c reads there as for Half-Life 2.
+        # Sound, voices included, works on an iPhone whose data starts empty.
+        ios_data=('platform', 'portal', 'hl2'),
     ),
 }
 
