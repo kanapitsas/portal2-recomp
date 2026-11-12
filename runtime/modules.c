@@ -182,7 +182,15 @@ static void open_module(CPU *c, uint32_t path, uint32_t mode) {
     const GuestModule *module = rt_find_module(GPTR(path));
     if (ensure_tables()) { loader_error("loader tables unavailable", GPTR(path)); c->eax = 0; return; }
     size_t index = module ? (size_t)(module - rt_modules) : 0;
-    if (!module) { loader_error("guest module unavailable", GPTR(path)); c->eax = 0; return; }
+    if (!module) {
+        uint32_t handle;   // a Mach-O image in place of a Linux module (native_plugin.c)
+        if (rt_native_plugin_open(GPTR(path), &handle)) {
+            if (!handle) loader_error("native plugin failed to load", GPTR(path));
+            c->eax = handle;
+            return;
+        }
+        loader_error("guest module unavailable", GPTR(path)); c->eax = 0; return;
+    }
     if ((mode & 4) && state[index] != READY && state[index] != INITIALIZING) {   // RTLD_NOLOAD
         c->eax = 0; return;
     }
@@ -202,6 +210,16 @@ static uint32_t module_end(CPU *c, const GuestModule *module) {
         if (top > end) end = top;
     }
     return end;
+}
+
+int rt_module_range(const char *name, uint32_t *base, uint32_t *size) {
+    const GuestModule *module = name ? rt_find_module(name) : NULL;
+    CPU *c = rt_shim_cpu();
+    if (!module || !c) return 0;
+    uint32_t end = module_end(c, module);
+    if (base) *base = module->base;
+    if (size) *size = end - module->base;
+    return 1;
 }
 
 // dladdr(addr, Dl_info *) : Dl_info i386 = {dli_fname, dli_fbase, dli_sname, dli_saddr}.
@@ -255,6 +273,12 @@ int rt_loader_shim(CPU *c, const char *name) {
         rt_string_length(c, symbol);
         const GuestModule *module = NULL;
         if (handle == UINT32_MAX) rt_trap(c, c->eip, "RTLD_NEXT lookup not implemented");
+        uint32_t native;
+        if (rt_native_plugin_symbol(handle, GPTR(symbol), &native)) {
+            c->eax = native;
+            if (!native) loader_error("native plugin symbol unavailable", GPTR(symbol));
+            return 1;
+        }
         if (handle && handle != PROGRAM_HANDLE && handle != UINT32_MAX) {
             size_t index;
             if (handle_module(handle, &index)) module = &rt_modules[index];
@@ -268,6 +292,8 @@ int rt_loader_shim(CPU *c, const char *name) {
         uint32_t handle = R32(c->esp + 4);
         size_t index;
         if (handle == PROGRAM_HANDLE) { c->eax = 0; return 1; }
+        int closed;
+        if (rt_native_plugin_close(handle, &closed)) { c->eax = (uint32_t)closed; return 1; }
         if (ensure_tables() || !handle_module(handle, &index) || !opens[index]) {
             loader_error("dlclose", "shared object not open"); c->eax = UINT32_MAX; return 1;
         }

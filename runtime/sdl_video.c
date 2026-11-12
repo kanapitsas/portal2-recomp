@@ -25,6 +25,7 @@
 // SHIMS: SDL_GetClipboardText SDL_SetClipboardText SDL_HasClipboardText
 // SHIMS: SDL_setenv SDL_ShowSimpleMessageBox SDL_ShowMessageBox SDL_GetWindowWMInfo
 #include "rt.h"
+#include "modules.h"
 #include "posix.h"   // rt_environ_sync : environ invité recopié après setenv
 #include "host_gl.h"   // OpenGL.framework (macOS) ou gl4es (iOS)
 #include "frame_times.h"
@@ -730,7 +731,8 @@ static int sdl_video(CPU *c, const char *name) {
     else if (!strcmp(n, "GetWindowID")) r = SDL_GetWindowID(WINDOW(0));
     else if (!strcmp(n, "GetWindowGrab")) r = (uint32_t)SDL_GetWindowGrab(WINDOW(0));
     else if (!strcmp(n, "SetWindowGrab")) {
-        SDL_SetWindowGrab(WINDOW(0), rt_arg32(c, 1) ? SDL_TRUE : SDL_FALSE);
+        rt_mouse_note_grab(WINDOW(0), rt_arg32(c, 1) != 0);   // native_plugin.c
+        if (!rt_mouse_released()) SDL_SetWindowGrab(WINDOW(0), rt_arg32(c, 1) ? SDL_TRUE : SDL_FALSE);
         if (rt_input_logging()) fprintf(stderr, "[input] %u SetWindowGrab %u\n", SDL_GetTicks(), rt_arg32(c, 1));
     }
     else if (!strcmp(n, "SetWindowGammaRamp")) {
@@ -739,7 +741,8 @@ static int sdl_video(CPU *c, const char *name) {
         for (unsigned i = 0; i < 3; ++i) ramp[i] = rt_arg32(c, 1 + i) ? rt_span(c, rt_arg32(c, 1 + i), 512) : NULL;
         r = (uint32_t)SDL_SetWindowGammaRamp(w, ramp[0], ramp[1], ramp[2]);
     } else if (!strcmp(n, "WarpMouseInWindow")) {
-        SDL_WarpMouseInWindow(WINDOW(0), (int)rt_arg32(c, 1) / window_scale_value, (int)rt_arg32(c, 2) / window_scale_value);
+        if (!rt_mouse_released())   // la souris d'un greffon natif reste où elle est
+            SDL_WarpMouseInWindow(WINDOW(0), (int)rt_arg32(c, 1) / window_scale_value, (int)rt_arg32(c, 2) / window_scale_value);
         if (rt_input_logging()) fprintf(stderr, "[input] %u WarpMouseInWindow %d,%d\n", SDL_GetTicks(), (int)rt_arg32(c, 1), (int)rt_arg32(c, 2));
     }
     // Écrans
@@ -850,7 +853,9 @@ static int sdl_video(CPU *c, const char *name) {
         if (cursor) { rt_handle_free(rt_arg32(c, 0), RT_SDL_CURSOR); SDL_FreeCursor(cursor); }
     }
     else if (!strcmp(n, "ShowCursor")) {
-        r = (uint32_t)SDL_ShowCursor((int)rt_arg32(c, 0));
+        int shown = (int)rt_arg32(c, 0);
+        if (shown >= 0) rt_mouse_note_cursor(shown);
+        r = rt_mouse_released() && shown >= 0 ? (uint32_t)shown : (uint32_t)SDL_ShowCursor(shown);
         static int last = -2;
         if (rt_input_logging() && (int)rt_arg32(c, 0) != last && (int)rt_arg32(c, 0) >= 0)
             fprintf(stderr, "[input] %u ShowCursor %d\n", SDL_GetTicks(), (int)rt_arg32(c, 0));
