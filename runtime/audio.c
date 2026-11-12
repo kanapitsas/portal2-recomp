@@ -64,7 +64,12 @@ static void write_spec(CPU *c, uint32_t address, const SDL_AudioSpec *spec, uint
 static int audio_shim(CPU *c, const char *name) {
     if (!strcmp(name, "SDL_OpenAudioDevice")) {
         uint32_t device_name = rt_arg32(c, 0), desired_address = rt_arg32(c, 2), obtained_address = rt_arg32(c, 3);
-        int capture = (int32_t)rt_arg32(c, 1) != 0, allowed = (int32_t)rt_arg32(c, 4);
+        int capture = (int32_t)rt_arg32(c, 1) != 0;
+        // Source 1 passes SDL_AUDIO_ALLOW_ANY_CHANGE, then mixes 44.1 kHz S16 stereo
+        // whatever `obtained` says. With SDL2 on iOS the session runs at 48 kHz, so
+        // the mix played 8.8 % too fast and too high. Allow nothing: SDL converts.
+        // (sdl2-compat, used on macOS, already does this for the same reason.)
+        int allowed = 0;
         char *host_name = NULL;
         if (device_name) {
             uint32_t length = rt_string_length(c, device_name);
