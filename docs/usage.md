@@ -14,21 +14,21 @@ The game starts in the language chosen by `tools/language.py`, which adds
 3. `"language": "french"` in `config/local.json` (the app keeps a copy of
    this file: re-run `python3 tools/make_app.py` after changing it);
 4. the language set in the game's Steam properties, read from
-   `appmanifest_620.acf` (`appmanifest_220.acf` for Half-Life 2) in the `steamapps/` folder that contains `common/`
+   `appmanifest_620.acf` (`appmanifest_220.acf` for Half-Life 2, `appmanifest_400.acf` for Portal) in the `steamapps/` folder that contains `common/`
    (then from Steam's own `steamapps/`);
 5. your macOS system language;
 6. English.
 
 Names are Steam's: `french`, `german`, `spanish`, `italian`, `russian`,
 `schinese`, `brazilian`, `koreana`, and so on (one `gameui_<name>.txt` per
-language in `portal2/resource/`, `hl2/resource/` for Half-Life 2). A language missing from your game folder
+language in `portal2/resource/`, `hl2/resource/` for Half-Life 2, `portal/resource/` for Portal). A language missing from your game folder
 falls back to English. Steam only downloads the voices of the language set in
 its properties: if you installed the game in English, menus and subtitles are
 translated but the voices stay English. To get them, switch the language in
 Steam (Properties > Language) and let it update the game first.
 
 `python3 tools/language.py --explain` prints the choice and where it comes
-from (for Portal 2; Half-Life 2 follows the same rules with its own keys). On the iPhone, the language is written into the app at build time
+from (for Portal 2; the other games follow the same rules with their own keys). On the iPhone, the language is written into the app at build time
 (same rules, rebuild after changing `config/local.json`).
 
 ## Controllers
@@ -40,7 +40,8 @@ template to it. On macOS that emulation only reaches games that Steam itself
 launches, so this app gets no input: the controller shows as connected, but
 nothing works. Tested with an 8BitDo SN30 Pro over Bluetooth in Switch mode
 (seen as a Nintendo Switch Pro Controller). With `P2_INPUT_LOG=1`, the log
-(`~/Library/Logs/Portal2Natif.log`, `HalfLife2Natif.log` for Half-Life 2) prints the controller state every half
+(`~/Library/Logs/Portal2Natif.log`, `HalfLife2Natif.log` for Half-Life 2,
+`PortalNatif.log` for Portal) prints the controller state every half
 second, accelerometer included: if those values stay at zero, Steam still has
 the controller.
 
@@ -81,8 +82,8 @@ by two people has not been tried yet.
 
 ## Saves between Mac and iPhone (Portal 2)
 
-Half-Life 2 is not supported yet (its iPhone saves are in
-`Documents/hl2-userdata`). Over the cable, with the iPhone unlocked and the game quit on both sides
+Portal and Half-Life 2 are not supported yet (their iPhone saves are in
+`Documents/portal-userdata` and `Documents/hl2-userdata`). Over the cable, with the iPhone unlocked and the game quit on both sides
 (`tools/ios_device.sh`, logic in `tools/save_sync.py`):
 
 ```sh
@@ -160,25 +161,32 @@ free Apple developer accounts cannot sign: it would need a paid account.
       "linux_root": "/path/to/depot_224",
       "steam_appid": 220,
       "steam_api_dylib": "/path/to/steamworks-2024.8.0/libsteam_api.dylib"
+    },
+    "portal1": {
+      "game_root": "/path/to/Portal",
+      "linux_root": "/path/to/depot_404",
+      "steam_appid": 400,
+      "steam_api_dylib": "/path/to/steamworks-2024.8.0/libsteam_api.dylib"
     }
   }
 }
 ```
 
-- One file for both games. The top-level keys are shared (`language`,
+- One file for all games. The top-level keys are shared (`language`,
   `d3d9metal_dylib`, `d3d9metal_ios`, `host_prefix`) or Portal 2's own
   (`game_root`, `linux_root`, `steam_appid`, `depot_id`,
   `steam_api_dylib`, `user_dir`, `ios_bundle_id`), as in older single-game
-  configs; Half-Life 2's own keys go in `games.hl2`
-  (`localconfig.game_config` merges them). An older Half-Life 2 checkout's
+  configs; each other game's own keys go in `games.hl2` or
+  `games.portal1` (`localconfig.game_config` merges them). An older Half-Life 2 checkout's
   config (`"game": "hl2"` with its keys at the top level) is still read, and
   `setup.sh` moves those keys into `games.hl2`.
-- Which game a tool works on: `--game portal2|hl2` (`GAME=` for `make
-  game`), else `P2_GAME`, else `"game"` in this file, else the only game set
-  up, else Portal 2. Portal 2 builds in `build/game` (binary
+- Which game a tool works on: `--game portal2|hl2|portal1` (`GAME=` for
+  `make game`), else `P2_GAME`, else `"game"` in this file, else the only
+  game set up, else Portal 2. Portal 2 builds in `build/game` (binary
   `build/portal2-native`, iPhone builds in `build/ios`), Half-Life 2 in
   `build/hl2` (binary `build/hl2/hl2-native`, iPhone builds in
-  `build/hl2/ios`).
+  `build/hl2/ios`), Portal in `build/portal1` (binary
+  `build/portal1/portal1-native`, iPhone builds in `build/portal1/ios`).
 
 - `language`, `d3d9metal_dylib` and `d3d9metal_ios` are optional:
   [game language](#game-language), [Metal renderer](d3d9-bridge.md#using-it),
@@ -208,8 +216,8 @@ python3 tools/run_game.py --show --timeout 3600
 python3 tools/make_app.py                 # optional: an app for the Dock / Finder (re-run after a rebuild)
 ```
 
-The same with `--game hl2` on each command for Half-Life 2 (10 to 20 minutes
-for the first `--release` build).
+The same with `--game hl2` or `--game portal1` on each command for the other
+games (10 to 20 minutes for the first `--release` build).
 
 iPhone: see [Building and running](ios.md#building-and-running) in ios.md.
 
@@ -220,14 +228,16 @@ With the Steam client open, `run_game.py` sets `SteamAppId` and `P2_STEAM_API_DY
 (the runtime itself only reads the top-level, Portal 2 keys). Without
 `--show`, the window is hidden (`P2_HIDDEN_WINDOWS=1`), vsync is disabled and
 the game runs on a copy of the user data
-(`<user_dir>/../portal2-userdata-diag`, `hl2-userdata-diag` for Half-Life 2)
+(`<user_dir>/../portal2-userdata-diag`, `hl2-userdata-diag` and
+`portal-userdata-diag` for the other games)
 with the sound muted. It also sets `P2_D3D9METAL` from `d3d9metal_dylib` (so
 it runs on Metal), passes `-windowed -w 1280 -h 720` by default, writes the
 output to `<build dir>/launch.log` and prints its end. The default
 `--timeout` is 60 s, after which the game is stopped.
 
-The binary itself (`build/portal2-native`, what `run_game.py` and the app
-launch) takes `--images <prep dir> --game-dir <game> [--linux-root <depot>]
+The binary itself (`build/portal2-native`; `build/hl2/hl2-native` and
+`build/portal1/portal1-native` for the other games; what `run_game.py` and
+the app launch) takes `--images <prep dir> --game-dir <game> [--linux-root <depot>]
 [--user-dir <saves>] -- <game arguments>` (`src/main.c`).
 
 The app (`python3 tools/make_app.py`, see the README) holds a copy of the

@@ -16,16 +16,17 @@
   default `<linux_root>/bin/linux32` from `config/local.json`, else
   `../work/portal2-linux/bin`). `make sanitize` is the UBSan variant.
 - `P2_STEAM_TESTS=1 make test`: live Steam tests, with the client running.
-- `make game [GAME=hl2] [GAME_OPT=0]`: builds a game; `make d3d9metal-check
+- `make game [GAME=hl2|portal1] [GAME_OPT=0]`: builds a game; `make d3d9metal-check
   D3D9METAL_A=…/libd3d9metal.a` checks the native library's ABI.
-- `make clean` deletes all of `build/` (both games: prep, generated C, object
+- `make clean` deletes all of `build/` (every game: prep, generated C, object
   caches, binaries, iOS builds). Regenerate prep with
   `python3 tools/gameprep.py [--game hl2]` (a few seconds), then rebuild with
   `python3 tools/build_game.py --release [--game hl2]` (long).
-- Both games share one checkout: Portal 2 in `build/game` and
-  `build/portal2-native`, Half-Life 2 in `build/hl2`; paths in
-  `tools/games.py`, config merge in `tools/localconfig.py` (`game_config`).
-  Tools take `--game`; never hard-code a game path.
+- The games share one checkout: Portal 2 in `build/game` and
+  `build/portal2-native`, Half-Life 2 in `build/hl2`, Portal in
+  `build/portal1`; paths in `tools/games.py`, config merge in
+  `tools/localconfig.py` (`game_config`). Tools take `--game`; never
+  hard-code a game path.
 
 ## Conventions for native bridges
 

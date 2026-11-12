@@ -346,6 +346,39 @@ always gets `-w`/`-h` at the render size (it would start at 640×480).
 Steam Input reloads its action manifest every few seconds in game (one small
 file read; harmless, not fixed).
 
+## Portal
+
+The same checkout also builds Portal's iPhone app (see
+[portal1.md](portal1.md)): `tools/build_ios.py --game portal1` reads the game
+profile (`tools/games.py`), writes `P2Game` = `portal1` into the Info.plist
+and builds `build/portal1/ios/<target>/Portal.app`. At launch
+`runtime/ios/game_ios.c` reads that key: saves in `Documents/portal-userdata`,
+`SteamAppId` 400 for the Steam stub, `-game portal`, back taps on (they fire
+the portal) and **Portal 2's touch layout**, since it already has both portal
+buttons.
+
+```sh
+./setup.sh --game portal1 --ios            # Mac build, then the iPhone app
+# or by hand, as for Portal 2:
+python3 tools/build_ios.py --game portal1 --target device --release --deps deps/ios-deps/device
+tools/ios_device.sh --game portal1 install && tools/ios_device.sh --game portal1 data   # ~4 GB: platform portal hl2
+tools/run_ios_sim.sh --game portal1 120    # simulator, headless
+```
+
+The identifier is `local.portal1recomp.<team>`, so it sits next to Portal 2's
+and Half-Life 2's apps (`games.portal1.ios_bundle_id` in
+`config/local.json`; `tools/ios_bundle_id.py --game portal1` prints it). The
+name on the home screen is "Portal". The Settings page is Portal 2's: the
+Portals group (back taps, portal buttons, vibration) and gyro aiming off by
+default, as for Portal 2. `tools/ios_device.sh saves` is still Portal 2 only,
+so Portal's saves are copied by hand for now.
+
+Status (12 November 2026): installs, starts and renders on an iPhone 17 Pro
+Max (short session, menu and touch layout; no chamber played). The devices
+were locked for the last run of this checkout, so the app was not exercised
+again. Same experimental status as the Mac app
+([portal1.md](portal1.md#what-was-tested)).
+
 ## Diagnostics
 
 iOS-specific variables; `P2_FRAME_LOG`, `P2_GATE_TIMING`, `P2_TRACE_*`,

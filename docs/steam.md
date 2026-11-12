@@ -12,6 +12,13 @@ emulator. `setup.sh` downloads that dylib inside the Steamworks.NET package
   from 1.61) and starts through `SteamInternal_SteamAPI_Init` and
   `SteamInternal_GameServer_Init_V2`. It uses Steamworks.NET 2024.8.0,
   unpacked into `deps/steamworks-2024.8.0/steam_api.bundle`.
+- **Portal**: `engine.so` asks the SDK 1.60 interfaces (seen in the depot:
+  `SteamClient021`, `SteamUser023`, `SteamUtils010`, `SteamFriends017`,
+  `SteamMatchMaking009`, `STEAMUGC_INTERFACE_VERSION020`,
+  `SteamGameServer015`, ...), starts through `SteamInternal_SteamAPI_Init`,
+  and `client.so` asks the same set. It uses Steamworks.NET 2024.8.0 and the
+  same generated table as Half-Life 2 (`tools/gen_steam.py`, `VERSIONS_HL2`);
+  the Timeline interface of 1.61 is generated but not asked for.
 - **iPhone**: there is no Steam client. `runtime/ios/steam_stub.c` answers the
   same flat functions offline (a logged-in owner, no achievements, cloud or
   multiplayer).
