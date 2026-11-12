@@ -53,7 +53,8 @@ RT_CHECK(sdl_audio_guest_callback) {
     memset(GPTR(desired), 0, 24); memset(GPTR(obtained), 0xcc, 24);
     W32(desired, 44100); W16(desired + 4, AUDIO_S16LSB); W8(desired + 6, 2); W16(desired + 8, 512);
     W32(desired + 16, rt_dynamic_import("__test_audio_callback")); W32(desired + 20, 0x1234);
-    uint32_t args[5] = {0, 0, desired, obtained, 0};
+    // Source 1 asks for SDL_AUDIO_ALLOW_ANY_CHANGE and ignores `obtained`: the shim allows none.
+    uint32_t args[5] = {0, 0, desired, obtained, SDL_AUDIO_ALLOW_ANY_CHANGE};
     uint32_t id = call(&c, "SDL_OpenAudioDevice", args, 5);
     assert(id >= 2);
     assert(R32(obtained) == 44100 && R16(obtained + 4) == AUDIO_S16LSB && R8(obtained + 6) == 2);
