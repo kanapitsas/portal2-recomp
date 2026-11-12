@@ -19,6 +19,7 @@
 // SHIMS: Direct3DCreate9 Direct3DCreate9Ex
 #include "d3d9_bridge.h"
 #include "fps_overlay.h"
+#include "modules.h"
 #include "frame_times.h"
 #include "sdl_common.h"
 #include <dlfcn.h>
@@ -1074,7 +1075,11 @@ void d3d9_manual_IDirect3DDevice9_SetGammaRamp(CPU *c, void *self, uint32_t a) {
 
 static int d3d9_present_call(CPU *c, const char *name, void *data) {
     const D3d9Method *m = data;
-    if (m->name[9] == 'D') rt_d3d9_draw_overlay(self_of(c, m));   // IDirect3DDevice9::Present (pas la chaîne d'échange)
+    if (m->name[9] == 'D') {   // IDirect3DDevice9::Present (pas la chaîne d'échange)
+        void *device = self_of(c, m);
+        rt_native_plugins_present(device);   // greffons natifs (native_plugin.c)
+        rt_d3d9_draw_overlay(device);
+    }
     uint64_t ticket = ++presents_started;
     d3d9_call(c, name, data);
     if ((int32_t)c->eax >= 0) {
@@ -1095,7 +1100,14 @@ static int is_present(const D3d9Method *m) {
     return !strcmp(m->name, "IDirect3DDevice9::Present") || !strcmp(m->name, "IDirect3DSwapChain9::Present")
         || !strcmp(m->name, "IDirect3DDevice9Ex::PresentEx");
 }
+// Reset : les greffons natifs libèrent d'abord leurs ressources D3DPOOL_DEFAULT.
+static int d3d9_reset_call(CPU *c, const char *name, void *data) {
+    rt_native_plugins_reset(self_of(c, data));
+    return d3d9_call(c, name, data);
+}
 static rt_shim_handler handler_of(const D3d9Method *m) {
+    if (!strcmp(m->name, "IDirect3DDevice9::Reset") || !strcmp(m->name, "IDirect3DDevice9Ex::ResetEx"))
+        return d3d9_reset_call;
     if (!is_present(m)) return d3d9_call;
     return rt_frame_times_enabled() ? d3d9_timed_present : d3d9_present_call;
 }

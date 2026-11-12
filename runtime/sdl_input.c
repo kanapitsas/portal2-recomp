@@ -427,6 +427,7 @@ static int sdl_input_shim(CPU *c, const char *name) {
     if (!strcmp(n, "PollEvent")) {
         uint32_t guest = rt_arg32(c, 0);
         if (guest) rt_write_span(c, guest, GUEST_EVENT_SIZE);
+        rt_native_plugins_events();   // greffons natifs (native_plugin.c)
         int got; poll_into(c, guest, &got);
         c->eax = (uint32_t)got;
     } else if (!strcmp(n, "WaitEventTimeout")) {
@@ -487,7 +488,8 @@ static int sdl_input_shim(CPU *c, const char *name) {
         if (px) W32(px, (uint32_t)(x * rt_sdl_window_scale()));
         if (py) W32(py, (uint32_t)(y * rt_sdl_window_scale()));
     } else if (!strcmp(n, "SetRelativeMouseMode")) {
-        c->eax = (uint32_t)SDL_SetRelativeMouseMode(rt_arg32(c, 0) ? SDL_TRUE : SDL_FALSE);
+        rt_mouse_note_relative(rt_arg32(c, 0) != 0);   // gardé de côté tant qu'un greffon tient la souris
+        c->eax = rt_mouse_released() ? 0 : (uint32_t)SDL_SetRelativeMouseMode(rt_arg32(c, 0) ? SDL_TRUE : SDL_FALSE);
         static int last_relative = -1;
         if (rt_input_logging() && (int)rt_arg32(c, 0) != last_relative)
             fprintf(stderr, "[input] %u relative mouse mode %u\n", SDL_GetTicks(), rt_arg32(c, 0));
