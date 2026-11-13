@@ -78,9 +78,12 @@ def generation_key(layout_path, layout, specs, whole_game, objdump='objdump'):
     images = [(m['image'], Path(m['image']).stat().st_size, Path(m['image']).stat().st_mtime_ns)
               for m in layout['modules']]
     objdump = shutil.which(objdump) or objdump
+    # Flags mode switches (lift.flags_mode, dead_flags): the generated C depends
+    # on them, so changing one regenerates (object caches follow the sources).
+    flags = [os.environ.get(name, '') for name in ('P2_LIFT_ABI_FLAGS', 'P2_LIFT_KEEP_FLAGS')]
     return digest(*(Path(t).read_bytes() for t in GEN_TOOLS), layout_path.read_bytes(), images, specs,
                   whole_game, objdump, Path(objdump).stat().st_mtime_ns if Path(objdump).exists() else 0,
-                  lift.SHARD_BITS, 'v1')
+                  lift.SHARD_BITS, flags, 'v1')
 
 
 def generate(layout_path, layout, specs, out, *, whole_game=True, jobs=None, objdump='objdump'):

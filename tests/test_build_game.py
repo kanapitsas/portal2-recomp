@@ -174,3 +174,8 @@ class GenerateReuseTests(unittest.TestCase):
             self.assertEqual((manifest['key'], seconds), (key, 0.0))
             with self.assertRaises(TypeError):   # no positional surprises: options are keywords
                 build_game.generate(layout_path, layout, specs, out, True, 1)
+            # The flags mode switches change the generated C: they are part of the key.
+            from unittest.mock import patch
+            for name in ('P2_LIFT_ABI_FLAGS', 'P2_LIFT_KEEP_FLAGS'):
+                with patch.dict('os.environ', {name: '0' if 'ABI' in name else '1'}):
+                    self.assertNotEqual(build_game.generation_key(layout_path, layout, specs, True), key)
