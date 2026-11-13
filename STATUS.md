@@ -193,11 +193,19 @@ Steps, from main ~45.3 M instructions, 22.8 M cycles, 160 fps to 40.9 M,
    before a call, only the restore after it is dropped (−1.5 % cycles). A
    version that no longer passed flags to callees reached −6 % but Codex
    showed it unsound: a callee, tail-jump thunk or indirect call that reads
-   flags at entry would see stale flags. Recovering it soundly needs per-flag
-   liveness (cmpxchg8b writes only ZF), a per-function summary (flags read at
-   entry, callees and tail targets reached without a kill), a global fixed
-   point and a second lifting pass keeping the save only before readers;
-   indirect calls are safe only if no address-taken function reads flags.
+   flags at entry would see stale flags. It now exists as the **ABI flags
+   mode** (default for the whole-game lift, `generate_sharded`): liveness is
+   per flag, and under the i386 SysV assumption a call neither reads nor
+   returns flags (no save before it, no reload after it) and `ret` saves
+   nothing; tail jumps keep the save. The assumption is proved per game at
+   generation time (`lift.flags_check`, same pass): no call is followed by a
+   flag read, and every function reading a flag at entry is either a
+   pushfd/lahf-only reader (CPUID probes, emitted conservatively) or only a
+   code-pointer root that no direct call or jump reaches (switch cases
+   compiled as functions). Otherwise the whole game is lifted again in the
+   conservative mode above. `P2_LIFT_ABI_FLAGS=0` at generation forces the
+   conservative mode; `build/<game>/gen/manifest.json` records `flags_mode`
+   and `flags_check`. PE plugins and smoke fixtures stay conservative.
 
 Remaining profile (steady state): ~60 % translated code, flat (no function
 above 1 %); Apple driver plus kernel ~30 %, of which `iokit_user_client_trap`
