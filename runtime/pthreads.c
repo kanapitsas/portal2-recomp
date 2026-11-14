@@ -28,20 +28,19 @@ typedef struct Attr {
 #define KEYS_MAX 1024u
 typedef struct Key { int used; uint32_t destructor; pthread_key_t native; } Key;
 typedef struct Cond { uint32_t address; pthread_cond_t native; struct Cond *next; } Cond;
-typedef struct Once { uint32_t address; pthread_once_t native; struct Once *next; } Once;
+typedef struct Once { uint32_t address; int done; pthread_once_t native; struct Once *next; } Once;
 static Key keys[KEYS_MAX];
 static Key *find_key(uint32_t id) { return id && id <= KEYS_MAX && keys[id - 1].used ? &keys[id - 1] : NULL; }
-static Cond *conditions;
-static Once *onces;
 static _Thread_local CPU *once_cpu;
 static _Thread_local uint32_t once_function, once_address;
+static _Thread_local Once *once_item;
 static void once_bridge(void) {
     rt_guest_enter();
     rt_invoke(once_cpu, once_function, NULL, 0);
     W32(once_address, 2);
+    once_item->done = 1;
     rt_guest_leave();
 }
-static Mutex *mutexes;
 static Attr *attributes;
 
 // Code d'erreur pthread hôte -> Linux (0 reste 0 ; rt_linux_errno traduit
@@ -51,36 +50,31 @@ static Attr *find_attr(uint32_t address) {
     for (Attr *a = attributes; a; a = a->next) if (a->address == address) return a;
     return NULL;
 }
-// Cache direct devant la liste (verrouillages fréquents : ~2 % du thread
-// principal en parcours de liste). Toujours consulté sous la porte invitée ;
-// une entrée est effacée à la destruction de son mutex.
-#define MUTEX_CACHE 1024u
-static Mutex *mutex_cache[MUTEX_CACHE];
-static unsigned mutex_slot(uint32_t address) { return (address >> 2 ^ address >> 12) & (MUTEX_CACHE - 1); }
+// Tables de hachage chaînées par adresse invitée (champ next), toujours
+// consultées sous la porte invitée : recherche, création et destruction en O(1).
+#define BUCKETS 4096u
+static unsigned bucket(uint32_t address) { return (address >> 2 ^ address >> 14) & (BUCKETS - 1); }
+static Mutex *mutexes[BUCKETS];
+static Cond *conditions[BUCKETS];
+static Once *onces[BUCKETS];
 static Mutex *find_mutex(uint32_t address) {
-    Mutex *m = mutex_cache[mutex_slot(address)];
-    if (m && m->address == address) return m;
-    for (m = mutexes; m; m = m->next) if (m->address == address) { mutex_cache[mutex_slot(address)] = m; return m; }
-    return NULL;
+    Mutex *m = mutexes[bucket(address)];
+    while (m && m->address != address) m = m->next;
+    return m;
 }
-// Même cache pour les conditions (signal/wait fréquents), sous la porte.
-#define COND_CACHE 256u
-static Cond *cond_cache[COND_CACHE];
-static unsigned cond_slot(uint32_t address) { return (address >> 2 ^ address >> 12) & (COND_CACHE - 1); }
-static Cond *find_cond(uint32_t address) {
-    Cond *item = cond_cache[cond_slot(address)];
-    if (item && item->address == address) return item;
-    for (item = conditions; item; item = item->next)
-        if (item->address == address) { cond_cache[cond_slot(address)] = item; return item; }
-    return NULL;
+static Cond **cond_link(uint32_t address) {
+    Cond **link = &conditions[bucket(address)];
+    while (*link && (*link)->address != address) link = &(*link)->next;
+    return link;
 }
+static Cond *find_cond(uint32_t address) { return *cond_link(address); }
 static int create_mutex(uint32_t address, const pthread_mutexattr_t *attr, uint32_t kind) {
     if (!address || find_mutex(address)) return EINVAL;
     Mutex *m = calloc(1, sizeof(*m));
     if (!m) return ENOMEM;
     int error = pthread_mutex_init(&m->native, attr);
     if (error) { free(m); return error; }
-    m->address = address; m->kind = kind; m->next = mutexes; mutexes = m;
+    m->address = address; m->kind = kind; m->next = mutexes[bucket(address)]; mutexes[bucket(address)] = m;
     return 0;
 }
 static int native_type(uint32_t kind) {
@@ -148,13 +142,36 @@ static int mutex_operation(CPU *c, uint32_t address, int op) {
     return error;
 }
 
-static int cond_wake(uint32_t address, int broadcast) {
+static int create_cond(uint32_t address, Cond **out) {
+    Cond *item = calloc(1, sizeof(*item));
+    if (!item) return ENOMEM;
+    int error = pthread_cond_init(&item->native, NULL);
+    if (error) { free(item); return error; }
+    item->address = address; item->next = conditions[bucket(address)]; conditions[bucket(address)] = item;
+    *out = item;
+    return 0;
+}
+// PTHREAD_COND_INITIALIZER glibc : 48 octets nuls, sans pthread_cond_init
+// (std::condition_variable). pthread_cond_destroy laisse une marque non nulle
+// pour qu'une condition détruite ne soit pas réadoptée.
+#define COND_DESTROYED 44u
+static int static_cond_bytes(CPU *c, uint32_t address) {
+    const uint8_t *raw = rt_span(c, address, 48);
+    for (unsigned i = 0; i < 48; ++i) if (raw[i]) return 0;
+    return 1;
+}
+static Cond *find_or_adopt_cond(CPU *c, uint32_t address) {
     Cond *item = find_cond(address);
+    if (!item && address && static_cond_bytes(c, address) && create_cond(address, &item)) item = NULL;
+    return item;
+}
+static int cond_wake(CPU *c, uint32_t address, int broadcast) {
+    Cond *item = find_or_adopt_cond(c, address);
     if (!item) return EINVAL;
     return broadcast ? pthread_cond_broadcast(&item->native) : pthread_cond_signal(&item->native);
 }
 static int cond_wait(CPU *c, int timed) {
-    Cond *item = find_cond(rt_arg32(c, 0));
+    Cond *item = find_or_adopt_cond(c, rt_arg32(c, 0));
     Mutex *mutex = find_mutex(rt_arg32(c, 1));
     if (!item || !mutex) return EINVAL;
     struct timespec deadline = {0};
@@ -205,40 +222,41 @@ static int pthread_objects(CPU *c, const char *name) {
         if (rt_arg32(c, 1)) rt_trap(c, c->eip, "guest condition attributes not implemented");
         Cond *item = find_cond(address);
         if (!address || item) error = EINVAL;
-        else {
-            item = calloc(1, sizeof(*item));
-            if (!item) error = ENOMEM;
-            else {
-                error = pthread_cond_init(&item->native, NULL);
-                if (error) free(item);
-                else { item->address = address; item->next = conditions; conditions = item; memset(rt_write_span(c,address,48),0,48); }
-            }
-        }
+        else if (!(error = create_cond(address, &item))) memset(rt_write_span(c, address, 48), 0, 48);
     } else if (!strcmp(name, "pthread_cond_signal") || !strcmp(name, "pthread_cond_broadcast")) {
-        error = cond_wake(address, !strcmp(name, "pthread_cond_broadcast"));
+        error = cond_wake(c, address, !strcmp(name, "pthread_cond_broadcast"));
     } else if (!strcmp(name, "pthread_cond_destroy")) {
-        Cond **link = &conditions; while (*link && (*link)->address != address) link = &(*link)->next;
-        if (!*link) error = EINVAL;
-        else {
+        Cond **link = cond_link(address);
+        if (!*link) {   // statique jamais utilisée : glibc renvoie 0
+            if (address && static_cond_bytes(c, address)) W32(address + COND_DESTROYED, UINT32_MAX);
+            else error = EINVAL;
+        } else {
             Cond *item = *link; error = pthread_cond_destroy(&item->native);
-            if (!error) { *link = item->next; if (cond_cache[cond_slot(address)] == item) cond_cache[cond_slot(address)] = NULL; free(item); }
+            if (!error) { *link = item->next; W32(address + COND_DESTROYED, UINT32_MAX); free(item); }
         }
     } else if (!strcmp(name,"pthread_cond_wait") || !strcmp(name,"pthread_cond_timedwait")) {
         error = cond_wait(c, !strcmp(name, "pthread_cond_timedwait"));
     } else if (!strcmp(name, "pthread_once")) {
-        Once *item = onces; while (item && item->address != address) item = item->next;
+        // once_bridge écrit 2 une fois la routine terminée ; avant, le mot
+        // invité reste à PTHREAD_ONCE_INIT (0) : 2 = déjà fait, sans registre.
+        if (R32(address) == 2) { c->eax = 0; return 1; }
+        Once *item = onces[bucket(address)]; while (item && item->address != address) item = item->next;
         if (!item) {
             if (R32(address)) rt_trap(c,c->eip,"unknown nonzero pthread_once control");
             item = calloc(1,sizeof(*item)); if (!item) { c->eax=ENOMEM; return 1; }
             pthread_once_t initial = PTHREAD_ONCE_INIT; item->native = initial;
-            item->address=address; item->next=onces; onces=item;
+            item->address=address; item->next=onces[bucket(address)]; onces[bucket(address)]=item;
+        } else if (item->done && !R32(address)) {
+            // Entrée terminée mais mot remis à 0 : mémoire réutilisée pour un
+            // nouveau contrôle. Personne n'attend un once terminé : on réarme.
+            pthread_once_t initial = PTHREAD_ONCE_INIT; item->native = initial; item->done = 0;
         }
-        CPU *old_cpu=once_cpu; uint32_t old_function=once_function, old_address=once_address;
-        once_cpu=c; once_function=rt_arg32(c,1); once_address=address;
+        CPU *old_cpu=once_cpu; uint32_t old_function=once_function, old_address=once_address; Once *old_item=once_item;
+        once_cpu=c; once_function=rt_arg32(c,1); once_address=address; once_item=item;
         unsigned saved=rt_guest_suspend();
         error=pthread_once(&item->native,once_bridge);
         rt_guest_resume(saved);
-        once_cpu=old_cpu; once_function=old_function; once_address=old_address;
+        once_cpu=old_cpu; once_function=old_function; once_address=old_address; once_item=old_item;
     } else if (!strcmp(name, "pthread_mutexattr_init")) {
         if (!address || find_attr(address)) error = EINVAL;
         else {
@@ -271,13 +289,13 @@ static int pthread_objects(CPU *c, const char *name) {
         error = attr_address && !a ? EINVAL : create_mutex(address, a ? &a->native : NULL, a ? a->kind : 0);
         if (!error) { memset(rt_write_span(c, address, 24), 0, 24); W32(address + 12, a ? a->kind : 0); }
     } else if (!strcmp(name, "pthread_mutex_destroy")) {
-        Mutex **link = &mutexes;
+        Mutex **link = &mutexes[bucket(address)];
         while (*link && (*link)->address != address) link = &(*link)->next;
         if (!*link) error = EINVAL;
         else {
             Mutex *m = *link;
             error = pthread_mutex_destroy(&m->native);
-            if (!error) { *link = m->next; if (mutex_cache[mutex_slot(address)] == m) mutex_cache[mutex_slot(address)] = NULL; W32(address + 12, UINT32_MAX); free(m); }
+            if (!error) { *link = m->next; W32(address + 12, UINT32_MAX); free(m); }
         }
     } else if (!strcmp(name, "pthread_mutex_lock") || !strcmp(name, "pthread_mutex_trylock") ||
                !strcmp(name, "pthread_mutex_timedlock") || !strcmp(name, "pthread_mutex_unlock")) {
@@ -297,7 +315,7 @@ static int pthread_handler(CPU *c, const char *name, void *data) {
     int op = (int)(intptr_t)data, error;
     rt_guest_enter();
     switch (op) {
-    case ROUTE_COND_SIGNAL: case ROUTE_COND_BROADCAST: error = cond_wake(rt_arg32(c, 0), op == ROUTE_COND_BROADCAST); break;
+    case ROUTE_COND_SIGNAL: case ROUTE_COND_BROADCAST: error = cond_wake(c, rt_arg32(c, 0), op == ROUTE_COND_BROADCAST); break;
     case ROUTE_COND_WAIT: case ROUTE_COND_TIMEDWAIT: error = cond_wait(c, op == ROUTE_COND_TIMEDWAIT); break;
     case ROUTE_GETSPECIFIC: error = key_specific(c, 0); break;
     case ROUTE_SETSPECIFIC: error = key_specific(c, 1); break;
@@ -350,14 +368,10 @@ void rt_pthreads_destroy(void) {
     rt_guest_enter();
     rt_threads_destroy();
     for (Key *key=keys;key<keys+KEYS_MAX;++key) if (key->used) { pthread_key_delete(key->native); key->used=0; }
-    while (conditions) { Cond *next=conditions->next; pthread_cond_destroy(&conditions->native); free(conditions); conditions=next; }
-    while (onces) { Once *next=onces->next; free(onces); onces=next; }
-    memset(mutex_cache, 0, sizeof(mutex_cache));
-    memset(cond_cache, 0, sizeof(cond_cache));
-    while (mutexes) {
-        Mutex *next = mutexes->next;
-        pthread_mutex_destroy(&mutexes->native);
-        free(mutexes); mutexes = next;
+    for (unsigned i = 0; i < BUCKETS; ++i) {
+        while (conditions[i]) { Cond *next=conditions[i]->next; pthread_cond_destroy(&conditions[i]->native); free(conditions[i]); conditions[i]=next; }
+        while (onces[i]) { Once *next=onces[i]->next; free(onces[i]); onces[i]=next; }
+        while (mutexes[i]) { Mutex *next=mutexes[i]->next; pthread_mutex_destroy(&mutexes[i]->native); free(mutexes[i]); mutexes[i]=next; }
     }
     while (attributes) {
         Attr *next = attributes->next;

@@ -14,7 +14,7 @@
 // Remplace une liste chaînée parcourue entièrement à chaque appel (coût
 // quadratique pendant la traduction des shaders par togl).
 #include "rt.h"
-#include <pthread.h>
+#include <os/lock.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -25,7 +25,7 @@
 #define LARGE_ALIGN 0x1000u
 #define CLASS_COUNT 80            // 64 classes de 16 o jusqu'à 1 Kio, puis 4 par puissance de 2 jusqu'à 16 Kio
 
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+static os_unfair_lock lock = OS_UNFAIR_LOCK_INIT;   // tas presque toujours sous la porte invitée : verrou non disputé
 static uint32_t top = HEAP_BEGIN, mapped = HEAP_BEGIN;
 static uint64_t live_bytes;
 
@@ -196,7 +196,7 @@ uint32_t rt_alloc_page_aligned(uint32_t size) {
     if (size > HEAP_END - HEAP_BEGIN - 2 * LARGE_ALIGN) return 0;
     uint32_t rounded = (size + LARGE_ALIGN - 1) & ~(LARGE_ALIGN - 1), addr = 0;
     if (rounded <= SMALL_MAX) rounded = SMALL_MAX + LARGE_ALIGN;
-    pthread_mutex_lock(&lock);
+    os_unfair_lock_lock(&lock);
     for (size_t i = 0; i < large_count && !addr; ++i) {
         if ((free_large[i].addr & (LARGE_ALIGN - 1)) || free_large[i].size < rounded) continue;
         addr = free_large[i].addr;
@@ -211,7 +211,7 @@ uint32_t rt_alloc_page_aligned(uint32_t size) {
     }
     if (addr && table_put(addr, rounded)) addr = 0;
     if (addr) live_bytes += rounded;
-    pthread_mutex_unlock(&lock);
+    os_unfair_lock_unlock(&lock);
     return addr;
 }
 
@@ -246,68 +246,68 @@ static int heap_shim(CPU *c, const char *name) {
 RT_SHIM_PROVIDER(heap_shim)
 
 uint32_t rt_alloc(uint32_t size) {
-    pthread_mutex_lock(&lock);
+    os_unfair_lock_lock(&lock);
     uint32_t addr = alloc_locked(size);
-    pthread_mutex_unlock(&lock);
+    os_unfair_lock_unlock(&lock);
     return addr;
 }
 
 int rt_free(uint32_t ptr) {
     if (!ptr) return 0;
-    pthread_mutex_lock(&lock);
+    os_unfair_lock_lock(&lock);
     int result = free_locked(ptr);
-    pthread_mutex_unlock(&lock);
+    os_unfair_lock_unlock(&lock);
     return result;
 }
 
 uint32_t rt_heap_usable_size(uint32_t ptr) {
-    pthread_mutex_lock(&lock);
+    os_unfair_lock_lock(&lock);
     Slot *slot = ptr ? table_find(ptr) : NULL;
     uint32_t size = slot ? slot->size : 0;
-    pthread_mutex_unlock(&lock);
+    os_unfair_lock_unlock(&lock);
     return size;
 }
 
 uint32_t rt_realloc(uint32_t ptr, uint32_t size) {
     if (!ptr) return rt_alloc(size);
     if (!size) { rt_free(ptr); return 0; }
-    pthread_mutex_lock(&lock);
+    os_unfair_lock_lock(&lock);
     Slot *slot = table_find(ptr);
-    if (!slot) { pthread_mutex_unlock(&lock); return 0; }
+    if (!slot) { os_unfair_lock_unlock(&lock); return 0; }
     uint32_t old = slot->size;
-    if (size <= old) { pthread_mutex_unlock(&lock); return ptr; }
+    if (size <= old) { os_unfair_lock_unlock(&lock); return ptr; }
     uint32_t result = alloc_locked(size);
     if (result) {
         memcpy(GPTR(result), GPTR(ptr), old);
         free_locked(ptr);
     }
-    pthread_mutex_unlock(&lock);
+    os_unfair_lock_unlock(&lock);
     return result;   // 0 : l'allocation d'origine est conservée
 }
 
 void rt_heap_info(uint32_t *arena, uint32_t *used, uint32_t *free_bytes, uint32_t *free_blocks) {
-    pthread_mutex_lock(&lock);
+    os_unfair_lock_lock(&lock);
     *arena = top - HEAP_BEGIN;
     *used = (uint32_t)live_bytes;
     *free_bytes = *arena - *used;
     size_t blocks = large_count;
     for (unsigned k = 0; k < CLASS_COUNT; ++k) blocks += free_small[k].count;
     *free_blocks = blocks > UINT32_MAX ? UINT32_MAX : (uint32_t)blocks;
-    pthread_mutex_unlock(&lock);
+    os_unfair_lock_unlock(&lock);
 }
 
 size_t rt_heap_table_capacity(void) {
-    pthread_mutex_lock(&lock);
+    os_unfair_lock_lock(&lock);
     size_t capacity = table_capacity;
-    pthread_mutex_unlock(&lock);
+    os_unfair_lock_unlock(&lock);
     return capacity;
 }
 
 void rt_heap_reset(void) {
-    pthread_mutex_lock(&lock);
+    os_unfair_lock_lock(&lock);
     for (unsigned k = 0; k < CLASS_COUNT; ++k) { free(free_small[k].items); free_small[k] = (Stack){0}; }
     free(free_large); free_large = NULL; large_count = large_capacity = 0;
     free(table); table = NULL; table_capacity = table_used = 0;
     top = mapped = HEAP_BEGIN; live_bytes = 0;
-    pthread_mutex_unlock(&lock);
+    os_unfair_lock_unlock(&lock);
 }

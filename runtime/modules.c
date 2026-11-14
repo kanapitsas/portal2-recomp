@@ -217,7 +217,7 @@ static int guest_dladdr(CPU *c, uint32_t address, uint32_t info) {
             const GuestSymbol *symbol = &module->symbols[s];
             if (symbol->address <= address && (!best || symbol->address > best->address)) best = symbol;
         }
-        uint32_t sname = best ? rt_guest_strdup(best->name) : 0;   // copie invitée, gardée (glibc pointe dans .dynstr)
+        uint32_t sname = best ? rt_intern_string(c, best->name) : 0;   // copie invitée stable, une par nom (glibc pointe dans .dynstr)
         rt_write_span(c, info, 16);
         W32(info, module_name(module, i)); W32(info + 4, module->base);
         W32(info + 8, sname); W32(info + 12, best ? best->address : 0);

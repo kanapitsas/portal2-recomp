@@ -179,11 +179,10 @@ void rt_div_narrow(CPU *c, uint32_t divisor, int width, int is_signed, uint32_t 
     uint32_t dividend = width == 8 ? (c->eax & 0xffffu) : (((c->edx & 0xffffu) << 16) | (c->eax & 0xffffu));
     uint32_t quotient, remainder;
     if (is_signed) {
-        int32_t lhs = (int32_t)sx(dividend, width * 2), rhs = (int32_t)sx(divisor, width);
-        int32_t limit = width == 8 ? 127 : 32767;
-        // -32768/-1 (ou -128/-1) : quotient hors limite, comme rt_div32 pour INT_MIN/-1.
-        if (rhs == -1 && lhs == -limit - 1) rt_trap(c, pc, "integer quotient overflow");
-        int32_t q = lhs / rhs;
+        // En int64_t : INT32_MIN/-1 (DX:AX = 0x80000000, diviseur 0xffff) est défini.
+        int64_t lhs = (int32_t)sx(dividend, width * 2), rhs = (int32_t)sx(divisor, width);
+        int64_t limit = width == 8 ? 127 : 32767;
+        int64_t q = lhs / rhs;
         if (q > limit || q < -limit - 1) rt_trap(c, pc, "integer quotient overflow");
         quotient = (uint32_t)q & mask; remainder = (uint32_t)(lhs % rhs) & mask;
     } else {
