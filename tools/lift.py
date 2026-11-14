@@ -513,101 +513,346 @@ class _Without:
 # Indicateurs morts. Chaque instruction écrit les indicateurs x86 dans la
 # structure locale f (rt.h, calcul immédiat). Une écriture que rien ne lit
 # avant la suivante est inutile, et clang ne l'élimine pas toujours (f
-# sauvegardé dans c->flags à chaque appel). Passe arrière de vivacité, sur
-# l'indicateur « au moins un drapeau » :
-# - écrivains connus (f_add/sub/logic/neg/imul : tous les drapeaux lus ici ;
-#   AF n'est lu que par pushf/lahf, et ces fonctions-là ne sont pas traitées) ;
-#   inc/dec/décalages n'écrivent pas tout : ils ne tuent rien mais leur calcul
-#   peut sauter si rien ne lit après ;
-# - lecteurs : cond(&f, …) ; toute autre mention de f est opaque (lue, gardée) ;
-# - appels : les drapeaux sont toujours sauvés avant (l'appelé peut les lire
-#   ou les rendre, comme get_pc_thunk) ; la relecture après l'appel saute
-#   quand aucun lecteur ne suit. ret et sauts sortants sauvent toujours. Rien
-#   n'est supposé sur les autres fonctions.
+# sauvegardé dans c->flags à chaque appel). Passe arrière de vivacité par
+# indicateur (masque de 6 bits CF ZF SF OF PF AF) sur le C émis par translate :
+# chaque forme émise qui mentionne f a un effet exact (lus, toujours écrits,
+# peut-être écrits ; table _flag_effect), toute autre mention de f est opaque
+# (lit tout, n'écrit rien). Un écrivain qui a un jumeau n_* (rt.h) dont tous
+# les indicateurs qu'il peut écrire sont morts devient ce jumeau.
+#
+# Frontières de fonction, deux modes :
+# - prudent (défaut de lift, toujours pour generate_pe) : c->flags est sauvé
+#   avant chaque appel, ret et saut sortant (l'appelé peut lire les drapeaux,
+#   ou les rendre, comme get_pc_thunk) ; la relecture après un appel saute
+#   quand aucun indicateur n'est vivant après. Rien n'est supposé sur les
+#   autres fonctions.
+# - ABI (abi=True, generate_sharded quand la preuve de build passe) : ABI
+#   i386 SysV, les drapeaux ne traversent pas un appel. Un appel (direct,
+#   import, indirect) ne les lit ni ne les rend : ni sauvegarde avant, ni
+#   relecture après, et il les tue tous ; ret ne les lit pas (pas de
+#   sauvegarde). Les sauts sortants gardent le comportement prudent
+#   (sauvegarde, lisent tout) : le découpage chaud/froid de GCC et les
+#   fragments de switch compilés comme fonctions y passent des drapeaux.
+#   `FL f = c->flags;` à l'entrée et la relecture de `resume:` restent
+#   (valeurs périmées, que personne ne lit par hypothèse).
+#
+# La preuve (rapport `report`, même passe) : deux modèles de plus calculés
+# dans le même point fixe (masques empilés : bits 0-5 génération, 6-11
+# modèle E, 12-17 modèle R ; voir _FLAG_MODELS) :
+# - E (entry_live) : modèle ABI, mais les sauts sortants ne lisent rien (ils
+#   transmettent les drapeaux à leur cible, dont l'entrée est vérifiée à son
+#   tour) ; un indicateur vivant à l'entrée est lu avant d'être réécrit ;
+# - R (read_after_call) : les appels sont transparents (ni lus ni tués) ; un
+#   indicateur vivant juste après un appel serait lu tel que l'appelé l'a
+#   laissé. `rep cmps/scas` dont ECX vaut un immédiat non nul dans le même
+#   bloc linéaire écrit tout (memcmp en ligne de GCC après un appel).
+CF, ZF, SF, OF, PF, AF = 1, 2, 4, 8, 16, 32
+ALL_FLAGS = 63
+FLAG_NAMES = (('cf', CF), ('zf', ZF), ('sf', SF), ('of', OF), ('pf', PF), ('af', AF))
+_FLAG_BIT = dict(FLAG_NAMES)
+_SZP = ZF | SF | PF
+# cond() de rt.h : indicateurs lus par chaque condition.
+_CC_READS = dict(O=OF, NO=OF, B=CF, AE=CF, E=ZF, NE=ZF, BE=CF | ZF, A=CF | ZF, S=SF, NS=SF, P=PF, NP=PF,
+                 L=SF | OF, GE=SF | OF, LE=ZF | SF | OF, G=ZF | SF | OF)
+# Écrivains qui ont un jumeau n_* : indicateurs que la version f_* peut écrire (rt.h).
+_TWIN_WRITES = dict(add=ALL_FLAGS, sub=ALL_FLAGS, logic=ALL_FLAGS, neg=ALL_FLAGS, imul=ALL_FLAGS,
+                    inc=ALL_FLAGS & ~CF, dec=ALL_FLAGS & ~CF,
+                    shl=CF | OF | _SZP, shr=CF | OF | _SZP, sar=CF | OF | _SZP)
 _FLAG_WRITER = re.compile(r'\bf_(add|sub|logic|neg|imul|inc|dec|shl|shr|sar)\(&f, ')
-_FLAG_KILLS = {'add', 'sub', 'logic', 'neg', 'imul'}
-_FLAG_ANY = re.compile(r'&f\b|\bf\.|\bf = |= f;')
+_FLAG_TOKEN = re.compile(r'\bcond\(&f, CC_([A-Z]+)\)|\bf_([a-z]+)\(&f, |\b(szp)\(&f, |\b(get_eflags)\(c, &f\)'
+                         r'|\b(set_eflags)\(c, &f, |\bf\.(cf|zf|sf|of|pf|af)\b( = (?!=))?')
+_FLAG_RESIDUE = re.compile(r'(?<![\w.>])f(?!\w)')   # toute autre mention de la variable f (pas .f ni ->f)
+_SHIFT_COUNT = re.compile(r'\bb = (0x[0-9a-f]+)u; r = f_(?:shl|shr|sar)\(&f, a, b, (?:8|16|32)\);')
+_ROTATE = re.compile(r'\bb = (0x[0-9a-f]+|1)u; r = f_rotate\(&f, a, b, (?:8|16|32), ([0-3])\);')
+_ROTATE_ANY = re.compile(r'\br = f_rotate\(&f, a, b, (?:8|16|32), ([0-3])\);')
+_SHLD_COUNT = re.compile(r'\br = \((0x[0-9a-f]+)u\) & 31; if \(r\) \{ ')
+_FLAG_SAVE = 'c->flags = f; '
+_SAVE_TARGET = re.compile(r'c->flags = f; (rt_(?:call_fn|call_any|call_import|call|return|jump_fn|jump_any|dispatch))\(')
 _CALL_SAVE = 'c->flags = f; '
 _CALL_RESTORE = ' f = c->flags;'
 _CALL = re.compile(r'rt_call(_fn|_any|_import)?\(c, ')
+_ECX_IMMEDIATE = re.compile(r'c->ecx = \(uint32_t\)\((0x[0-9a-f]+)u\); goto L[0-9a-f]+;')
+_CPU_CALL = re.compile(r'\b\w+\(c[,)]')
 
 
-def dead_flags(translated, flow, resume=frozenset()):
-    if any('get_eflags' in code or 'set_eflags' in code for code in translated.values()):
-        return translated
+def _flag_effect(code):
+    """Flag effect of one translated instruction, function-boundary saves aside.
+
+    Returns (use, must, may, twin, kind, boundary, rep): flags read on entry,
+    flags always written, flags possibly written, name of the n_* twin when
+    the instruction is a lone rewritable writer, reader kind for reports
+    ('cond', 'carry', 'eflags', 'opaque' or None), boundary ('call', 'ret',
+    'jump' or None) and whether it is `rep cmps/scas` (written only when
+    ECX != 0). Unrecognised forms are opaque: read everything, write nothing."""
+    opaque = (ALL_FLAGS, 0, ALL_FLAGS, None, 'opaque')
+    saves = code.count(_FLAG_SAVE)
+    targets = _SAVE_TARGET.findall(code)
+    boundary, rest = None, code
+    if saves:
+        kinds = {'call' if t.startswith('rt_call') else 'ret' if t == 'rt_return' else 'jump' for t in targets}
+        if len(targets) != saves or len(kinds) != 1 or (kinds == {'call'} and saves != 1):
+            return opaque + (None, False)
+        boundary = kinds.pop()
+        rest = rest.replace(_FLAG_SAVE, '')
+    reloads = rest.count(_CALL_RESTORE)
+    if reloads:
+        if boundary != 'call' or reloads != 1:
+            return opaque + (None, False)
+        rest = rest.replace(_CALL_RESTORE, '')
+    elif boundary == 'call':
+        return opaque + (None, False)   # forme d'appel inconnue
+    tokens = list(_FLAG_TOKEN.finditer(rest))
+    if _FLAG_RESIDUE.search(_FLAG_TOKEN.sub('', rest)):
+        return opaque + (boundary, False)
+    use = 0
+    others = []
+    for m in tokens:
+        if m[1]:
+            if m[1] not in _CC_READS:
+                return opaque + (boundary, False)
+            use |= _CC_READS[m[1]]
+        elif m[2]:
+            others.append(('f_' + m[2], m.start()))
+        elif m[3] or m[4] or m[5]:
+            others.append((m[3] or m[4] or m[5], m.start()))
+        else:
+            others.append((m[6] + ('=' if m[7] else ''), m.start()))
+    if not others:
+        return (use, 0, 0, None, 'cond' if use else None, boundary, False)
+    if use:
+        return opaque + (boundary, False)   # lecteur et écrivain à la fois : jamais émis
+    names = tuple(name for name, _ in others)
+    head = rest[:others[0][1]]
+    straight = 'if (' not in head and 'while (' not in rest
+    effect = None
+    if len(names) == 1 and names[0][2:] in _TWIN_WRITES and straight:
+        op = names[0][2:]
+        may = _TWIN_WRITES[op]
+        must = may
+        if op in ('shl', 'shr', 'sar'):
+            # Compte nul (modulo 32) : f_shl/shr/sar rendent sans rien écrire.
+            m = _SHIFT_COUNT.search(rest)
+            must = may if m and int(m[1], 16) & 31 else 0
+        return (0, must, may, op, None, boundary, False)
+    if names in (('f_adc',), ('f_sbb',)) and straight:
+        effect = (CF, ALL_FLAGS, ALL_FLAGS, None, 'carry')
+    elif names == ('f_comi',) and straight:
+        effect = (0, ALL_FLAGS, ALL_FLAGS, None, None)
+    elif names == ('f_rotate',) and straight and _ROTATE_ANY.search(rest):
+        # f_rotate : compte & 31 nul -> rien ; sinon CF, et OF si le compte vaut 1.
+        # rcl/rcr (genres 2, 3) lisent CF avant de l'écrire.
+        kind = int(_ROTATE_ANY.search(rest)[1])
+        m = _ROTATE.search(rest)
+        count = (int(m[1], 0) & 31) if m else None
+        must = 0 if not count else CF | (OF if count == 1 else 0)
+        reads = CF if kind >= 2 and count != 0 else 0
+        effect = (reads, must, CF | OF, None, 'carry' if reads else None)
+    elif names == ('f_sub', 'zf') and rest.startswith('while (c->ecx) { f_sub(&f, ') and (
+            '; --c->ecx; if (!f.zf) break; }' in rest or '; --c->ecx; if (f.zf) break; }' in rest):
+        # rep cmps/scas : f_sub puis lecture de son propre ZF à chaque tour ;
+        # aucune itération si ECX = 0, donc rien d'écrit à coup sûr.
+        return (0, 0, ALL_FLAGS, None, None, boundary, True)
+    elif names in (('cf=',), ('cf=', 'of='), ('zf=',)) and straight:
+        # bt/bts/btr/btc (CF) ; mul/imul à un opérande (CF = OF) ; bsf/bsr (ZF).
+        must = 0
+        for name in names:
+            must |= _FLAG_BIT[name[:2]]
+        effect = (0, must, must, None, None)
+    elif names == ('zf=', 'zf') and straight and 'f.zf = observed == expected; if (!f.zf)' in rest:
+        effect = (0, ZF, ZF, None, None)   # cmpxchg8b : relit le ZF qu'il vient d'écrire
+    elif names == ('cf=', 'pf=', 'af=', 'zf=', 'sf=') and straight and rest.startswith('a = c->eax >> 8; f.cf = a & 1;'):
+        effect = (0, CF | PF | AF | ZF | SF, CF | PF | AF | ZF | SF, None, None)   # sahf
+    elif names == ('cf=', 'of=', 'szp') and ' & 31; if (r) { f.cf = ' in rest:
+        # shld/shrd : rien si le compte & 31 est nul, sinon CF, OF et SZP.
+        m = _SHLD_COUNT.search(rest)
+        must = CF | OF | _SZP if m and int(m[1], 16) & 31 else 0
+        effect = (0, must, CF | OF | _SZP, None, None)
+    elif names in (('cf', 'f_adc'), ('cf', 'f_sbb')) and straight and 'b + f.cf, ' in rest:
+        effect = (CF, ALL_FLAGS, ALL_FLAGS, None, 'carry')   # lock adc/sbb : CF lu (deux fois), puis tout écrit
+    elif names == ('get_eflags',):
+        effect = (ALL_FLAGS, 0, 0, None, 'eflags')   # pushfd, lahf
+    elif names == ('set_eflags',) and straight:
+        effect = (0, ALL_FLAGS, ALL_FLAGS, None, None)   # popfd
+    if effect is None:
+        return opaque + (boundary, False)
+    return effect + (boundary, False)
+
+
+# Effet d'une frontière par modèle : (lit tout, tue tout) ; None = sans effet.
+#                  génération prudente     génération ABI          E             R
+_BOUNDARY = dict(call=((ALL_FLAGS, 0),     (0, ALL_FLAGS),         (0, ALL_FLAGS), (0, 0)),
+                 ret=((ALL_FLAGS, 0),      (0, 0),                 (0, 0),       (0, 0)),
+                 jump=((ALL_FLAGS, 0),     (ALL_FLAGS, 0),         (0, 0),       (0, 0)))
+_MODEL_E, _MODEL_R = 6, 12   # décalages des modèles dans les masques empilés
+
+
+def _constant_count(pc, translated, flow, preds, entry):
+    """`rep cmps/scas` at pc runs at least once: ECX is set to a non-zero
+    immediate in the straight-line code before it (single predecessors,
+    nothing else touching ECX or calling into the runtime)."""
+    current = pc
+    for _ in range(8):
+        if len(preds.get(current, ())) != 1 or current == entry:
+            return False
+        previous = preds[current][0]
+        code = translated[previous]
+        m = _ECX_IMMEDIATE.fullmatch(code)
+        if m:
+            return int(m[1], 16) != 0
+        if 'c->ecx' in code or _CPU_CALL.search(code) or 'goto resume' in code:
+            return False
+        current = previous
+    return False
+
+
+def _readers(starts, bit, flow, use, must):
+    """Instructions that read flag `bit` before it is rewritten, from `starts`."""
+    seen, pending, found = set(), list(starts), []
+    while pending:
+        pc = pending.pop()
+        if pc in seen or pc not in use:
+            continue
+        seen.add(pc)
+        if use[pc] & bit:
+            found.append(pc)
+        if not must[pc] & bit:
+            pending.extend(flow.get(pc, ()))
+    return sorted(found)
+
+
+def dead_flags(translated, flow, resume=frozenset(), abi=False, entry=None, report=None):
+    """Per-flag dead-flag rewrite of one function (see above). With `report`
+    (a dict), also fills report['entry_live'] = (mask, {pc: kind of every
+    reader of an entry flag}) when `entry` is given and some flag is live
+    there under model E, and report['read_after_call'] = [(call pc, mask,
+    {pc: kind of every reader})] for calls followed by a read under model R."""
     if resume:
         # longjmp : tout appel peut revenir à un point de reprise de setjmp.
         flow = {pc: list(s) + (sorted(resume) if _CALL.search(translated[pc]) else []) for pc, s in flow.items()}
-    info = {}
-    for pc, code in translated.items():
-        call = _CALL.search(code) is not None and _CALL_SAVE in code and _CALL_RESTORE in code
-        rest = code.replace(_CALL_SAVE, '', 1).replace(_CALL_RESTORE, '', 1) if call else code
-        writers = _FLAG_WRITER.findall(rest)
-        others = _FLAG_ANY.findall(_FLAG_WRITER.sub('', rest))
-        conds = rest.count('cond(&f')
-        if call:
-            # L'appelé reçoit toujours les drapeaux (sauvegarde gardée : il
-            # pourrait les lire, et get_pc_thunk les rend tels quels) ; la
-            # relecture après l'appel ne saute que si rien ne les lit ensuite.
-            kind = ('call', True, False) if not writers and not others else ('opaque', True, False)
-        elif rest.count('f_comi(&f, ') == 1 and len(_FLAG_ANY.findall(rest)) == 1:
-            # comiss/ucomisd : écrit les six drapeaux (rt.h), gardé tel quel.
-            kind = ('comi', False, True)
-        elif len(writers) == 1 and not others:
-            kind = ('writer', False, writers[0] in _FLAG_KILLS)
-        elif not writers and conds and len(others) == conds:
-            kind = ('reader', True, False)
-        elif not writers and not others:
-            kind = ('none', False, False)
-        else:
-            kind = ('opaque', True, False)
-        info[pc] = kind
-    def solve(reads_of):
-        live = dict.fromkeys(translated, False)
-        order = sorted(translated, reverse=True)   # once, not per fixpoint iteration
-        changed = True
-        while changed:
-            changed = False
-            for pc in order:
-                _, _, kills = info[pc]
-                out = any(live.get(s, True) for s in flow.get(pc, ()))
-                value = reads_of(pc) or (out and not kills)
-                if value != live[pc]:
-                    live[pc] = value
-                    changed = True
-        return live
-    live_in = solve(lambda pc: info[pc][1])
+    effects = {pc: _flag_effect(code) for pc, code in translated.items()}
+    generation = 1 if abi else 0
+    detect = report is not None
+    preds = {}
+    if detect:
+        for pc, successors in flow.items():
+            for s in successors:
+                preds.setdefault(s, []).append(pc)
+    use, must = {}, {}
+    for pc, (u, m, _, _, _, boundary, rep) in effects.items():
+        gu, gm, eu, em, ru, rm = u, m, u, m, u, m
+        if rep and detect and _constant_count(pc, translated, flow, preds, entry):
+            em = rm = ALL_FLAGS
+        if boundary:
+            effect = _BOUNDARY[boundary]
+            gu, gm = gu | effect[generation][0], gm | effect[generation][1]
+            eu, em = eu | effect[2][0], em | effect[2][1]
+            ru, rm = ru | effect[3][0], rm | effect[3][1]
+        use[pc] = gu | eu << _MODEL_E | ru << _MODEL_R
+        must[pc] = gm | em << _MODEL_E | rm << _MODEL_R
+    unknown = (1 << 18) - 1
+    live = dict.fromkeys(translated, 0)
+    order = sorted(translated, reverse=True)   # once, not per fixpoint iteration
+    changed = True
+    while changed:
+        changed = False
+        for pc in order:
+            out = 0
+            for s in flow.get(pc, ()):
+                out |= live.get(s, unknown)
+            value = use[pc] | (out & ~must[pc])
+            if value != live[pc]:
+                live[pc] = value
+                changed = True
+    def live_out(pc):
+        out = 0
+        for s in flow.get(pc, ()):
+            out |= live.get(s, unknown)
+        return out
+    if detect:
+        def model(shift):
+            return ({pc: (v >> shift) & ALL_FLAGS for pc, v in use.items()},
+                    {pc: (v >> shift) & ALL_FLAGS for pc, v in must.items()})
+        if entry is not None and (live.get(entry, 0) >> _MODEL_E) & ALL_FLAGS:
+            mask = (live[entry] >> _MODEL_E) & ALL_FLAGS
+            e_use, e_must = model(_MODEL_E)
+            readers = {}
+            for _, bit in FLAG_NAMES:
+                if mask & bit:
+                    for pc in _readers([entry], bit, flow, e_use, e_must):
+                        readers[pc] = effects[pc][4]
+            report['entry_live'] = (mask, readers)
+        sites = []
+        r_model = None
+        for pc, effect in effects.items():
+            if effect[5] == 'call' and (live_out(pc) >> _MODEL_R) & ALL_FLAGS:
+                mask = (live_out(pc) >> _MODEL_R) & ALL_FLAGS
+                r_model = r_model or model(_MODEL_R)
+                readers = {}
+                for _, bit in FLAG_NAMES:
+                    if mask & bit:
+                        for reader in _readers(flow.get(pc, ()), bit, flow, *r_model):
+                            readers[reader] = effects[reader][4]
+                sites.append((pc, mask, readers))
+        report['read_after_call'] = sorted(sites)
+    if any('get_eflags' in code or 'set_eflags' in code for code in translated.values()):
+        # pushfd/popfd/lahf : la fonction reste telle quelle (prudente dans les deux modes).
+        return translated
     result = {}
     for pc, code in translated.items():
-        kind = info[pc][0]
-        out = any(live_in.get(s, True) for s in flow.get(pc, ()))
-        if kind == 'call' and not out:
-            code = code.replace(_CALL_RESTORE, '', 1)
-        elif kind == 'writer' and not out:
-            code = _FLAG_WRITER.sub(lambda m: f'n_{m[1]}(', code)
+        _, _, may, twin, _, boundary, _ = effects[pc]
+        out = live_out(pc) & ALL_FLAGS
+        if boundary == 'call':
+            if abi:
+                code = code.replace(_CALL_SAVE, '', 1).replace(_CALL_RESTORE, '', 1)
+            elif not out:
+                code = code.replace(_CALL_RESTORE, '', 1)
+        elif boundary == 'ret' and abi:
+            code = code.replace(_FLAG_SAVE, '', 1)
+        if twin and not may & out:
+            code = _FLAG_WRITER.sub(lambda m: f'n_{m[1]}(', code, count=1)
         result[pc] = code
     return result
 
 
-def lift(entry, insns, entries=frozenset(), callees=None, tables=None, setjmp=None, delta=None):
+def cpuid_probe(function):
+    """The CPUID-probe idiom (`function`: {pc: (next, op, args)}): an `xor
+    reg, 0x200000` (EFLAGS.ID) followed, at a higher address, by a `popfd`.
+    A recognised syntactic idiom used by flags_check, not a proof that the
+    caller's flags only feed the ID-bit test."""
+    toggles = [pc for pc, (_, op, args) in function.items()
+               if op == 'xor' and re.fullmatch(r'e(?:[a-d]x|[sd]i|bp), 0x200000', args)]
+    return any(op == 'popfd' and pc > min(toggles) for pc, (_, op, _) in function.items()) if toggles else False
+
+
+def lift(entry, insns, entries=frozenset(), callees=None, tables=None, setjmp=None, delta=None,
+         abi=False, report=None):
     """Translate one function. `setjmp(target)` tells whether a direct call
     target is setjmp; its return sites become resume points for longjmp.
     `delta` (C expression): relocatable code of a PE plugin, every code
-    address and relocated value is then address + delta."""
+    address and relocated value is then address + delta. `abi`: flags do
+    not cross calls and ret (see dead_flags). `report` (dict): filled with
+    the flag proof of this function, 'entry_live' = (mask, [(pc, kind,
+    instruction)], cpuid_probe) and 'read_after_call' = [(call pc, mask,
+    [(pc, kind, instruction)])], plus 'switch_cases' = targets of the jump
+    tables recovered in this function; each key only when non-empty.
+    `cpuid_probe`: the function has the CPUID-probe idiom (cpuid_probe())."""
     pending = [entry]
     translated = {}
     flow = {}
     resume = set()
     others = _Without(entries, entry)
+    switch_cases = set()
     while pending:
         pc = pending.pop()
         if pc in translated:
             continue
         if pc not in insns:
             raise Unsupported(f'no instruction at {pc:#x}')
+        cases = tables(pc) if tables else None
+        if cases:
+            switch_cases.update(cases)
         try:
-            code, successors = translate(pc, insns[pc], others, callees,
-                                         tables(pc) if tables else None, delta is not None)
+            code, successors = translate(pc, insns[pc], others, callees, cases, delta is not None)
         except (Unsupported, IndexError) as exc:
             raise Unsupported(f'{pc:#x}: {exc}') from exc
         translated[pc] = code
@@ -622,7 +867,21 @@ def lift(entry, insns, entries=frozenset(), callees=None, tables=None, setjmp=No
             if target is not None and setjmp(target):
                 resume.add(nxt)
     if not os.environ.get('P2_LIFT_KEEP_FLAGS'):
-        translated = dead_flags(translated, flow, frozenset(resume))
+        proof = {} if report is not None else None
+        translated = dead_flags(translated, flow, frozenset(resume), abi, entry, proof)
+        if proof:
+            def described(readers):
+                return [(pc, kind, ' '.join(insns[pc][1:]).strip()) for pc, kind in sorted(readers.items())]
+            if proof.get('entry_live'):
+                report['entry_live'] = (proof['entry_live'][0], described(proof['entry_live'][1]),
+                                        cpuid_probe({pc: insns[pc] for pc in translated}))
+            if proof.get('read_after_call'):
+                report['read_after_call'] = [(pc, mask, described(readers))
+                                             for pc, mask, readers in proof['read_after_call']]
+    if report is not None and switch_cases:
+        report['switch_cases'] = switch_cases
+    # P2_LIFT_KEEP_FLAGS : aucune réécriture, toutes les sauvegardes restent
+    # (prudent, quel que soit `abi` ; generate_sharded le note dans le manifeste).
     # `restrict` : le CPU vit hors de la mémoire invitée, et `mem_` est une
     # copie locale de M ; clang garde ainsi les registres invités dans des
     # registres hôtes entre les accès mémoire (voir RT_MEM dans rt.h).
@@ -1066,7 +1325,10 @@ def _write_atomic(path, data):
     os.replace(temporary, path)
 
 
-def generate(layout, exports, objdump, allow_unimplemented=False, disasm_cache=None):
+def generate(layout, exports, objdump, allow_unimplemented=False, disasm_cache=None, abi=False):
+    """One C file for a set of roots (smoke tests). `abi` stays off by
+    default: hand-written test programs may pass flags across calls (and
+    nothing here proves otherwise, unlike generate_sharded)."""
     code = ['/* Generated by tools/lift.py. Do not edit. */', '#include "rt.h"']
     selected = [(name, resolve_export(layout, name)) for name in exports]
     insns = {}
@@ -1105,7 +1367,7 @@ def generate(layout, exports, objdump, allow_unimplemented=False, disasm_cache=N
         ensure_module(entry)
         callees = set()
         body, count = lift(entry, insns, entries, callees, tables,
-                           lambda t: import_called(t, insns, imports, tables) in SETJMP_IMPORTS)
+                           lambda t: import_called(t, insns, imports, tables) in SETJMP_IMPORTS, abi=abi)
         bodies.append(body)
         compiled.add(entry)
         total += count
@@ -1384,6 +1646,9 @@ def _generate_job(job):
     setjmp = lambda t: import_called(t, insns, imports, tables) in SETJMP_IMPORTS
     functions, used_imports, pending = {}, set(), list(reversed(roots))
     initial, optional, skipped, failed = set(roots), _JOB['optional'], [], []
+    # Preuve des drapeaux (dead_flags) : fonctions vivantes à l'entrée, appels
+    # suivis d'une lecture, et toutes les cibles directes (appels, sauts).
+    proof = dict(entry_live={}, read_after_call={}, direct=set(), switch_cases=set())
     try:
         while pending:
             entry = pending.pop()
@@ -1398,11 +1663,18 @@ def _generate_job(job):
                 continue
             if entry in functions:
                 continue
-            callees = set()
+            callees, report = set(), {}
             try:
                 if not _claim(entry):
                     continue
-                functions[entry] = lift(entry, insns, _JOB['entries'], callees, tables, setjmp)
+                functions[entry] = lift(entry, insns, _JOB['entries'], callees, tables, setjmp,
+                                        abi=_JOB['abi'], report=report)
+                proof['direct'] |= callees
+                proof['switch_cases'] |= report.get('switch_cases', set())
+                if 'entry_live' in report:
+                    proof['entry_live'][entry] = report['entry_live']
+                if 'read_after_call' in report:
+                    proof['read_after_call'][entry] = report['read_after_call']
             except Unsupported as exc:
                 if entry in _JOB['named']:
                     raise Unsupported(f'{exc} (function {entry:#x})') from None
@@ -1423,7 +1695,8 @@ def _generate_job(job):
         directory = Path(_JOB['parts']) / shard
         directory.mkdir(exist_ok=True)
         _write_atomic(directory / f'{number:05d}.part', marshal.dumps(bodies))
-    return number, {entry: count for entry, (_, count) in functions.items()}, sorted(used_imports), skipped, failed
+    return (number, {entry: count for entry, (_, count) in functions.items()}, sorted(used_imports), skipped, failed,
+            proof)
 
 
 SHARD_BITS = 17   # 128 Kio de code invité par fichier : une nouvelle racine ne touche qu'un fichier
@@ -1433,7 +1706,81 @@ def shard_name(module, entry):
     return f'{module["name"].replace(".", "_")}.{(entry - module["base"]) >> SHARD_BITS:03x}.c'
 
 
-def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, jobs, log=print):
+def flags_mode(requested=None):
+    """(abi, reasons): the flags mode asked for. None reads P2_LIFT_ABI_FLAGS
+    (ABI unless it is 0); P2_LIFT_KEEP_FLAGS (no dead-flags pass at all)
+    always means conservative."""
+    reasons = []
+    if requested is None:
+        requested = os.environ.get('P2_LIFT_ABI_FLAGS', '1') != '0'
+        if not requested:
+            reasons.append('P2_LIFT_ABI_FLAGS=0')
+    elif not requested:
+        reasons.append('conservative mode requested')
+    if requested and os.environ.get('P2_LIFT_KEEP_FLAGS'):
+        requested = False
+        reasons.append('P2_LIFT_KEEP_FLAGS is set')
+    return requested, reasons
+
+
+def flags_check(layout, proof, entries):
+    """Build-time check of the ABI flags assumption over the whole game.
+
+    Accepted when no call is followed by a flag read (read_after_call) and
+    every function that reads a flag at entry (entry_live, model E) is
+    (i) a CPUID probe: every read of an entry flag is a `pushfd` and the
+        function has the probe idiom (cpuid_probe: `xor reg, 0x200000` then
+        `popfd`). Such functions use get_eflags/set_eflags, so dead_flags
+        leaves them as translate emitted them (conservative in both modes);
+        what pushfd reads there are the arithmetic flags of the caller at
+        the call, which the i386 ABI leaves unspecified, and a probe only
+        tests the ID bit (kept exactly in c->eflags_sys) before restoring
+        or overwriting them. This is a recognised syntactic idiom, not a
+        proof: any other pushfd/lahf reader (e.g. `pushfd; pop eax; and eax,
+        1; ret`, which would return its caller's carry) is an offender; or
+    (ii) a recovered switch case: not a function boundary (`entries`), not
+        the target of any direct call or direct tail jump, and a target of a
+        jump table recovered by JumpTables (proof['switch_cases']), i.e. a
+        case compiled as its own function because its address sits in data,
+        reached by the indirect jump that keeps the save. Any other
+        code-pointer root may be the target of an indirect call, which no
+        longer saves the flags in ABI mode: an offender.
+    Returns a JSON-able summary; `offenders` lists every refutation."""
+    name = lambda address: (owner(layout, address) or {}).get('name', '?')
+    flags = lambda mask: '|'.join(n for n, bit in FLAG_NAMES if mask & bit)
+    readers_text = lambda readers: '; '.join(f'{pc:#x} {insn} [{kind}]' for pc, kind, insn in readers[:4]) + (
+        f' (+{len(readers) - 4})' if len(readers) > 4 else '')
+    cases = proof.get('switch_cases', set())
+    cpuid_probes, switch_cases, offenders = [], [], []
+    for entry, (mask, readers, probe) in sorted(proof['entry_live'].items()):
+        if readers and probe and all(kind == 'eflags' and insn == 'pushfd' for _, kind, insn in readers):
+            cpuid_probes.append(entry)
+            continue
+        if entry not in entries and entry not in proof['direct'] and entry in cases:
+            switch_cases.append(entry)
+            continue
+        if entry in entries:
+            why = 'function boundary'
+        elif entry in proof['direct']:
+            why = 'direct call/jump target'
+        elif readers and all(kind == 'eflags' for _, kind, _ in readers):
+            why = 'pushfd/lahf reader without the CPUID-probe idiom, code-pointer root'
+        else:
+            why = 'code-pointer root that is not a recovered switch case'
+        offenders.append(f'{name(entry)} {entry:#x} ({why}): reads {flags(mask)} at entry: '
+                         + readers_text(readers))
+    sites = 0
+    for entry, calls in sorted(proof['read_after_call'].items()):
+        for pc, mask, readers in calls:
+            sites += 1
+            offenders.append(f'{name(entry)} {entry:#x}: call at {pc:#x} followed by a read of {flags(mask)}: '
+                             + readers_text(readers))
+    return dict(entry_live=len(proof['entry_live']), cpuid_probes=[f'{a:#x}' for a in cpuid_probes],
+                switch_cases=[f'{a:#x}' for a in switch_cases], read_after_call=sites,
+                offenders=offenders)
+
+
+def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, jobs, log=print, flags_abi=None):
     """Lift every function reachable from `specs` (and, with whole_game, from
     every known root of every module) into C files grouped by guest address.
 
@@ -1443,6 +1790,11 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
     module_boundaries, code pointers found in data and code become roots
     (code_pointer_roots) and hot guest functions can be replaced by native
     ones (native_override).
+
+    Flags (dead_flags): `flags_abi` None follows P2_LIFT_ABI_FLAGS (flags_mode).
+    In ABI mode the result is kept only if flags_check proves the assumption
+    for this game; otherwise the whole game is lifted again in conservative
+    mode. The manifest records `flags_mode` and `flags_check` either way.
     """
     import gc
     import multiprocessing
@@ -1506,23 +1858,44 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
     low = min(a for a, _ in executable_ranges)
     span = max(b for _, b in executable_ranges) - low
     parts = Path(out_dir) / 'parts'
-    shutil.rmtree(parts, ignore_errors=True)
-    parts.mkdir(parents=True)
-    _JOB.update(layout=layout, insns=insns, imports=imports, entries=frozenset(entries), low=low, span=span,
-                optional=frozenset(roots - named), named=frozenset(named),
-                claims=context.RawArray('B', (span + 7) // 8), lock=context.Lock(), parts=str(parts),
-                tables=JumpTables(layout, insns))
-    counts, used_imports, not_code, failures = {}, set(), set(), {}
+    abi, reasons = flags_mode(flags_abi)
+    refuted = None
     try:
-        with context.Pool(jobs) as pool:
-            for done, (_, functions, used, skipped, failed) in enumerate(pool.imap_unordered(_generate_job, work), 1):
-                counts.update(functions)
-                failures.update(failed)
-                used_imports.update(used)
-                not_code.update(skipped)
-                if done % 10 == 0 or done == len(work):
-                    log(f'  lifted {done}/{len(work)} jobs: {len(counts)} functions, '
-                        f'{sum(counts.values())} instructions, {time.time() - started:.0f} s')
+        while True:
+            # Mode ABI d'abord ; si la preuve échoue, tout le jeu est relevé en
+            # mode prudent (un second passage, ~35 s pour Portal 2).
+            shutil.rmtree(parts, ignore_errors=True)
+            parts.mkdir(parents=True)
+            _JOB.update(layout=layout, insns=insns, imports=imports, entries=frozenset(entries), low=low, span=span,
+                        optional=frozenset(roots - named), named=frozenset(named),
+                        claims=context.RawArray('B', (span + 7) // 8), lock=context.Lock(), parts=str(parts),
+                        tables=JumpTables(layout, insns), abi=abi)
+            counts, used_imports, not_code, failures = {}, set(), set(), {}
+            proof = dict(entry_live={}, read_after_call={}, direct=set(), switch_cases=set())
+            with context.Pool(jobs) as pool:
+                for done, (_, functions, used, skipped, failed, found) in enumerate(
+                        pool.imap_unordered(_generate_job, work), 1):
+                    counts.update(functions)
+                    failures.update(failed)
+                    used_imports.update(used)
+                    not_code.update(skipped)
+                    proof['entry_live'].update(found['entry_live'])
+                    proof['read_after_call'].update(found['read_after_call'])
+                    proof['direct'] |= found['direct']
+                    proof['switch_cases'] |= found['switch_cases']
+                    if done % 10 == 0 or done == len(work):
+                        log(f'  lifted {done}/{len(work)} jobs: {len(counts)} functions, '
+                            f'{sum(counts.values())} instructions, {time.time() - started:.0f} s')
+            check = flags_check(layout, proof, entries)
+            if not abi or not check['offenders']:
+                break
+            log(f'ABI flags: assumption refuted by {len(check["offenders"])} site(s), '
+                'regenerating the whole game in conservative mode:')
+            for line in check['offenders']:
+                log('  ' + line)
+            reasons.append(f'{len(check["offenders"])} offender(s), see flags_check_abi.offenders')
+            refuted = check   # the evidence comes from the ABI pass, kept as is in the manifest
+            abi = False
     finally:
         gc.unfreeze()
         _JOB.clear()
@@ -1539,7 +1912,10 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
     manifest = dict(shards={}, functions=len(counts), instructions=sum(counts.values()),
                     used_imports=sorted(used_imports), roots=len(roots), code_pointer_roots=taken, c_bytes=0,
                     non_code_roots=[f'{a:#x}' for a in sorted(not_code)],
-                    not_compiled={f'{a:#x}': why for a, why in sorted(failures.items()) if a not in counts})
+                    not_compiled={f'{a:#x}': why for a, why in sorted(failures.items()) if a not in counts},
+                    flags_mode='abi' if abi else 'conservative', flags_check=dict(check, reasons=reasons))
+    if refuted is not None:
+        manifest['flags_check_abi'] = dict(refuted, reasons=reasons)
     compiled = frozenset(counts)
     for shard_dir in shard_dirs:
         name, bodies = shard_dir.name, {}
@@ -1576,6 +1952,10 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
         f'{manifest["instructions"]} instructions, {len(used_imports)} direct imports, '
         f'{len(shard_dirs)} files, {manifest["c_bytes"] / 1e6:.0f} MB of C, {len(not_code)} non-code roots ignored '
         f'(load {load_time:.0f} s, lift {lift_time:.0f} s)')
+    log(f'flags: {manifest["flags_mode"]} mode ({len(check["cpuid_probes"])} CPUID probes and '
+        f'{len(check["switch_cases"])} switch cases read flags at entry, {check["read_after_call"]} '
+        f'read-after-call sites, {len(check["offenders"])} offenders' + (f'; {"; ".join(reasons)}' if reasons else '')
+        + ')')
     if manifest['not_compiled']:
         log(f'{len(manifest["not_compiled"])} functions NOT compiled (runtime trap if reached), e.g. '
             + '; '.join(f'{a}: {why}' for a, why in list(manifest['not_compiled'].items())[:5]))
