@@ -18,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lift  # noqa: E402
 import localconfig  # noqa: E402
-from build_game import HOST_CFLAGS, HOST_LIBS   # noqa: E402  single source of the host flags (with the Makefile)
+from build_game import GENERATED_TUNING, HOST_CFLAGS, HOST_LIBS   # noqa: E402  single source of the host flags (with the Makefile)
 
 ROOT = Path(__file__).resolve().parent.parent
 EXPORTS = ['EncodeBinaryToString', 'DecodeBinaryFromString', 'V_UTF8ToUnicode', 'V_UnicodeToUTF8', 'KeyValuesSystem']
@@ -59,7 +59,11 @@ def main():
     for name, flags in configs:
         exe = out / f'bench-{name}'
         runtime = sorted(str(p) for p in (ROOT / 'runtime').glob('*.c'))
-        subprocess.run(['clang', f'-O{args.opt}', '-g', '-Wall', '-Wextra', '-Werror', *flags.split(),
+        # GENERATED_TUNING as in the game build: without it clang leaves the
+        # guest registers in memory in the loops, and the timings then depend
+        # on incidental vectorisation choices (store-forwarding stalls) rather
+        # than on the generated code.
+        subprocess.run(['clang', f'-O{args.opt}', '-g', '-Wall', '-Wextra', '-Werror', *GENERATED_TUNING, *flags.split(),
                         f'-I{ROOT / "runtime"}', *HOST_CFLAGS, *runtime, *sources, str(ROOT / 'tests/bench.c'),
                         *HOST_LIBS, '-o', str(exe)], check=True)
         times, sums = {}, set()
