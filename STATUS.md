@@ -199,13 +199,15 @@ Steps, from main ~45.3 M instructions, 22.8 M cycles, 160 fps to 40.9 M,
    returns flags (no save before it, no reload after it) and `ret` saves
    nothing; tail jumps keep the save. The assumption is proved per game at
    generation time (`lift.flags_check`, same pass): no call is followed by a
-   flag read, and every function reading a flag at entry is either a
-   pushfd/lahf-only reader (CPUID probes, emitted conservatively) or only a
-   code-pointer root that no direct call or jump reaches (switch cases
-   compiled as functions). Otherwise the whole game is lifted again in the
-   conservative mode above. `P2_LIFT_ABI_FLAGS=0` at generation forces the
-   conservative mode; `build/<game>/gen/manifest.json` records `flags_mode`
-   and `flags_check`. PE plugins and smoke fixtures stay conservative.
+   flag read, and every function reading a flag at entry is either a CPUID
+   probe (only `pushfd` reads them, and the function toggles EFLAGS.ID: a
+   recognised idiom, emitted conservatively) or a recovered switch-table
+   case compiled as its own function that no direct call or jump reaches.
+   Otherwise the whole game is lifted again in the conservative mode above.
+   `P2_LIFT_ABI_FLAGS=0` at generation forces the conservative mode;
+   `build/<game>/gen/manifest.json` records `flags_mode` and `flags_check`
+   (plus `flags_check_abi`, the refuting check, after a fallback). PE plugins
+   and smoke fixtures stay conservative.
 
 Remaining profile (steady state): ~60 % translated code, flat (no function
 above 1 %); Apple driver plus kernel ~30 %, of which `iokit_user_client_trap`

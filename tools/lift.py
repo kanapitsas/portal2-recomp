@@ -814,6 +814,16 @@ def dead_flags(translated, flow, resume=frozenset(), abi=False, entry=None, repo
     return result
 
 
+def cpuid_probe(function):
+    """The CPUID-probe idiom (`function`: {pc: (next, op, args)}): an `xor
+    reg, 0x200000` (EFLAGS.ID) followed, at a higher address, by a `popfd`.
+    A recognised syntactic idiom used by flags_check, not a proof that the
+    caller's flags only feed the ID-bit test."""
+    toggles = [pc for pc, (_, op, args) in function.items()
+               if op == 'xor' and re.fullmatch(r'e(?:[a-d]x|[sd]i|bp), 0x200000', args)]
+    return any(op == 'popfd' and pc > min(toggles) for pc, (_, op, _) in function.items()) if toggles else False
+
+
 def lift(entry, insns, entries=frozenset(), callees=None, tables=None, setjmp=None, delta=None,
          abi=False, report=None):
     """Translate one function. `setjmp(target)` tells whether a direct call
@@ -822,22 +832,27 @@ def lift(entry, insns, entries=frozenset(), callees=None, tables=None, setjmp=No
     address and relocated value is then address + delta. `abi`: flags do
     not cross calls and ret (see dead_flags). `report` (dict): filled with
     the flag proof of this function, 'entry_live' = (mask, [(pc, kind,
-    instruction)]) and 'read_after_call' = [(call pc, mask, [(pc, kind,
-    instruction)])], each key only when non-empty."""
+    instruction)], cpuid_probe) and 'read_after_call' = [(call pc, mask,
+    [(pc, kind, instruction)])], plus 'switch_cases' = targets of the jump
+    tables recovered in this function; each key only when non-empty.
+    `cpuid_probe`: the function has the CPUID-probe idiom (cpuid_probe())."""
     pending = [entry]
     translated = {}
     flow = {}
     resume = set()
     others = _Without(entries, entry)
+    switch_cases = set()
     while pending:
         pc = pending.pop()
         if pc in translated:
             continue
         if pc not in insns:
             raise Unsupported(f'no instruction at {pc:#x}')
+        cases = tables(pc) if tables else None
+        if cases:
+            switch_cases.update(cases)
         try:
-            code, successors = translate(pc, insns[pc], others, callees,
-                                         tables(pc) if tables else None, delta is not None)
+            code, successors = translate(pc, insns[pc], others, callees, cases, delta is not None)
         except (Unsupported, IndexError) as exc:
             raise Unsupported(f'{pc:#x}: {exc}') from exc
         translated[pc] = code
@@ -858,10 +873,13 @@ def lift(entry, insns, entries=frozenset(), callees=None, tables=None, setjmp=No
             def described(readers):
                 return [(pc, kind, ' '.join(insns[pc][1:]).strip()) for pc, kind in sorted(readers.items())]
             if proof.get('entry_live'):
-                report['entry_live'] = (proof['entry_live'][0], described(proof['entry_live'][1]))
+                report['entry_live'] = (proof['entry_live'][0], described(proof['entry_live'][1]),
+                                        cpuid_probe({pc: insns[pc] for pc in translated}))
             if proof.get('read_after_call'):
                 report['read_after_call'] = [(pc, mask, described(readers))
                                              for pc, mask, readers in proof['read_after_call']]
+    if report is not None and switch_cases:
+        report['switch_cases'] = switch_cases
     # P2_LIFT_KEEP_FLAGS : aucune réécriture, toutes les sauvegardes restent
     # (prudent, quel que soit `abi` ; generate_sharded le note dans le manifeste).
     # `restrict` : le CPU vit hors de la mémoire invitée, et `mem_` est une
@@ -1630,7 +1648,7 @@ def _generate_job(job):
     initial, optional, skipped, failed = set(roots), _JOB['optional'], [], []
     # Preuve des drapeaux (dead_flags) : fonctions vivantes à l'entrée, appels
     # suivis d'une lecture, et toutes les cibles directes (appels, sauts).
-    proof = dict(entry_live={}, read_after_call={}, direct=set())
+    proof = dict(entry_live={}, read_after_call={}, direct=set(), switch_cases=set())
     try:
         while pending:
             entry = pending.pop()
@@ -1652,6 +1670,7 @@ def _generate_job(job):
                 functions[entry] = lift(entry, insns, _JOB['entries'], callees, tables, setjmp,
                                         abi=_JOB['abi'], report=report)
                 proof['direct'] |= callees
+                proof['switch_cases'] |= report.get('switch_cases', set())
                 if 'entry_live' in report:
                     proof['entry_live'][entry] = report['entry_live']
                 if 'read_after_call' in report:
@@ -1705,47 +1724,59 @@ def flags_mode(requested=None):
 
 
 def flags_check(layout, proof, entries):
-    """Build-time proof of the ABI flags assumption over the whole game.
+    """Build-time check of the ABI flags assumption over the whole game.
 
     Accepted when no call is followed by a flag read (read_after_call) and
     every function that reads a flag at entry (entry_live, model E) is
-    (i) a pushfd/lahf-only reader: every read of an entry flag is a
-        get_eflags (pushfd, lahf). Such functions use get_eflags/set_eflags,
-        so dead_flags leaves them as translate emitted them (conservative
-        in both modes); what pushfd reads there are the arithmetic flags of
-        the caller at the call, which the i386 ABI leaves unspecified: the
-        original program reads unspecified values too (CPUID probes only
-        test the ID bit, which c->eflags_sys keeps exactly). A conditional
-        (cond) or other reader of an entry flag is not covered by this
-        argument, hence the classification by every reader, not by the mere
-        presence of pushfd; or
-    (ii) only a code-pointer root: not a function boundary (`entries`) and not
-        the target of any direct call or direct tail jump, i.e. reached
-        through an indirect jump, which keeps the save (a switch case
-        compiled as its own function because its address sits in data).
+    (i) a CPUID probe: every read of an entry flag is a `pushfd` and the
+        function has the probe idiom (cpuid_probe: `xor reg, 0x200000` then
+        `popfd`). Such functions use get_eflags/set_eflags, so dead_flags
+        leaves them as translate emitted them (conservative in both modes);
+        what pushfd reads there are the arithmetic flags of the caller at
+        the call, which the i386 ABI leaves unspecified, and a probe only
+        tests the ID bit (kept exactly in c->eflags_sys) before restoring
+        or overwriting them. This is a recognised syntactic idiom, not a
+        proof: any other pushfd/lahf reader (e.g. `pushfd; pop eax; and eax,
+        1; ret`, which would return its caller's carry) is an offender; or
+    (ii) a recovered switch case: not a function boundary (`entries`), not
+        the target of any direct call or direct tail jump, and a target of a
+        jump table recovered by JumpTables (proof['switch_cases']), i.e. a
+        case compiled as its own function because its address sits in data,
+        reached by the indirect jump that keeps the save. Any other
+        code-pointer root may be the target of an indirect call, which no
+        longer saves the flags in ABI mode: an offender.
     Returns a JSON-able summary; `offenders` lists every refutation."""
     name = lambda address: (owner(layout, address) or {}).get('name', '?')
     flags = lambda mask: '|'.join(n for n, bit in FLAG_NAMES if mask & bit)
     readers_text = lambda readers: '; '.join(f'{pc:#x} {insn} [{kind}]' for pc, kind, insn in readers[:4]) + (
         f' (+{len(readers) - 4})' if len(readers) > 4 else '')
-    pushfd_only, code_pointer_only, offenders = [], [], []
-    for entry, (mask, readers) in sorted(proof['entry_live'].items()):
-        if readers and all(kind == 'eflags' for _, kind, _ in readers):
-            pushfd_only.append(entry)
-        elif entry not in entries and entry not in proof['direct']:
-            code_pointer_only.append(entry)
+    cases = proof.get('switch_cases', set())
+    cpuid_probes, switch_cases, offenders = [], [], []
+    for entry, (mask, readers, probe) in sorted(proof['entry_live'].items()):
+        if readers and probe and all(kind == 'eflags' and insn == 'pushfd' for _, kind, insn in readers):
+            cpuid_probes.append(entry)
+            continue
+        if entry not in entries and entry not in proof['direct'] and entry in cases:
+            switch_cases.append(entry)
+            continue
+        if entry in entries:
+            why = 'function boundary'
+        elif entry in proof['direct']:
+            why = 'direct call/jump target'
+        elif readers and all(kind == 'eflags' for _, kind, _ in readers):
+            why = 'pushfd/lahf reader without the CPUID-probe idiom, code-pointer root'
         else:
-            why = 'function boundary' if entry in entries else 'direct call/jump target'
-            offenders.append(f'{name(entry)} {entry:#x} ({why}): reads {flags(mask)} at entry: '
-                             + readers_text(readers))
+            why = 'code-pointer root that is not a recovered switch case'
+        offenders.append(f'{name(entry)} {entry:#x} ({why}): reads {flags(mask)} at entry: '
+                         + readers_text(readers))
     sites = 0
     for entry, calls in sorted(proof['read_after_call'].items()):
         for pc, mask, readers in calls:
             sites += 1
             offenders.append(f'{name(entry)} {entry:#x}: call at {pc:#x} followed by a read of {flags(mask)}: '
                              + readers_text(readers))
-    return dict(entry_live=len(proof['entry_live']), pushfd_only=[f'{a:#x}' for a in pushfd_only],
-                code_pointer_only=[f'{a:#x}' for a in code_pointer_only], read_after_call=sites,
+    return dict(entry_live=len(proof['entry_live']), cpuid_probes=[f'{a:#x}' for a in cpuid_probes],
+                switch_cases=[f'{a:#x}' for a in switch_cases], read_after_call=sites,
                 offenders=offenders)
 
 
@@ -1828,6 +1859,7 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
     span = max(b for _, b in executable_ranges) - low
     parts = Path(out_dir) / 'parts'
     abi, reasons = flags_mode(flags_abi)
+    refuted = None
     try:
         while True:
             # Mode ABI d'abord ; si la preuve échoue, tout le jeu est relevé en
@@ -1839,7 +1871,7 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
                         claims=context.RawArray('B', (span + 7) // 8), lock=context.Lock(), parts=str(parts),
                         tables=JumpTables(layout, insns), abi=abi)
             counts, used_imports, not_code, failures = {}, set(), set(), {}
-            proof = dict(entry_live={}, read_after_call={}, direct=set())
+            proof = dict(entry_live={}, read_after_call={}, direct=set(), switch_cases=set())
             with context.Pool(jobs) as pool:
                 for done, (_, functions, used, skipped, failed, found) in enumerate(
                         pool.imap_unordered(_generate_job, work), 1):
@@ -1850,6 +1882,7 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
                     proof['entry_live'].update(found['entry_live'])
                     proof['read_after_call'].update(found['read_after_call'])
                     proof['direct'] |= found['direct']
+                    proof['switch_cases'] |= found['switch_cases']
                     if done % 10 == 0 or done == len(work):
                         log(f'  lifted {done}/{len(work)} jobs: {len(counts)} functions, '
                             f'{sum(counts.values())} instructions, {time.time() - started:.0f} s')
@@ -1860,7 +1893,8 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
                 'regenerating the whole game in conservative mode:')
             for line in check['offenders']:
                 log('  ' + line)
-            reasons.append(f'{len(check["offenders"])} offender(s), see flags_check.offenders')
+            reasons.append(f'{len(check["offenders"])} offender(s), see flags_check_abi.offenders')
+            refuted = check   # the evidence comes from the ABI pass, kept as is in the manifest
             abi = False
     finally:
         gc.unfreeze()
@@ -1880,6 +1914,8 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
                     non_code_roots=[f'{a:#x}' for a in sorted(not_code)],
                     not_compiled={f'{a:#x}': why for a, why in sorted(failures.items()) if a not in counts},
                     flags_mode='abi' if abi else 'conservative', flags_check=dict(check, reasons=reasons))
+    if refuted is not None:
+        manifest['flags_check_abi'] = dict(refuted, reasons=reasons)
     compiled = frozenset(counts)
     for shard_dir in shard_dirs:
         name, bodies = shard_dir.name, {}
@@ -1916,8 +1952,8 @@ def generate_sharded(layout, specs, whole_game, objdump, disasm_cache, out_dir, 
         f'{manifest["instructions"]} instructions, {len(used_imports)} direct imports, '
         f'{len(shard_dirs)} files, {manifest["c_bytes"] / 1e6:.0f} MB of C, {len(not_code)} non-code roots ignored '
         f'(load {load_time:.0f} s, lift {lift_time:.0f} s)')
-    log(f'flags: {manifest["flags_mode"]} mode ({len(check["pushfd_only"])} pushfd-only and '
-        f'{len(check["code_pointer_only"])} code-pointer-only entry readers, {check["read_after_call"]} '
+    log(f'flags: {manifest["flags_mode"]} mode ({len(check["cpuid_probes"])} CPUID probes and '
+        f'{len(check["switch_cases"])} switch cases read flags at entry, {check["read_after_call"]} '
         f'read-after-call sites, {len(check["offenders"])} offenders' + (f'; {"; ".join(reasons)}' if reasons else '')
         + ')')
     if manifest['not_compiled']:

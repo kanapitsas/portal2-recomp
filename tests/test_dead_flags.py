@@ -208,7 +208,8 @@ class Proof(unittest.TestCase):
 
     def test_entry_live_with_a_conditional_first(self):
         report = self.proof(program(('je', '0x1008'), ('cmp', 'eax, 1'), ('ret', '')))
-        mask, readers = report['entry_live']
+        mask, readers, probe = report['entry_live']
+        self.assertFalse(probe)
         self.assertEqual(mask, lift.ZF)
         self.assertEqual(readers, [(0x1000, 'cond', 'je 0x1008')])
         self.assertNotIn('read_after_call', report)
@@ -223,9 +224,35 @@ class Proof(unittest.TestCase):
         self.assertEqual(self.proof(program(('call', '0x9000'), ('jb', '0x1000'), ('ret', '')))
                          .get('entry_live'), None)
 
+    PROBE = program(('pushfd', ''), ('pushfd', ''), ('pop', 'eax'), ('mov', 'edx, eax'),
+                    ('xor', 'eax, 0x200000'), ('push', 'eax'), ('popfd', ''), ('pushfd', ''), ('pop', 'eax'),
+                    ('popfd', ''), ('xor', 'eax, edx'), ('ret', ''))
+
     def test_pushfd_reader(self):
-        report = self.proof(program(('pushfd', ''), ('pop', 'eax'), ('ret', '')))
-        self.assertEqual(report['entry_live'], (63, [(0x1000, 'eflags', 'pushfd')]))
+        report = self.proof(self.PROBE)
+        self.assertEqual(report['entry_live'], (63, [(0x1000, 'eflags', 'pushfd'), (0x1004, 'eflags', 'pushfd')], True))
+        # returns the caller's carry: same reader, but no CPUID-probe idiom
+        report = self.proof(program(('pushfd', ''), ('pop', 'eax'), ('and', 'eax, 1'), ('ret', '')))
+        self.assertEqual(report['entry_live'], (63, [(0x1000, 'eflags', 'pushfd')], False))
+
+    def test_cpuid_probe_idiom(self):
+        self.assertTrue(lift.cpuid_probe(self.PROBE))
+        without_popfd = {pc: insn for pc, insn in self.PROBE.items() if insn[1] != 'popfd'}
+        self.assertFalse(lift.cpuid_probe(without_popfd))
+        other_bit = dict(self.PROBE)
+        other_bit[0x1010] = (0x1014, 'xor', 'eax, 0x40000')
+        self.assertFalse(lift.cpuid_probe(other_bit))
+
+    def test_switch_cases_are_reported(self):
+        tables = lambda pc: [0x1008, 0x100c] if pc == 0x1004 else None
+        insns = program(('cmp', 'eax, 1'), ('jmp', 'dword ptr [4*eax + 0x5000]'), ('ret', ''), ('ret', ''))
+        report = self.proof_with(insns, tables)
+        self.assertEqual(report['switch_cases'], {0x1008, 0x100c})
+
+    def proof_with(self, insns, tables):
+        report = {}
+        lift.lift(0x1000, insns, tables=tables, report=report)
+        return report
 
     def test_read_after_call(self):
         report = self.proof(program(('cmp', 'eax, 1'), ('call', '0x9000'), ('jb', '0x1000'), ('ret', '')))
@@ -241,18 +268,24 @@ class Proof(unittest.TestCase):
         self.assertEqual([(pc, mask) for pc, mask, _ in report['read_after_call']], [(0x1000, lift.CF | lift.ZF)])
 
     def test_check_classifies_entry_readers(self):
-        proof = dict(entry_live={0x1000: (63, [(0x1000, 'eflags', 'pushfd')]),
-                                 0x2000: (lift.ZF, [(0x2000, 'cond', 'je 0x2010')]),
-                                 0x3000: (lift.ZF, [(0x3000, 'cond', 'je 0x3010')]),
-                                 0x4000: (lift.ZF, [(0x4000, 'cond', 'je 0x4010')]),
-                                 0x5000: (63, [(0x5000, 'eflags', 'pushfd'), (0x5004, 'cond', 'jb 0x5000')])},
-                     read_after_call={}, direct={0x3000})
-        check = lift.flags_check({'modules': []}, proof, {0x4000, 0x5000})
-        self.assertEqual(check['pushfd_only'], ['0x1000'])
-        self.assertEqual(check['code_pointer_only'], ['0x2000'])
-        self.assertEqual(len(check['offenders']), 3)   # direct target, boundary, pushfd + jb
+        pushfd = [(0x1000, 'eflags', 'pushfd')]
+        je = lambda pc: [(pc, 'cond', f'je {pc + 0x10:#x}')]
+        proof = dict(entry_live={0x1000: (63, pushfd, True),               # CPUID probe: accepted
+                                 0x1100: (63, pushfd, False),              # pushfd without the idiom
+                                 0x1200: (63, [(0x1200, 'eflags', 'lahf')], True),   # lahf: not the idiom
+                                 0x1300: (63, pushfd + je(0x1304), True),  # pushfd, then a jcc on entry flags
+                                 0x2000: (lift.ZF, je(0x2000), False),     # recovered switch case: accepted
+                                 0x2100: (lift.ZF, je(0x2100), False),     # code pointer, not a switch case
+                                 0x3000: (lift.ZF, je(0x3000), False),     # direct target (also a case)
+                                 0x4000: (lift.ZF, je(0x4000), False)},    # boundary (also a case)
+                     read_after_call={}, direct={0x3000}, switch_cases={0x2000, 0x3000, 0x4000})
+        check = lift.flags_check({'modules': []}, proof, {0x4000})
+        self.assertEqual(check['cpuid_probes'], ['0x1000'])
+        self.assertEqual(check['switch_cases'], ['0x2000'])
+        refuted = sorted(line.split()[1] for line in check['offenders'])
+        self.assertEqual(refuted, ['0x1100', '0x1200', '0x1300', '0x2100', '0x3000', '0x4000'])
         self.assertEqual(check['read_after_call'], 0)
-        proof = dict(entry_live={}, direct=set(),
+        proof = dict(entry_live={}, direct=set(), switch_cases=set(),
                      read_after_call={0x6000: [(0x6004, lift.CF, [(0x6008, 'cond', 'jb 0x6000')])]})
         check = lift.flags_check({'modules': []}, proof, set())
         self.assertEqual((check['read_after_call'], len(check['offenders'])), (1, 1))
